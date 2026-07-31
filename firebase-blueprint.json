@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "SubscribedChannel": {
+      "title": "SubscribedChannel",
+      "description": "YouTube Channel subscribed to by user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "YouTube Channel ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the YouTube Channel"
+        },
+        "handle": {
+          "type": "string",
+          "description": "Handle or canonical base URL"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Avatar URL of the channel"
+        },
+        "subscribers": {
+          "type": "string",
+          "description": "Subscriber count string"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User ID who owns this subscription"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of creation"
+        }
+      },
+      "required": ["id", "name", "userId"]
+    },
+    "FavoriteTrack": {
+      "title": "FavoriteTrack",
+      "description": "Track saved to user's favorites",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "YouTube Video ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Song or video title"
+        },
+        "channel": {
+          "type": "string",
+          "description": "Channel name or artist"
+        },
+        "views": {
+          "type": "string",
+          "description": "View count"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duration string"
+        },
+        "aiMoodTags": {
+          "type": "string",
+          "description": "Mood tags or genre"
+        },
+        "genre": {
+          "type": "string",
+          "description": "Music genre"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User ID who owns this favorite"
+        },
+        "addedAt": {
+          "type": "string",
+          "description": "Timestamp when added"
+        }
+      },
+      "required": ["id", "title", "channel", "userId"]
+    },
+    "Playlist": {
+      "title": "Playlist",
+      "description": "User custom playlist",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Playlist ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Playlist title"
+        },
+        "tracks": {
+          "type": "array",
+          "description": "List of track objects"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User ID who owns this playlist"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of creation"
+        }
+      },
+      "required": ["id", "name", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/subscriptions/{channelId}": {
+      "schema": {
+        "$ref": "#/entities/SubscribedChannel"
+      },
+      "description": "User's YouTube channel subscriptions"
+    },
+    "/users/{userId}/favorites/{trackId}": {
+      "schema": {
+        "$ref": "#/entities/FavoriteTrack"
+      },
+      "description": "User's favorite tracks"
+    },
+    "/users/{userId}/playlists/{playlistId}": {
+      "schema": {
+        "$ref": "#/entities/Playlist"
+      },
+      "description": "User's custom music playlists"
+    }
+  }
+}
