@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -7,7 +7,7 @@ import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack } from './
 import { DEFAULT_TRACKS, DEFAULT_CHANNELS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
 import { AudioPlayerOverlay } from './components/AudioPlayerOverlay';
-import { GlobalYouTubePlayer } from './components/GlobalYouTubePlayer';
+import { GlobalYouTubePlayer, PlayerEngine } from './components/GlobalYouTubePlayer';
 import { DownloadModal } from './components/DownloadModal';
 import { AddToPlaylistModal } from './components/AddToPlaylistModal';
 import { ShareAppModal } from './components/ShareAppModal';
@@ -21,10 +21,24 @@ import { LibraryView } from './views/LibraryView';
 import { SettingsView } from './views/SettingsView';
 import { DownloadsView } from './views/DownloadsView';
 import { SplashScreen } from './components/SplashScreen';
+import { applyAccentTheme } from './utils/accentTheme';
+
+const TAB_ORDER: TabType[] = ['home', 'search', 'subscriptions', 'library', 'downloads', 'settings'];
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [activeTab, setActiveTabState] = useState<TabType>('home');
+  const [tabDirection, setTabDirection] = useState<number>(1);
+
+  const handleTabChange = useCallback((newTab: TabType) => {
+    setActiveTabState((currentTab) => {
+      if (currentTab === newTab) return currentTab;
+      const currentIndex = TAB_ORDER.indexOf(currentTab);
+      const newIndex = TAB_ORDER.indexOf(newTab);
+      setTabDirection(newIndex >= currentIndex ? 1 : -1);
+      return newTab;
+    });
+  }, []);
   const [downloadedTracks, setDownloadedTracks] = useState<DownloadedTrack[]>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_downloads');
@@ -41,6 +55,22 @@ export default function App() {
     const saved = localStorage.getItem('aura_ai_theme');
     return saved ? saved === 'dark' : true;
   });
+
+  // Liquid Glass Accent Theme State
+  const [accentThemeId, setAccentThemeId] = useState<string>(() => {
+    return localStorage.getItem('aura_ai_accent_theme') || 'indigo';
+  });
+
+  const [customAccentHex, setCustomAccentHex] = useState<string>(() => {
+    return localStorage.getItem('aura_ai_custom_accent_hex') || '#6366f1';
+  });
+
+  // Apply accent theme dynamically
+  useEffect(() => {
+    localStorage.setItem('aura_ai_accent_theme', accentThemeId);
+    localStorage.setItem('aura_ai_custom_accent_hex', customAccentHex);
+    applyAccentTheme(accentThemeId, customAccentHex);
+  }, [accentThemeId, customAccentHex]);
 
   // Firebase user & auth modal state
   const [user, setUser] = useState<User | null>(null);
@@ -66,7 +96,26 @@ export default function App() {
     localStorage.setItem('aura_ai_video_quality', quality);
   };
 
-  // Auto play on track select state
+  // Data Saver / Low Bandwidth Mode state
+  const [isDataSaverMode, setIsDataSaverMode] = useState<boolean>(() => {
+    return localStorage.getItem('aura_data_saver_mode') === 'true';
+  });
+
+  const handleToggleDataSaverMode = (enabled: boolean) => {
+    setIsDataSaverMode(enabled);
+    localStorage.setItem('aura_data_saver_mode', String(enabled));
+    if (enabled) {
+      setShowVideo(true); // Keep low-bandwidth audio+video stream active
+      setAudioQuality('128');
+      setVideoQuality('144p');
+      showToast("⚡ Data Saver Mode ON — Low-bandwidth Audio+Video stream active (144p video & 128kbps audio)", "success");
+    } else {
+      setShowVideo(true);
+      setAudioQuality('320');
+      setVideoQuality('1080p');
+      showToast("Data Saver Mode OFF — Full HD Video & 320kbps Audio restored", "info");
+    }
+  };
   const [autoPlayOnSelect, setAutoPlayOnSelect] = useState<boolean>(() => {
     const saved = localStorage.getItem('aura_ai_autoplay_select');
     return saved ? saved === 'true' : true;
@@ -94,6 +143,34 @@ export default function App() {
   const [volume, setVolume] = useState<number>(85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [showVideo, setShowVideo] = useState<boolean>(true);
+  const [playerEngine, setPlayerEngine] = useState<PlayerEngine>(() => {
+    return (localStorage.getItem('aura_player_engine') as PlayerEngine) || 'youtube';
+  });
+
+  const handleChangePlayerEngine = (engine: PlayerEngine) => {
+    setPlayerEngine(engine);
+    localStorage.setItem('aura_player_engine', engine);
+    showToast(`Switched player engine to ${engine.toUpperCase()}`, 'info');
+  };
+
+  // Real-time playback time & duration from YouTube video stream
+  const [playbackTime, setPlaybackTime] = useState<number>(0);
+  const [realDuration, setRealDuration] = useState<number>(0);
+  const [seekToSeconds, setSeekToSeconds] = useState<number | null>(null);
+
+  const handleProgress = useCallback((playedSec: number) => {
+    setPlaybackTime(Math.floor(playedSec));
+  }, []);
+
+  const handleDuration = useCallback((durationSec: number) => {
+    setRealDuration(Math.floor(durationSec));
+  }, []);
+
+  const handleSeek = useCallback((newTime: number) => {
+    setPlaybackTime(newTime);
+    setSeekToSeconds(newTime);
+    setTimeout(() => setSeekToSeconds(null), 100);
+  }, []);
 
   // Download Modal track & playlist
   const [downloadTrack, setDownloadTrack] = useState<Track | null>(null);
@@ -166,71 +243,96 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
-  // Firebase Authentication listener and Firestore real-time sync
+  // Function to sync Google account data (local <-> Firestore cloud <-> YouTube)
+  const handleSyncGoogleAccount = useCallback(async (targetUser?: User | null, showNotification: boolean = true) => {
+    const activeUser = targetUser || auth.currentUser || user;
+    if (!activeUser) {
+      if (showNotification) {
+        showToast('Please sign in with Google to sync your account.', 'info');
+      }
+      return;
+    }
+
+    try {
+      if (showNotification) {
+        showToast('Syncing Google Account with Cloud...', 'info');
+      }
+
+      // 1. Sync local favorites to Firestore
+      const savedFavs = localStorage.getItem('aura_ai_favorites');
+      if (savedFavs) {
+        const localFavs: Track[] = JSON.parse(savedFavs);
+        for (const track of localFavs) {
+          await setDoc(doc(db, 'users', activeUser.uid, 'favorites', track.id), {
+            ...track, userId: activeUser.uid, addedAt: track.addedAt || new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+
+      // 2. Sync local playlists to Firestore
+      const savedPlaylists = localStorage.getItem('aura_ai_playlists');
+      if (savedPlaylists) {
+        const localPlay: Playlist[] = JSON.parse(savedPlaylists);
+        for (const p of localPlay) {
+          await setDoc(doc(db, 'users', activeUser.uid, 'playlists', p.id), {
+            ...p, userId: activeUser.uid
+          }, { merge: true });
+        }
+      }
+
+      // 3. Sync local subscriptions to Firestore
+      const savedSubs = localStorage.getItem('aura_ai_subscriptions');
+      if (savedSubs) {
+        const localSubs: SubscribedChannel[] = JSON.parse(savedSubs);
+        for (const sub of localSubs) {
+          await setDoc(doc(db, 'users', activeUser.uid, 'subscriptions', sub.id), {
+            ...sub, userId: activeUser.uid, addedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+
+      // 4. Auto-sync YouTube subscriptions if access token is available
+      const ytToken = sessionStorage.getItem('aura_yt_access_token');
+      if (ytToken) {
+        try {
+          const ytChannels = await fetchYouTubeUserSubscriptions(ytToken);
+          for (const ch of ytChannels) {
+            await setDoc(doc(db, 'users', activeUser.uid, 'subscriptions', ch.id), {
+              ...ch, userId: activeUser.uid, addedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        } catch (ytErr) {
+          console.log("Could not auto-sync YouTube subscriptions:", ytErr);
+        }
+      }
+
+      if (showNotification) {
+        showToast(`Google account successfully synced (${activeUser.email || activeUser.displayName})`, 'success');
+      }
+    } catch (err) {
+      console.error('Google account sync error:', err);
+      if (showNotification) {
+        showToast('Failed to sync Google account data.', 'error');
+      }
+    }
+  }, [user]);
+
+  // Firebase Authentication listener and Firestore real-time sync on startup / open
   useEffect(() => {
     testFirebaseConnection();
     
+    let isInitialLoad = true;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        console.log('Firebase user logged in:', currentUser.uid);
+        console.log('Firebase user logged in on application open:', currentUser.uid);
 
-        // Auto-sync local data to cloud
-        const syncLocalToCloud = async () => {
-          try {
-            const savedFavs = localStorage.getItem('aura_ai_favorites');
-            if (savedFavs) {
-              const localFavs: Track[] = JSON.parse(savedFavs);
-              for (const track of localFavs) {
-                await setDoc(doc(db, 'users', currentUser.uid, 'favorites', track.id), {
-                  ...track, userId: currentUser.uid, addedAt: track.addedAt || new Date().toISOString()
-                }, { merge: true });
-              }
-            }
-
-            const savedPlaylists = localStorage.getItem('aura_ai_playlists');
-            if (savedPlaylists) {
-              const localPlay: Playlist[] = JSON.parse(savedPlaylists);
-              for (const p of localPlay) {
-                await setDoc(doc(db, 'users', currentUser.uid, 'playlists', p.id), {
-                  ...p, userId: currentUser.uid
-                }, { merge: true });
-              }
-            }
-
-            const savedSubs = localStorage.getItem('aura_ai_subscriptions');
-            if (savedSubs) {
-              const localSubs: SubscribedChannel[] = JSON.parse(savedSubs);
-              for (const sub of localSubs) {
-                await setDoc(doc(db, 'users', currentUser.uid, 'subscriptions', sub.id), {
-                  ...sub, userId: currentUser.uid, addedAt: new Date().toISOString()
-                }, { merge: true });
-              }
-            }
-
-            // Also auto-sync YouTube subscriptions if access token is available in session
-            const ytToken = sessionStorage.getItem('aura_yt_access_token');
-            if (ytToken) {
-              try {
-                const ytChannels = await fetchYouTubeUserSubscriptions(ytToken);
-                for (const ch of ytChannels) {
-                  await setDoc(doc(db, 'users', currentUser.uid, 'subscriptions', ch.id), {
-                    ...ch, userId: currentUser.uid, addedAt: new Date().toISOString()
-                  }, { merge: true });
-                }
-                console.log("YouTube account subscriptions automatically synced.");
-              } catch (ytErr) {
-                console.log("Could not auto-sync YouTube subscriptions:", ytErr);
-              }
-            }
-
-            console.log("Local data automatically synced to Google account.");
-          } catch (e) {
-            console.error("Auto-sync failed:", e);
-          }
-        };
-
-        syncLocalToCloud();
+        // Perform Google Account Sync on application open
+        handleSyncGoogleAccount(currentUser, isInitialLoad);
+        if (isInitialLoad) {
+          isInitialLoad = false;
+        }
 
         // Subscriptions listener
         const subPath = `users/${currentUser.uid}/subscriptions`;
@@ -277,7 +379,26 @@ export default function App() {
     });
 
     return () => unsubscribeAuth();
-  }, []);
+  }, [handleSyncGoogleAccount]);
+
+  // Listen for OAuth success messages from popup auth window
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        showToast('Google Account authenticated! Syncing YouTube account...', 'success');
+        if (event.data.code) {
+          sessionStorage.setItem('aura_yt_oauth_code', event.data.code);
+        }
+        handleSyncGoogleAccount(null, true);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [handleSyncGoogleAccount]);
 
   // Sync subscriptions to localStorage
   useEffect(() => {
@@ -311,6 +432,8 @@ export default function App() {
     } else {
       setCurrentTrack(track);
       setIsPlaying(true);
+      setPlaybackTime(0);
+      setRealDuration(0);
     }
     // Record to watch history (deduplicated, latest first)
     setHistory((prev) => {
@@ -522,21 +645,20 @@ export default function App() {
       
       {/* iOS Liquid Glass Ambient Background Mesh Orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-500/20 dark:bg-indigo-600/15 blur-[120px] animate-liquid-orb-1" />
-        <div className="absolute top-[40%] right-[-10%] w-[600px] h-[600px] rounded-full bg-purple-500/15 dark:bg-purple-600/15 blur-[140px] animate-liquid-orb-2" />
-        <div className="absolute bottom-[-10%] left-[20%] w-[550px] h-[550px] rounded-full bg-rose-500/15 dark:bg-rose-600/10 blur-[130px] animate-liquid-orb-1" />
+        <div 
+          className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[120px] animate-liquid-orb-1" 
+          style={{ backgroundColor: 'var(--accent-orb-1)' }}
+        />
+        <div 
+          className="absolute top-[40%] right-[-10%] w-[600px] h-[600px] rounded-full blur-[140px] animate-liquid-orb-2" 
+          style={{ backgroundColor: 'var(--accent-orb-2)' }}
+        />
+        <div 
+          className="absolute bottom-[-10%] left-[20%] w-[550px] h-[550px] rounded-full blur-[130px] animate-liquid-orb-1" 
+          style={{ backgroundColor: 'var(--accent-orb-1)' }}
+        />
       </div>
 
-      {/* Global Seamless YouTube Audio Stream Engine */}
-      <GlobalYouTubePlayer
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        volume={volume}
-        isMuted={isMuted}
-        showVideo={showVideo}
-        onTrackEnded={handleNextTrack}
-        audioQuality={audioQuality}
-      />
 
       {/* Toast Overlay */}
       {toast && (
@@ -550,7 +672,7 @@ export default function App() {
       {/* Main Header & Shifted Bottom Dock Navbar */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         favoritesCount={favorites.length}
@@ -563,17 +685,58 @@ export default function App() {
         user={user}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenShareModal={() => setIsShareModalOpen(true)}
+        isDataSaverMode={isDataSaverMode}
+        onToggleDataSaverMode={handleToggleDataSaverMode}
       />
 
       {/* Primary Main Content Area */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-28 w-full">
-        <AnimatePresence mode="wait">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-28 w-full overflow-hidden">
+        <AnimatePresence mode="wait" custom={tabDirection} initial={false}>
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 12, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.99 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            custom={tabDirection}
+            initial={(dir: number) => ({
+              x: dir > 0 ? 100 : -100,
+              opacity: 0,
+              scale: 0.98,
+              filter: 'blur(3px)'
+            })}
+            animate={{
+              x: 0,
+              opacity: 1,
+              scale: 1,
+              filter: 'blur(0px)'
+            }}
+            exit={(dir: number) => ({
+              x: dir < 0 ? 100 : -100,
+              opacity: 0,
+              scale: 0.98,
+              filter: 'blur(3px)'
+            })}
+            transition={{
+              x: { type: "spring", stiffness: 340, damping: 32 },
+              opacity: { duration: 0.22 },
+              scale: { duration: 0.22 },
+              filter: { duration: 0.22 }
+            }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.1}
+            onDragEnd={(_e, { offset, velocity }) => {
+              const swipeThreshold = 50;
+              if (offset.x < -swipeThreshold || velocity.x < -250) {
+                const idx = TAB_ORDER.indexOf(activeTab);
+                if (idx < TAB_ORDER.length - 1) {
+                  handleTabChange(TAB_ORDER[idx + 1]);
+                }
+              } else if (offset.x > swipeThreshold || velocity.x > 250) {
+                const idx = TAB_ORDER.indexOf(activeTab);
+                if (idx > 0) {
+                  handleTabChange(TAB_ORDER[idx - 1]);
+                }
+              }
+            }}
+            className="touch-pan-y min-h-[70vh] cursor-grab active:cursor-grabbing"
           >
             {activeTab === 'home' && (
               <HomeView
@@ -651,6 +814,10 @@ export default function App() {
               <SettingsView
                 darkMode={darkMode}
                 setDarkMode={setDarkMode}
+                accentThemeId={accentThemeId}
+                setAccentThemeId={setAccentThemeId}
+                customAccentHex={customAccentHex}
+                setCustomAccentHex={setCustomAccentHex}
                 youtubeApiKey={youtubeApiKey}
                 setYoutubeApiKey={setYoutubeApiKey}
                 audioQuality={audioQuality}
@@ -663,30 +830,19 @@ export default function App() {
                 user={user}
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}
                 onOpenShareModal={() => setIsShareModalOpen(true)}
+                onSyncGoogleAccount={handleSyncGoogleAccount}
                 favoritesCount={favorites.length}
                 subscriptionsCount={subscriptions.length}
                 playlistsCount={playlists.length}
+                playerEngine={playerEngine}
+                onChangePlayerEngine={handleChangePlayerEngine}
+                isDataSaverMode={isDataSaverMode}
+                onToggleDataSaverMode={handleToggleDataSaverMode}
               />
             )}
           </motion.div>
         </AnimatePresence>
       </main>
-
-      {/* Persistent Global YouTube Video & Audio Player */}
-      {currentTrack && (
-        <GlobalYouTubePlayer
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          volume={volume}
-          isMuted={isMuted}
-          showVideo={showVideo}
-          isOverlayOpen={isOverlayOpen}
-          onTrackEnded={handleNextTrack}
-          audioQuality={audioQuality}
-          onOpenOverlay={() => setIsOverlayOpen(true)}
-          onCloseVideo={() => setShowVideo(false)}
-        />
-      )}
 
       {/* Full Screen Audio Stream Player Overlay */}
       {isOverlayOpen && currentTrack && (
@@ -709,6 +865,35 @@ export default function App() {
           setShowVideo={setShowVideo}
           onShowToast={showToast}
           audioQuality={audioQuality}
+          playbackTime={playbackTime}
+          realDuration={realDuration}
+          onSeek={handleSeek}
+          playerEngine={playerEngine}
+          onChangePlayerEngine={handleChangePlayerEngine}
+          isDataSaverMode={isDataSaverMode}
+          onToggleDataSaverMode={handleToggleDataSaverMode}
+        />
+      )}
+
+      {/* Persistent Global YouTube Video & Audio Player */}
+      {currentTrack && (
+        <GlobalYouTubePlayer
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          volume={volume}
+          isMuted={isMuted}
+          showVideo={showVideo}
+          isOverlayOpen={isOverlayOpen}
+          onTrackEnded={handleNextTrack}
+          audioQuality={audioQuality}
+          isDataSaverMode={isDataSaverMode}
+          onOpenOverlay={() => setIsOverlayOpen(true)}
+          onCloseVideo={() => setShowVideo(false)}
+          onProgress={handleProgress}
+          onDuration={handleDuration}
+          seekToSeconds={seekToSeconds}
+          playerEngine={playerEngine}
+          onChangePlayerEngine={handleChangePlayerEngine}
         />
       )}
 
@@ -771,6 +956,7 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         user={user}
         onShowToast={showToast}
+        onSyncGoogleAccount={handleSyncGoogleAccount}
         favoritesCount={favorites.length}
         subscriptionsCount={subscriptions.length}
         playlistsCount={playlists.length}

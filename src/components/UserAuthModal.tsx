@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogIn, LogOut, ShieldCheck, Cloud, CloudOff, CheckCircle2, Sparkles, User as UserIcon, Loader2 } from 'lucide-react';
+import { X, LogIn, LogOut, ShieldCheck, Cloud, CloudOff, CheckCircle2, Sparkles, User as UserIcon, Loader2, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
 import { loginWithGoogle, logoutUser } from '../lib/firebase';
@@ -9,6 +9,7 @@ interface UserAuthModalProps {
   onClose: () => void;
   user: User | null;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onSyncGoogleAccount?: () => void;
   favoritesCount: number;
   subscriptionsCount: number;
   playlistsCount: number;
@@ -19,11 +20,13 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   onClose,
   user,
   onShowToast,
+  onSyncGoogleAccount,
   favoritesCount,
   subscriptionsCount,
   playlistsCount
 }) => {
   const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSignIn = async () => {
     setLoading(true);
@@ -146,14 +149,31 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleSignOut}
-                    disabled={loading}
-                    className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/25 text-xs font-black rounded-2xl flex items-center justify-center gap-2 transition-all"
-                  >
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
-                    Sign Out of Firebase
-                  </button>
+                  <div className="flex flex-col gap-2 pt-1">
+                    <button
+                      onClick={async () => {
+                        if (onSyncGoogleAccount) {
+                          setIsSyncing(true);
+                          await onSyncGoogleAccount();
+                          setTimeout(() => setIsSyncing(false), 800);
+                        }
+                      }}
+                      disabled={isSyncing || loading}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 active:scale-98"
+                    >
+                      <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
+                      <span>{isSyncing ? 'Syncing Google Account...' : 'Sync Google Account Data Now'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleSignOut}
+                      disabled={loading || isSyncing}
+                      className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/25 text-xs font-black rounded-2xl flex items-center justify-center gap-2 transition-all"
+                    >
+                      {loading ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+                      Sign Out of Firebase
+                    </button>
+                  </div>
                 </div>
               ) : (
                 /* Logged Out View */

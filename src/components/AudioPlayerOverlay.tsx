@@ -16,10 +16,15 @@ import {
   Video,
   ChevronDown,
   Music,
-  ListPlus
+  ListPlus,
+  Settings2,
+  Globe,
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
+import { PlayerEngine } from './GlobalYouTubePlayer';
 
 interface AudioPlayerOverlayProps {
   track: Track | null;
@@ -40,6 +45,13 @@ interface AudioPlayerOverlayProps {
   setShowVideo: (v: boolean) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   audioQuality?: string;
+  playbackTime?: number;
+  realDuration?: number;
+  onSeek?: (seconds: number) => void;
+  playerEngine?: PlayerEngine;
+  onChangePlayerEngine?: (engine: PlayerEngine) => void;
+  isDataSaverMode?: boolean;
+  onToggleDataSaverMode?: (enabled: boolean) => void;
 }
 
 export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
@@ -60,12 +72,21 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
   showVideo,
   setShowVideo,
   onShowToast,
-  audioQuality = '320'
+  audioQuality = '320',
+  playbackTime = 0,
+  realDuration = 0,
+  onSeek,
+  playerEngine = 'youtube',
+  onChangePlayerEngine,
+  isDataSaverMode = false,
+  onToggleDataSaverMode
 }) => {
-  const [currentTime, setCurrentTime] = useState(0);
+  const [internalTime, setInternalTime] = useState(0);
+  const currentTime = playbackTime || internalTime;
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [imgStage, setImgStage] = useState<number>(0);
+  const [showEngineDropdown, setShowEngineDropdown] = useState(false);
 
   useEffect(() => {
     setImgStage(0);
@@ -147,9 +168,9 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
     return () => { isSubscribed = false; };
   }, [track?.id, track?.title, track?.channel]);
 
-  // Reset currentTime on track change
+  // Reset internal time on track change
   useEffect(() => {
-    setCurrentTime(0);
+    setInternalTime(0);
   }, [track?.id]);
 
   const parseDurationSeconds = (durationStr?: string): number => {
@@ -164,7 +185,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
     return 220;
   };
 
-  const totalDurationSec = parseDurationSeconds(track?.duration);
+  const totalDurationSec = realDuration || parseDurationSeconds(track?.duration);
   const progressPercent = Math.min((currentTime / totalDurationSec) * 100, 100);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -172,19 +193,23 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
     const clickX = e.clientX - rect.left;
     const percent = Math.max(0, Math.min(1, clickX / rect.width));
     const newTime = Math.floor(percent * totalDurationSec);
-    setCurrentTime(newTime);
+    setInternalTime(newTime);
+    if (onSeek) {
+      onSeek(newTime);
+    }
   };
 
-  // Track progress counter
+  // Track progress counter fallback if not synced via props
   useEffect(() => {
+    if (playbackTime > 0) return; // Skip interval if live playbackTime is supplied from YouTube player
     let interval: any;
     if (isPlaying) {
       interval = setInterval(() => {
-        setCurrentTime((prev) => prev + 1);
+        setInternalTime((prev) => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, playbackTime]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -254,15 +279,95 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
           <ChevronDown size={20}/>
         </button>
 
-        <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded-full text-xs font-bold text-indigo-300">
-          <Radio size={14} className="animate-pulse text-indigo-400" />
-          <span>ORIGINAL YOUTUBE SOUND</span>
-          <span className="bg-indigo-600/60 text-white px-2 py-0.5 rounded-full text-[10px] uppercase font-mono">
-            {audioQuality === 'auto' ? 'Auto HQ' : `${audioQuality} kbps`}
-          </span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded-full text-xs font-bold text-indigo-300">
+            <Radio size={14} className="animate-pulse text-indigo-400" />
+            <span className="hidden xs:inline">YOUTUBE SOUND</span>
+            <span className="bg-indigo-600/60 text-white px-2 py-0.5 rounded-full text-[10px] uppercase font-mono">
+              {audioQuality === 'auto' ? 'Auto HQ' : `${audioQuality} kbps`}
+            </span>
+          </div>
+
+          {onToggleDataSaverMode && (
+            <button
+              onClick={() => onToggleDataSaverMode(!isDataSaverMode)}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1 border shadow-xs ${
+                isDataSaverMode
+                  ? 'bg-amber-500/30 text-amber-200 border-amber-400/50 ring-2 ring-amber-500/30'
+                  : 'bg-white/10 hover:bg-white/20 text-gray-300 border-white/15'
+              }`}
+              title={isDataSaverMode ? "Data Saver Active" : "Enable Data Saver"}
+            >
+              <Zap size={13} className={isDataSaverMode ? 'fill-amber-400 text-amber-400 animate-pulse' : ''} />
+              <span>{isDataSaverMode ? 'Saver ON' : 'Data Saver'}</span>
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
+          {/* Player Engine Switcher Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowEngineDropdown(!showEngineDropdown)}
+              className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-all active:scale-90 text-indigo-300 flex items-center justify-center"
+              title="Player Engine Options"
+            >
+              <Settings2 size={20} />
+            </button>
+
+            {showEngineDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-white/20 rounded-2xl shadow-2xl p-2 z-50 text-xs">
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 mb-1 flex items-center justify-between">
+                  <span>Player Engine</span>
+                  <Globe size={12} />
+                </div>
+                <button
+                  onClick={() => { onChangePlayerEngine?.('youtube'); setShowEngineDropdown(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'youtube' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                >
+                  <span>YouTube Standard</span>
+                </button>
+                <button
+                  onClick={() => { onChangePlayerEngine?.('youtube-nocookie'); setShowEngineDropdown(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'youtube-nocookie' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                >
+                  <span>YouTube NoCookie</span>
+                </button>
+                <button
+                  onClick={() => { onChangePlayerEngine?.('invidious'); setShowEngineDropdown(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'invidious' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                >
+                  <span>Invidious (3rd Party)</span>
+                </button>
+                <button
+                  onClick={() => { onChangePlayerEngine?.('piped'); setShowEngineDropdown(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'piped' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                >
+                  <span>Piped (3rd Party)</span>
+                </button>
+                <button
+                  onClick={() => { onChangePlayerEngine?.('embed'); setShowEngineDropdown(false); }}
+                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'embed' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                >
+                  <span>Direct IFrame</span>
+                </button>
+
+                {videoId && (
+                  <div className="border-t border-white/10 mt-1 pt-1">
+                    <a
+                      href={`https://yewtu.be/watch?v=${videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full text-left px-3 py-1.5 rounded-xl text-[11px] text-gray-400 hover:text-white hover:bg-white/5 flex items-center gap-1.5 font-medium"
+                    >
+                      <ExternalLink size={12} /> Open in Invidious Web
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {onOpenAddToPlaylist && (
             <button
               onClick={() => onOpenAddToPlaylist(track)}

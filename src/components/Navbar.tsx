@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { 
   Home, 
   Search, 
@@ -15,7 +16,8 @@ import {
   User,
   Cloud,
   Share2,
-  Download
+  Download,
+  Zap
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
@@ -35,6 +37,8 @@ interface NavbarProps {
   user?: FirebaseUser | null;
   onOpenAuthModal?: () => void;
   onOpenShareModal?: () => void;
+  isDataSaverMode?: boolean;
+  onToggleDataSaverMode?: (enabled: boolean) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -51,7 +55,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSubscriptionsModal,
   user,
   onOpenAuthModal,
-  onOpenShareModal
+  onOpenShareModal,
+  isDataSaverMode = false,
+  onToggleDataSaverMode
 }) => {
   return (
     <>
@@ -83,106 +89,185 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Center Top Nav Links (Desktop View) */}
-          <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-gray-200/50 dark:border-white/10 backdrop-blur-md">
+          <nav className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-gray-200/50 dark:border-white/10 backdrop-blur-md relative">
             <button
               onClick={() => setActiveTab('home')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'home'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'text-indigo-600 dark:text-indigo-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Home size={14} /> Home
+              {activeTab === 'home' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Home size={14} /> Home
+              </span>
             </button>
+
             <button
               onClick={() => setActiveTab('subscriptions')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 relative ${
+              className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'subscriptions'
-                  ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-xs'
+                  ? 'text-rose-600 dark:text-rose-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <div className="relative">
-                <Youtube size={14} className="text-rose-500" />
-                {selectedChannelFilter && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping" />
-                )}
-              </div>
-              <span>Subscriptions</span>
-              {subscriptionsCount > 0 ? (
-                <span className="w-4 h-4 bg-rose-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
-                  {subscriptionsCount}
-                </span>
-              ) : (
-                <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+              {activeTab === 'subscriptions' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
               )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <div className="relative">
+                  <Youtube size={14} className="text-rose-500" />
+                  {selectedChannelFilter && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping" />
+                  )}
+                </div>
+                <span>Subscriptions</span>
+                {subscriptionsCount > 0 ? (
+                  <span className="w-4 h-4 bg-rose-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
+                    {subscriptionsCount}
+                  </span>
+                ) : (
+                  <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse" />
+                )}
+              </span>
             </button>
+
             <button
               onClick={() => setActiveTab('search')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'search'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'text-indigo-600 dark:text-indigo-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Search size={14} /> Search
+              {activeTab === 'search' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Search size={14} /> Search
+              </span>
             </button>
+
             <button
               onClick={() => setActiveTab('library')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 relative ${
+              className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'library'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'text-indigo-600 dark:text-indigo-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Library size={14} /> Library
-              {favoritesCount > 0 && (
-                <span className="w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
-                  {favoritesCount}
-                </span>
+              {activeTab === 'library' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
               )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Library size={14} /> Library
+                {favoritesCount > 0 && (
+                  <span className="w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
+                    {favoritesCount}
+                  </span>
+                )}
+              </span>
             </button>
+
             <button
               onClick={() => setActiveTab('downloads')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'downloads'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'text-indigo-600 dark:text-indigo-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Download size={14} /> Downloads
+              {activeTab === 'downloads' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Download size={14} /> Downloads
+              </span>
             </button>
 
             {/* Settings Tab */}
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'settings'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                  ? 'text-indigo-600 dark:text-indigo-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Settings size={14} /> Settings
+              {activeTab === 'settings' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Settings size={14} /> Settings
+              </span>
             </button>
 
             {/* Profile Tab in Nav Bar */}
             {onOpenAuthModal && (
               <button
                 onClick={onOpenAuthModal}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                className="relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="Avatar" className="w-4 h-4 rounded-full object-cover ring-1 ring-emerald-500" />
-                ) : (
-                  <User size={14} className={user ? "text-emerald-500" : ""} />
-                )}
-                <span>{user ? (user.displayName?.split(' ')[0] || 'Profile') : 'Profile'}</span>
+                <span className="relative z-10 flex items-center gap-1.5">
+                  {user?.photoURL ? (
+                    <img src={user.photoURL} alt="Avatar" className="w-4 h-4 rounded-full object-cover ring-1 ring-emerald-500" />
+                  ) : (
+                    <User size={14} className={user ? "text-emerald-500" : ""} />
+                  )}
+                  <span>{user ? (user.displayName?.split(' ')[0] || 'Profile') : 'Profile'}</span>
+                </span>
               </button>
             )}
           </nav>
 
           {/* Right Top Bar Actions */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Data Saver Mode Quick Toggle */}
+            {onToggleDataSaverMode && (
+              <button
+                onClick={() => onToggleDataSaverMode(!isDataSaverMode)}
+                className={`px-2.5 py-1.5 rounded-2xl border backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shadow-xs ${
+                  isDataSaverMode
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 border-amber-500/40 ring-2 ring-amber-500/30'
+                    : 'bg-gray-500/10 hover:bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/20'
+                }`}
+                title={isDataSaverMode ? "Data Saver Active (Low Bandwidth Audio + Video Stream)" : "Turn on Data Saver (Audio + 144p Video Stream)"}
+              >
+                <Zap size={14} className={isDataSaverMode ? "text-amber-500 fill-amber-500 animate-bounce" : "text-gray-400"} />
+                <span className="hidden sm:inline">{isDataSaverMode ? "Data Saver ON" : "Data Saver"}</span>
+                {isDataSaverMode && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                )}
+              </button>
+            )}
+
             {hasYouTubeKey && (
               <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/20 dark:border-emerald-500/30 backdrop-blur-md">
                 <Key size={11} /> Key Connected
@@ -348,10 +433,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
-            <div className={`px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center ${
-              activeTab === 'home' ? 'bg-indigo-500/15 dark:bg-indigo-400/20 shadow-xs scale-105 border border-indigo-500/20' : 'bg-transparent'
-            }`}>
-              <Home size={17} className={activeTab === 'home' ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'home' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Home size={17} className={`relative z-10 ${activeTab === 'home' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Home</span>
           </button>
@@ -365,16 +455,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
-            <div className={`px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center relative ${
-              activeTab === 'subscriptions' ? 'bg-rose-500/15 dark:bg-rose-400/20 shadow-xs scale-105 border border-rose-500/20' : 'bg-transparent'
-            }`}>
-              <Youtube size={17} className={activeTab === 'subscriptions' ? 'stroke-[2.5px] text-rose-500' : 'stroke-2'} />
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'subscriptions' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-rose-500/15 dark:bg-rose-400/20 rounded-full border border-rose-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Youtube size={17} className={`relative z-10 ${activeTab === 'subscriptions' ? 'stroke-[2.5px] text-rose-500' : 'stroke-2'}`} />
               {subscriptionsCount > 0 ? (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-600 text-white rounded-full text-[8px] font-black flex items-center justify-center shadow-xs border border-white dark:border-slate-900">
+                <span className="absolute -top-1 -right-1 z-20 w-3.5 h-3.5 bg-rose-600 text-white rounded-full text-[8px] font-black flex items-center justify-center shadow-xs border border-white dark:border-slate-900">
                   {subscriptionsCount}
                 </span>
               ) : (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-rose-500 rounded-full animate-pulse border-2 border-white dark:border-slate-900" />
+                <span className="absolute -top-0.5 -right-0.5 z-20 w-2 h-2 bg-rose-500 rounded-full animate-pulse border-2 border-white dark:border-slate-900" />
               )}
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Subs</span>
@@ -389,10 +484,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
-            <div className={`px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center ${
-              activeTab === 'search' ? 'bg-indigo-500/15 dark:bg-indigo-400/20 shadow-xs scale-105 border border-indigo-500/20' : 'bg-transparent'
-            }`}>
-              <Search size={17} className={activeTab === 'search' ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'search' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Search size={17} className={`relative z-10 ${activeTab === 'search' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Search</span>
           </button>
@@ -406,12 +506,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
-            <div className={`px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center relative ${
-              activeTab === 'library' ? 'bg-indigo-500/15 dark:bg-indigo-400/20 shadow-xs scale-105 border border-indigo-500/20' : 'bg-transparent'
-            }`}>
-              <Library size={17} className={activeTab === 'library' ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'library' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Library size={17} className={`relative z-10 ${activeTab === 'library' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
               {favoritesCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white rounded-full text-[8px] font-black flex items-center justify-center shadow-xs border border-white/50">
+                <span className="absolute -top-1 -right-1 z-20 w-3.5 h-3.5 bg-rose-500 text-white rounded-full text-[8px] font-black flex items-center justify-center shadow-xs border border-white/50">
                   {favoritesCount}
                 </span>
               )}
@@ -428,10 +533,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
-            <div className={`px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center relative ${
-              activeTab === 'downloads' ? 'bg-indigo-500/15 dark:bg-indigo-400/20 shadow-xs scale-105 border border-indigo-500/20' : 'bg-transparent'
-            }`}>
-              <Download size={17} className={activeTab === 'downloads' ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'downloads' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Download size={17} className={`relative z-10 ${activeTab === 'downloads' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">DLs</span>
           </button>
@@ -445,10 +555,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
-            <div className={`px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center relative ${
-              activeTab === 'settings' ? 'bg-indigo-500/15 dark:bg-indigo-400/20 shadow-xs scale-105 border border-indigo-500/20' : 'bg-transparent'
-            }`}>
-              <Settings size={17} className={activeTab === 'settings' ? 'stroke-[2.5px]' : 'stroke-2'} />
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'settings' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Settings size={17} className={`relative z-10 ${activeTab === 'settings' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Settings</span>
           </button>

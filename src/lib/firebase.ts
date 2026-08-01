@@ -28,7 +28,7 @@ export const db = getFirestore(app);
 // Initialize Auth
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-// googleProvider.addScope('https://www.googleapis.com/auth/youtube.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/youtube.readonly');
 
 // Error Handler for Firestore operations
 export enum OperationType {
