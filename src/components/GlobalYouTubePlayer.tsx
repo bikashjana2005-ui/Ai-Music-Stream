@@ -24,6 +24,8 @@ interface GlobalYouTubePlayerProps {
   playerEngine?: PlayerEngine;
   onChangePlayerEngine?: (engine: PlayerEngine) => void;
   isDataSaverMode?: boolean;
+  isFullScreen?: boolean;
+  onToggleFullScreen?: () => void;
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -41,12 +43,16 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   seekToSeconds,
   playerEngine = 'youtube',
   onChangePlayerEngine,
-  isDataSaverMode = false
+  isDataSaverMode = false,
+  isFullScreen = false,
+  onToggleFullScreen
 }) => {
   const playerRef = useRef<ReactPlayer | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [showEngineMenu, setShowEngineMenu] = useState<boolean>(false);
   const [showSizePresets, setShowSizePresets] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
+  const [isNativeFullScreen, setIsNativeFullScreen] = useState<boolean>(false);
 
   // Mini player dimensions state
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
@@ -70,23 +76,53 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     }
   }, [seekToSeconds]);
 
+  // Handle native HTML5 fullscreen changes
+  useEffect(() => {
+    const handleFSChange = () => {
+      setIsNativeFullScreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFSChange);
+    return () => document.removeEventListener('fullscreenchange', handleFSChange);
+  }, []);
+
+  const handleFullscreenClick = () => {
+    if (onToggleFullScreen) {
+      onToggleFullScreen();
+      return;
+    }
+    if (!document.fullscreenElement) {
+      if (wrapperRef.current?.requestFullscreen) {
+        wrapperRef.current.requestFullscreen().catch(() => {});
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  };
+
   if (!videoId || videoId.length !== 11) return null;
 
-  const isFloating = showVideo && !isOverlayOpen;
-  const isOverlay = showVideo && isOverlayOpen;
+  const isFull = isFullScreen || isNativeFullScreen;
+  const isFloating = showVideo && !isOverlayOpen && !isFull;
+  const isOverlay = showVideo && isOverlayOpen && !isFull;
   const isHidden = !showVideo;
 
   let containerClassName = '';
   let playerBoxClassName = '';
 
-  if (isHidden) {
+  if (isFull) {
+    // Fullscreen Full Video Player Mode
+    containerClassName = 'fixed inset-0 z-[100] w-screen h-screen bg-black flex flex-col pointer-events-auto p-0 m-0 overflow-hidden';
+    playerBoxClassName = 'relative w-full h-full bg-black flex-1 flex items-center justify-center';
+  } else if (isHidden) {
     // Audio-Only / Background Mode: Keep single ReactPlayer mounted off-screen for uninterrupted audio
     containerClassName = 'fixed -top-[9999px] -left-[9999px] w-[320px] h-[180px] pointer-events-none z-[-10] overflow-hidden';
     playerBoxClassName = 'w-full h-full bg-black';
   } else if (isOverlay) {
     // Fullscreen Overlay mode: Position centered ON TOP of AudioPlayerOverlay (z-[90] > z-[70])
     containerClassName = 'fixed inset-0 z-[90] flex flex-col items-center justify-center pointer-events-none p-4 pb-20 sm:pb-24';
-    playerBoxClassName = 'relative w-full max-w-2xl aspect-video rounded-3xl overflow-hidden shadow-2xl ring-2 ring-indigo-500/60 bg-black pointer-events-auto group';
+    playerBoxClassName = 'relative w-full max-w-3xl aspect-video rounded-3xl overflow-hidden shadow-2xl ring-2 ring-rose-500/60 bg-black pointer-events-auto group';
   } else {
     // Floating Video Player mode: Draggable & Resizable window
     containerClassName = 'fixed bottom-20 right-3 sm:bottom-24 sm:right-6 rounded-3xl overflow-hidden shadow-2xl ring-2 ring-indigo-500/60 bg-slate-950 pointer-events-auto flex flex-col z-[90] border border-white/20 touch-none';
@@ -186,6 +222,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
   return (
     <motion.div
+      ref={wrapperRef}
       key="global-youtube-player-wrapper"
       className={containerClassName}
       style={isFloating ? { width: `${dimensions.width}px`, height: `${dimensions.height}px` } : undefined}
@@ -195,6 +232,43 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => setIsDragging(false)}
     >
+      {/* Fullscreen Video Player Header Bar */}
+      {isFull && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/90 via-black/60 to-transparent p-4 sm:p-6 flex items-center justify-between text-white pointer-events-auto transition-opacity duration-300 hover:opacity-100 opacity-90">
+          <div className="flex items-center gap-3">
+            <div className="px-3 py-1.5 bg-rose-600 rounded-full text-white font-black text-xs flex items-center gap-1.5 shadow-lg border border-rose-400/30">
+              <PlaySquare size={15} className="fill-white" />
+              <span>Full YouTube Video Player</span>
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-extrabold truncate max-w-xs sm:max-w-xl text-white">{currentTrack?.title}</h3>
+              <p className="text-xs text-rose-300 font-semibold truncate">{currentTrack?.channel}</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2.5">
+            <a
+              href={`https://www.youtube.com/watch?v=${videoId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-1.5 bg-white/15 hover:bg-white/25 border border-white/20 rounded-full text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+              title="Open video on YouTube.com"
+            >
+              <ExternalLink size={13} />
+              <span className="hidden sm:inline">YouTube.com</span>
+            </a>
+
+            <button
+              onClick={handleFullscreenClick}
+              className="p-2.5 bg-rose-600 hover:bg-rose-500 rounded-full text-white shadow-xl ring-2 ring-rose-400/50 transition-all active:scale-90"
+              title="Exit Full Video Player"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Floating Mode Header Controls (Acts as Drag Bar) */}
       {isFloating && (
         <div className="bg-slate-900/95 backdrop-blur-md px-2.5 py-1.5 flex items-center justify-between gap-1.5 border-b border-white/10 shrink-0 z-20 text-white select-none cursor-grab active:cursor-grabbing relative">
@@ -220,50 +294,113 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            {/* Quick Preset Size Menu */}
+            {/* Quick Preset Size Menu with Figures */}
             <div className="relative">
               <button
                 onClick={() => setShowSizePresets(!showSizePresets)}
-                className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 rounded-md text-[10px] font-mono font-bold text-gray-200 transition-all flex items-center gap-1 border border-white/10"
-                title="Resize presets"
+                className="px-2 py-0.5 bg-indigo-500/20 hover:bg-indigo-500/30 rounded-md text-[10px] font-mono font-black text-amber-300 transition-all flex items-center gap-1 border border-indigo-500/30 shadow-xs"
+                title="Resize mini player using figures"
               >
-                <Scaling size={11} />
-                <span>Size</span>
+                <Scaling size={11} className="text-amber-400" />
+                <span>{dimensions.width}×{dimensions.height}</span>
               </button>
 
               {showSizePresets && (
-                <div className="absolute right-0 top-full mt-1.5 w-40 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 text-xs">
-                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 mb-1">
-                    Preset Sizes
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-slate-900 border border-white/20 rounded-2xl shadow-2xl p-2.5 z-50 text-xs text-white backdrop-blur-2xl space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+                    <span className="font-black text-amber-400 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                      <Scaling size={12} /> Video Figure Resizer
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      {dimensions.width}×{dimensions.height}px
+                    </span>
                   </div>
-                  <button
-                    onClick={() => applyPresetSize(280, 170)}
-                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white/10 text-gray-200 flex justify-between font-mono text-[11px]"
-                  >
-                    <span>Compact</span>
-                    <span className="text-gray-400">280x170</span>
-                  </button>
-                  <button
-                    onClick={() => applyPresetSize(380, 220)}
-                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white/10 text-gray-200 flex justify-between font-mono text-[11px]"
-                  >
-                    <span>Medium</span>
-                    <span className="text-gray-400">380x220</span>
-                  </button>
-                  <button
-                    onClick={() => applyPresetSize(520, 310)}
-                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white/10 text-gray-200 flex justify-between font-mono text-[11px]"
-                  >
-                    <span>Large</span>
-                    <span className="text-gray-400">520x310</span>
-                  </button>
-                  <button
-                    onClick={() => applyPresetSize(640, 380)}
-                    className="w-full text-left px-2 py-1 rounded-lg hover:bg-white/10 text-gray-200 flex justify-between font-mono text-[11px]"
-                  >
-                    <span>Theater</span>
-                    <span className="text-gray-400">640x380</span>
-                  </button>
+
+                  {/* 16:9 Figure Presets */}
+                  <div className="space-y-1">
+                    <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">16:9 Figure Presets</div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {[
+                        { label: 'Compact', w: 280, h: 160 },
+                        { label: 'Medium', w: 380, h: 220 },
+                        { label: 'Large', w: 480, h: 270 },
+                        { label: 'HD 16:9', w: 640, h: 360 },
+                        { label: 'Theater', w: 720, h: 405 },
+                        { label: 'Ultra HD', w: 854, h: 480 },
+                      ].map((preset) => (
+                        <button
+                          key={preset.label}
+                          onClick={() => applyPresetSize(preset.w, preset.h)}
+                          className={`px-2 py-1 rounded-lg text-left font-semibold text-[10px] flex justify-between items-center transition-all ${
+                            dimensions.width === preset.w && dimensions.height === preset.h
+                              ? 'bg-indigo-600 text-white font-bold ring-1 ring-indigo-400'
+                              : 'bg-white/5 hover:bg-white/15 text-gray-300'
+                          }`}
+                        >
+                          <span>{preset.label}</span>
+                          <span className="font-mono text-[9px] opacity-75">{preset.w}×{preset.h}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Width & Height Figure Stepper */}
+                  <div className="space-y-1.5 pt-1 border-t border-white/10">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
+                      <span>Width Figure</span>
+                      <span className="font-mono text-amber-300">{dimensions.width}px</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => applyPresetSize(Math.max(220, dimensions.width - 40), Math.round(Math.max(220, dimensions.width - 40) * (9/16)))}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold"
+                      >
+                        -40
+                      </button>
+                      <input 
+                        type="range"
+                        min="220"
+                        max="960"
+                        step="20"
+                        value={dimensions.width}
+                        onChange={(e) => {
+                          const w = parseInt(e.target.value, 10);
+                          applyPresetSize(w, Math.round(w * (9/16)));
+                        }}
+                        className="flex-1 accent-indigo-500 cursor-pointer"
+                      />
+                      <button
+                        onClick={() => applyPresetSize(Math.min(960, dimensions.width + 40), Math.round(Math.min(960, dimensions.width + 40) * (9/16)))}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold"
+                      >
+                        +40
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Scale Figures */}
+                  <div className="space-y-1 pt-1 border-t border-white/10">
+                    <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Scale Factor Figures</div>
+                    <div className="flex items-center gap-1">
+                      {[0.75, 1.0, 1.25, 1.5, 2.0].map((scale) => {
+                        const targetW = Math.round(380 * scale);
+                        const targetH = Math.round(220 * scale);
+                        return (
+                          <button
+                            key={scale}
+                            onClick={() => applyPresetSize(targetW, targetH)}
+                            className={`flex-1 py-1 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                              dimensions.width === targetW
+                                ? 'bg-amber-400 text-slate-950 font-black'
+                                : 'bg-white/10 hover:bg-white/20 text-gray-300'
+                            }`}
+                          >
+                            {scale}x
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -329,15 +466,13 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
               )}
             </div>
 
-            {onOpenOverlay && (
-              <button
-                onClick={onOpenOverlay}
-                className="p-1 bg-indigo-600 hover:bg-indigo-500 rounded-md text-white transition-all flex items-center shadow-sm active:scale-95"
-                title="Expand Full Screen Player"
-              >
-                <Maximize2 size={11} />
-              </button>
-            )}
+            <button
+              onClick={handleFullscreenClick}
+              className="p-1 bg-rose-600 hover:bg-rose-500 rounded-md text-white transition-all flex items-center shadow-sm active:scale-95"
+              title="Expand Full Video Player (Fullscreen)"
+            >
+              <Maximize2 size={11} />
+            </button>
             {onCloseVideo && (
               <button
                 onClick={onCloseVideo}

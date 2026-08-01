@@ -35,10 +35,13 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       onShowToast(`Welcome back, ${res.user.displayName || 'Music Enthusiast'}! Cloud synced.`, 'success');
       onClose();
     } catch (err: any) {
-      console.error('Google sign in error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        onShowToast('Google sign-in cancelled.', 'error');
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        console.info('Google sign-in cancelled by user.');
+        onShowToast('Google sign-in was cancelled.', 'info');
+      } else if (err?.code === 'auth/popup-blocked') {
+        onShowToast('Popup was blocked by your browser. Please allow popups or open in a new tab.', 'error');
       } else {
+        console.error('Google sign in error:', err);
         onShowToast('Sign in failed. If you are in preview, try opening the app in a new tab.', 'error');
       }
     } finally {

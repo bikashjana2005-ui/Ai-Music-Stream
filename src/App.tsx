@@ -143,6 +143,7 @@ export default function App() {
   const [volume, setVolume] = useState<number>(85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [showVideo, setShowVideo] = useState<boolean>(true);
+  const [isFullScreenVideo, setIsFullScreenVideo] = useState<boolean>(false);
   const [playerEngine, setPlayerEngine] = useState<PlayerEngine>(() => {
     return (localStorage.getItem('aura_player_engine') as PlayerEngine) || 'youtube';
   });
@@ -163,7 +164,17 @@ export default function App() {
   }, []);
 
   const handleDuration = useCallback((durationSec: number) => {
-    setRealDuration(Math.floor(durationSec));
+    const totalSecs = Math.floor(durationSec);
+    setRealDuration(totalSecs);
+    if (totalSecs > 0) {
+      const hrs = Math.floor(totalSecs / 3600);
+      const mins = Math.floor((totalSecs % 3600) / 60);
+      const secs = totalSecs % 60;
+      const formatted = hrs > 0
+        ? `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
+        : `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      setCurrentTrack((prev) => prev ? { ...prev, duration: formatted } : null);
+    }
   }, []);
 
   const handleSeek = useCallback((newTime: number) => {
@@ -638,7 +649,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors selection:bg-indigo-500 selection:text-white relative overflow-x-hidden flex flex-col items-center justify-start w-full">
       <AnimatePresence>
         {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       </AnimatePresence>
@@ -690,53 +701,15 @@ export default function App() {
       />
 
       {/* Primary Main Content Area */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-28 w-full overflow-hidden">
-        <AnimatePresence mode="wait" custom={tabDirection} initial={false}>
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-28 w-full flex flex-col items-center justify-start self-center overflow-x-hidden">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
-            custom={tabDirection}
-            initial={(dir: number) => ({
-              x: dir > 0 ? 100 : -100,
-              opacity: 0,
-              scale: 0.98,
-              filter: 'blur(3px)'
-            })}
-            animate={{
-              x: 0,
-              opacity: 1,
-              scale: 1,
-              filter: 'blur(0px)'
-            }}
-            exit={(dir: number) => ({
-              x: dir < 0 ? 100 : -100,
-              opacity: 0,
-              scale: 0.98,
-              filter: 'blur(3px)'
-            })}
-            transition={{
-              x: { type: "spring", stiffness: 340, damping: 32 },
-              opacity: { duration: 0.22 },
-              scale: { duration: 0.22 },
-              filter: { duration: 0.22 }
-            }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.1}
-            onDragEnd={(_e, { offset, velocity }) => {
-              const swipeThreshold = 50;
-              if (offset.x < -swipeThreshold || velocity.x < -250) {
-                const idx = TAB_ORDER.indexOf(activeTab);
-                if (idx < TAB_ORDER.length - 1) {
-                  handleTabChange(TAB_ORDER[idx + 1]);
-                }
-              } else if (offset.x > swipeThreshold || velocity.x > 250) {
-                const idx = TAB_ORDER.indexOf(activeTab);
-                if (idx > 0) {
-                  handleTabChange(TAB_ORDER[idx - 1]);
-                }
-              }
-            }}
-            className="touch-pan-y min-h-[70vh] cursor-grab active:cursor-grabbing"
+            initial={{ opacity: 0, y: 6, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.99 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center"
           >
             {activeTab === 'home' && (
               <HomeView
@@ -852,6 +825,7 @@ export default function App() {
           onTogglePlay={handleTogglePlay}
           onClose={() => setIsOverlayOpen(false)}
           onDownload={(track) => setDownloadTrack(track)}
+          onPlayTrack={handlePlayTrack}
           onNextTrack={handleNextTrack}
           onPrevTrack={handlePrevTrack}
           isFavorite={favorites.some(f => f.id === currentTrack.id)}
@@ -872,6 +846,7 @@ export default function App() {
           onChangePlayerEngine={handleChangePlayerEngine}
           isDataSaverMode={isDataSaverMode}
           onToggleDataSaverMode={handleToggleDataSaverMode}
+          onToggleFullScreen={() => setIsFullScreenVideo(prev => !prev)}
         />
       )}
 
@@ -884,11 +859,16 @@ export default function App() {
           isMuted={isMuted}
           showVideo={showVideo}
           isOverlayOpen={isOverlayOpen}
+          isFullScreen={isFullScreenVideo}
+          onToggleFullScreen={() => setIsFullScreenVideo(prev => !prev)}
           onTrackEnded={handleNextTrack}
           audioQuality={audioQuality}
           isDataSaverMode={isDataSaverMode}
           onOpenOverlay={() => setIsOverlayOpen(true)}
-          onCloseVideo={() => setShowVideo(false)}
+          onCloseVideo={() => {
+            setShowVideo(false);
+            setIsFullScreenVideo(false);
+          }}
           onProgress={handleProgress}
           onDuration={handleDuration}
           seekToSeconds={seekToSeconds}

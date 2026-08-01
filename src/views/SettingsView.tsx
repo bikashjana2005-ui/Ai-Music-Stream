@@ -124,37 +124,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   ];
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto animate-fade-in pb-28">
+    <div className="space-y-6 max-w-6xl mx-auto w-full animate-fade-in pb-28">
       
-      {/* Header Banner */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-indigo-900/90 via-slate-900/90 to-purple-950/90 text-white border border-white/10 shadow-xl backdrop-blur-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full filter blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="p-2 bg-indigo-500/20 text-indigo-300 rounded-2xl border border-indigo-500/30">
-                <Settings size={22} />
-              </span>
-              <h1 className="text-2xl font-black tracking-tight text-white">App & Preferences Settings</h1>
-            </div>
-            <p className="text-xs text-gray-300 font-medium">
-              Configure playback engines, liquid glass themes, audio bitrates, and cloud synchronization.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="px-3 py-1 bg-white/10 rounded-xl text-[11px] font-bold text-indigo-200 border border-white/15 flex items-center gap-1.5">
-              <Globe size={13} className="text-indigo-400" />
-              Engine: {playerEngine.toUpperCase()}
-            </span>
-            <span className="px-3 py-1 bg-white/10 rounded-xl text-[11px] font-bold text-amber-300 border border-white/15 flex items-center gap-1.5">
-              <Sparkles size={13} />
-              {audioQuality} kbps Audio
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* Category Navigation Pills */}
       <div className="flex items-center gap-1.5 p-1.5 bg-gray-100/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-x-auto no-scrollbar scroll-smooth">
         {tabs.map((tab) => {

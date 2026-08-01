@@ -92,8 +92,12 @@ export async function loginWithGoogle() {
       sessionStorage.setItem('aura_yt_access_token', accessToken);
     }
     return { user: result.user, accessToken };
-  } catch (error) {
-    console.error('Google Auth Error:', error);
+  } catch (error: any) {
+    if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+      console.info('Google sign-in popup closed by user.');
+    } else {
+      console.error('Google Auth Error:', error);
+    }
     throw error;
   }
 }

@@ -193,8 +193,21 @@ async function searchYouTubeScrape(query: string, sortByDate?: boolean): Promise
 
                     const title = video.title?.runs?.[0]?.text || video.title?.simpleText || "Unknown Title";
                     const channel = video.ownerText?.runs?.[0]?.text || "YouTube Creator";
-                    const duration = video.lengthText?.simpleText || "3:45";
-                    const views = video.viewCountText?.simpleText || "Verified Stream";
+                    
+                    // Exact video duration extraction
+                    let duration = video.lengthText?.simpleText || video.lengthText?.runs?.[0]?.text;
+                    if (!duration && video.thumbnailOverlays && Array.isArray(video.thumbnailOverlays)) {
+                      for (const overlay of video.thumbnailOverlays) {
+                        const timeStatus = overlay?.thumbnailOverlayTimeStatusRenderer?.text;
+                        if (timeStatus) {
+                          duration = timeStatus?.simpleText || timeStatus?.runs?.[0]?.text;
+                          if (duration) break;
+                        }
+                      }
+                    }
+                    if (!duration) duration = "3:45";
+
+                    const views = video.viewCountText?.simpleText || video.shortViewCountText?.simpleText || "Verified Stream";
                     const publishedTime = video.publishedTimeText?.simpleText || video.publishedTimeText?.runs?.[0]?.text || "";
 
                     // Exclude YouTube Shorts (< 0:50)
@@ -222,21 +235,46 @@ async function searchYouTubeScrape(query: string, sortByDate?: boolean): Promise
                     const title = lockup.metadata?.lockupMetadataViewModel?.title?.content || "Original YouTube Video";
                     const channel = lockup.metadata?.lockupMetadataViewModel?.metadataRows?.[0]?.metadataParts?.[0]?.text?.content || "YouTube Creator";
                     
+                    // Extract exact duration from lockup overlay
+                    let duration = "";
+                    const overlays = lockup.contentImage?.thumbnailViewModel?.overlays || 
+                                     lockup.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.overlays ||
+                                     lockup.overlays;
+                    if (overlays && Array.isArray(overlays)) {
+                      for (const overlay of overlays) {
+                        const timeStatus = overlay?.thumbnailOverlayTimeStatusRenderer?.text;
+                        if (timeStatus) {
+                          duration = timeStatus?.content || timeStatus?.runs?.[0]?.text || timeStatus?.simpleText || "";
+                          if (duration) break;
+                        }
+                      }
+                    }
+                    if (!duration) duration = "4:12";
+
+                    // Extract view count & published time from metadataParts if available
+                    let views = "Verified Stream";
+                    let publishedTime = "Recently Uploaded";
+                    const parts = lockup.metadata?.lockupMetadataViewModel?.metadataRows?.[1]?.metadataParts;
+                    if (parts && Array.isArray(parts)) {
+                      if (parts[0]?.text?.content) views = parts[0].text.content;
+                      if (parts[1]?.text?.content) publishedTime = parts[1].text.content;
+                    }
+
                     tracks.push({
                       id: videoId,
                       title,
                       channel,
-                      views: "Live Stream",
-                      duration: "Original Stream",
-                      publishedTime: "Recently Uploaded",
-                      aiMoodTags: "Real-time Original Video",
+                      views,
+                      duration,
+                      publishedTime,
+                      aiMoodTags: publishedTime ? `Uploaded ${publishedTime}` : "Real-time Original Video",
                       genre: "Original YouTube"
                     });
                   }
                 }
               }
             }
-            if (tracks.length >= 20) break;
+            if (tracks.length >= 80) break;
           }
         }
       } catch (e) {
@@ -244,25 +282,35 @@ async function searchYouTubeScrape(query: string, sortByDate?: boolean): Promise
       }
     }
 
-    // Fallback: Regex extraction for /watch?v= links if fewer than 6 items found
-    if (tracks.length < 6) {
+    // Fallback: Regex extraction for /watch?v= links if fewer than 10 items found
+    if (tracks.length < 10) {
       const videoRegex = /"videoId":"([a-zA-Z0-9_-]{11})".*?"title":{"runs":\[{"text":"(.*?)"}\].*?"ownerText":{"runs":\[{"text":"(.*?)"}\]/g;
       let match;
       while ((match = videoRegex.exec(html)) !== null) {
         const videoId = match[1];
         if (!seenIds.has(videoId)) {
           seenIds.add(videoId);
+
+          // Extract exact duration from nearby snippet
+          let duration = "3:45";
+          const snippet = html.slice(match.index, match.index + 1200);
+          const timeMatch = snippet.match(/"simpleText":"(\d{1,2}:\d{2}(?::\d{2})?)"/) ||
+                            snippet.match(/"content":"(\d{1,2}:\d{2}(?::\d{2})?)"/);
+          if (timeMatch) {
+            duration = timeMatch[1];
+          }
+
           tracks.push({
             id: videoId,
             title: match[2] || "Original YouTube Track",
             channel: match[3] || "YouTube Creator",
             views: "Verified Stream",
-            duration: "3:45",
+            duration,
             publishedTime: "Live Stream",
             aiMoodTags: "Real-time Original Video",
             genre: "Original YouTube"
           });
-          if (tracks.length >= 16) break;
+          if (tracks.length >= 50) break;
         }
       }
     }
@@ -529,15 +577,19 @@ app.get("/api/health", (req, res) => {
 // Recommendations Endpoint
 app.post("/api/music/recommendations", async (req, res) => {
   try {
-    const { mood = "General Trending", genre } = req.body;
-    const cacheKey = `rec_${mood}_${genre || ''}`;
+    const { mood = "General Trending", genre, trackTitle, channel } = req.body;
+    const cacheKey = `rec_${mood}_${genre || ''}_${trackTitle || ''}_${channel || ''}`;
     const cached = getCached<any>(cacheKey);
     if (cached) {
       return res.json(cached);
     }
 
-    // Direct YouTube Search for 100% Real, Playable Tracks matching the mood
-    const searchQuery = `${mood} ${genre || ''} official audio full song`.trim();
+    // Direct YouTube Search for 100% Real, Playable Tracks matching mood or specific track/channel
+    let searchQuery = `${mood} ${genre || ''} official audio full song`.trim();
+    if (trackTitle) {
+      searchQuery = `${trackTitle} ${channel || ''} related music audio`.trim();
+    }
+
     const scrapedTracks = await searchYouTubeScrape(searchQuery);
 
     if (scrapedTracks && scrapedTracks.length > 0) {
@@ -583,7 +635,7 @@ app.get("/api/music/autocomplete", async (req, res) => {
 // Search Endpoint
 app.post("/api/music/search", async (req, res) => {
   try {
-    const { query, youtubeApiKey, forceFresh, filter } = req.body;
+    const { query, youtubeApiKey, forceFresh, filter, page = 1 } = req.body;
     if (!query || typeof query !== "string") {
       return res.status(400).json({ error: "Query is required" });
     }
@@ -593,7 +645,18 @@ app.post("/api/music/search", async (req, res) => {
     else if (filter === 'live') modifiedQuery = `${query} live concert performance`;
     else if (filter === 'remix') modifiedQuery = `${query} remix bass boosted`;
 
-    const cacheKey = `search_${modifiedQuery.toLowerCase().trim()}_${youtubeApiKey ? 'yt' : 'noyt'}`;
+    // Vary search modifier based on page number to yield unlimited distinct results
+    if (page === 2) {
+      modifiedQuery = `${modifiedQuery} full song hd audio`;
+    } else if (page === 3) {
+      modifiedQuery = `${modifiedQuery} video music album`;
+    } else if (page === 4) {
+      modifiedQuery = `${modifiedQuery} live acoustic version`;
+    } else if (page > 4) {
+      modifiedQuery = `${modifiedQuery} special edition mix`;
+    }
+
+    const cacheKey = `search_${modifiedQuery.toLowerCase().trim()}_p${page}_${youtubeApiKey ? 'yt' : 'noyt'}`;
     if (!forceFresh) {
       const cached = getCached<any>(cacheKey);
       if (cached) {
@@ -607,7 +670,7 @@ app.post("/api/music/search", async (req, res) => {
     if (ytKey && ytKey.trim().length > 10) {
       try {
         const ytRes = await fetch(
-          `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=12&q=${encodeURIComponent(modifiedQuery)}&key=${ytKey.trim()}`
+          `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=50&q=${encodeURIComponent(modifiedQuery)}&key=${ytKey.trim()}`
         );
         if (ytRes.ok) {
           const ytData = await ytRes.json();
@@ -621,7 +684,7 @@ app.post("/api/music/search", async (req, res) => {
               aiMoodTags: "Original Audio",
               genre: "YouTube Music"
             }));
-            const result = { tracks, source: "YouTube API" };
+            const result = { tracks, source: "YouTube API", page };
             setCached(cacheKey, result, 3 * 60 * 1000);
             return res.json(result);
           }
@@ -639,7 +702,7 @@ app.post("/api/music/search", async (req, res) => {
     }
 
     if (scrapedTracks && scrapedTracks.length > 0) {
-      const result = { tracks: scrapedTracks, source: "Real-Time YouTube Scraper" };
+      const result = { tracks: scrapedTracks, source: "Real-Time YouTube Scraper", page };
       setCached(cacheKey, result, 3 * 60 * 1000);
       return res.json(result);
     }

@@ -32,6 +32,7 @@ interface AudioPlayerOverlayProps {
   onTogglePlay: () => void;
   onClose: () => void;
   onDownload: (track: Track) => void;
+  onPlayTrack?: (track: Track) => void;
   onNextTrack?: () => void;
   onPrevTrack?: () => void;
   isFavorite?: boolean;
@@ -52,6 +53,7 @@ interface AudioPlayerOverlayProps {
   onChangePlayerEngine?: (engine: PlayerEngine) => void;
   isDataSaverMode?: boolean;
   onToggleDataSaverMode?: (enabled: boolean) => void;
+  onToggleFullScreen?: () => void;
 }
 
 export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
@@ -60,6 +62,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
   onTogglePlay,
   onClose,
   onDownload,
+  onPlayTrack,
   onNextTrack,
   onPrevTrack,
   isFavorite = false,
@@ -79,7 +82,8 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
   playerEngine = 'youtube',
   onChangePlayerEngine,
   isDataSaverMode = false,
-  onToggleDataSaverMode
+  onToggleDataSaverMode,
+  onToggleFullScreen
 }) => {
   const [internalTime, setInternalTime] = useState(0);
   const currentTime = playbackTime || internalTime;
@@ -87,6 +91,10 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [imgStage, setImgStage] = useState<number>(0);
   const [showEngineDropdown, setShowEngineDropdown] = useState(false);
+
+  // YouTube Related Video Recommendations state
+  const [relatedRecommendations, setRelatedRecommendations] = useState<Track[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState<boolean>(false);
 
   useEffect(() => {
     setImgStage(0);
@@ -167,6 +175,39 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
     getTrackAnalysis();
     return () => { isSubscribed = false; };
   }, [track?.id, track?.title, track?.channel]);
+
+  // Fetch YouTube Related Video Recommendations
+  useEffect(() => {
+    if (!track) return;
+    let isMounted = true;
+
+    const fetchRelated = async () => {
+      setLoadingRelated(true);
+      try {
+        const res = await fetch("/api/music/recommendations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            trackTitle: track.title, 
+            channel: track.channel 
+          })
+        });
+        const data = await res.json();
+        if (isMounted && data.tracks) {
+          // Filter out current playing track
+          const filtered = data.tracks.filter((t: Track) => t.id !== track.id);
+          setRelatedRecommendations(filtered.slice(0, 8));
+        }
+      } catch (e) {
+        console.error("Error fetching related recommendations:", e);
+      } finally {
+        if (isMounted) setLoadingRelated(false);
+      }
+    };
+
+    fetchRelated();
+    return () => { isMounted = false; };
+  }, [track?.id]);
 
   // Reset internal time on track change
   useEffect(() => {
@@ -388,6 +429,16 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
             <Video size={20} />
           </button>
 
+          {showVideo && onToggleFullScreen && (
+            <button
+              onClick={onToggleFullScreen}
+              className="p-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 rounded-full text-white shadow-lg shadow-rose-600/30 transition-all active:scale-90 flex items-center justify-center border border-rose-400/40"
+              title="Launch Full Video Player Mode"
+            >
+              <Zap size={20} className="fill-yellow-300 text-yellow-300 animate-pulse" />
+            </button>
+          )}
+
           {onToggleFavorite && (
             <button
               onClick={() => onToggleFavorite(track)}
@@ -557,6 +608,73 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
             </div>
           ) : (
             <p className="text-xs text-gray-300 leading-relaxed font-normal">{aiAnalysis}</p>
+          )}
+        </div>
+
+        {/* YouTube Up Next & Recommended Videos Section */}
+        <div className="mt-6 p-4 bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl w-full text-left space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles size={14} className="text-rose-400 animate-pulse" />
+              <span className="text-xs font-black uppercase tracking-wider text-white">
+                Recommended Videos & Up Next
+              </span>
+            </div>
+            <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+              YouTube Recommendations
+            </span>
+          </div>
+
+          {loadingRelated ? (
+            <div className="space-y-2 py-2">
+              {[1, 2, 3].map((i) => (
+                <div key={`related-skel-${i}`} className="h-14 bg-white/10 animate-pulse rounded-xl" />
+              ))}
+            </div>
+          ) : relatedRecommendations.length > 0 ? (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1 no-scrollbar">
+              {relatedRecommendations.map((recTrack) => {
+                const isCurrent = recTrack.id === track.id;
+                return (
+                  <div
+                    key={`overlay-rec-${recTrack.id}`}
+                    onClick={() => onPlayTrack ? onPlayTrack(recTrack) : null}
+                    className={`flex items-center gap-3 p-2.5 rounded-xl transition-all cursor-pointer group ${
+                      isCurrent ? 'bg-rose-600/30 border border-rose-500/50' : 'bg-white/5 hover:bg-white/15'
+                    }`}
+                  >
+                    <div className="relative w-16 h-10 rounded-lg overflow-hidden shrink-0 bg-black">
+                      <img
+                        src={`https://i.ytimg.com/vi/${recTrack.id}/hqdefault.jpg`}
+                        alt={recTrack.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/30 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                        <Play size={14} className="fill-white text-white opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+                      </div>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate group-hover:text-rose-300 transition-colors">
+                        {recTrack.title}
+                      </p>
+                      <p className="text-[10px] text-gray-400 truncate">
+                        {recTrack.channel}
+                      </p>
+                    </div>
+
+                    <span className="text-[10px] font-mono text-gray-400 shrink-0">
+                      {recTrack.duration || '3:30'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 py-2">No related video recommendations found.</p>
           )}
         </div>
 
