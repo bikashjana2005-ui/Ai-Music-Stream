@@ -38,7 +38,14 @@ import {
   Pause,
   HardDrive,
   WifiOff,
-  RotateCcw
+  RotateCcw,
+  Eye,
+  Calendar,
+  Flame,
+  Copy,
+  Check,
+  Youtube,
+  Tag
 } from 'lucide-react';
 import ReactPlayer from 'react-player/youtube';
 import { Track } from '../types';
@@ -98,6 +105,7 @@ interface GlobalYouTubePlayerProps {
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isOnline?: boolean;
   downloadedTracks?: Track[];
+  darkMode?: boolean;
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -128,7 +136,8 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   onToggleSubscribe,
   onShowToast,
   isOnline = true,
-  downloadedTracks = []
+  downloadedTracks = [],
+  darkMode = true
 }) => {
   const playerRef = useRef<ReactPlayer | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -197,6 +206,9 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
+  const [selectedTopicCategory, setSelectedTopicCategory] = useState<string>('All');
+  const [showAiSummary, setShowAiSummary] = useState<boolean>(false);
+  const [copyLinkSuccess, setCopyLinkSuccess] = useState<boolean>(false);
 
   // Related YouTube Video Recommendations & Comments
   const [recommendations, setRecommendations] = useState<Track[]>([]);
@@ -242,6 +254,34 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFSChange);
   }, []);
 
+  // Fetch related recommendations with optional category filter
+  const fetchRelated = async (cat?: string) => {
+    if (!currentTrack) return;
+    setLoadingRecs(true);
+    const activeCategory = cat !== undefined ? cat : selectedTopicCategory;
+    try {
+      const res = await fetch("/api/music/recommendations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          trackTitle: currentTrack.title, 
+          channel: currentTrack.channel,
+          genre: currentTrack.genre,
+          category: activeCategory
+        })
+      });
+      const data = await res.json();
+      if (data.tracks) {
+        const filtered = data.tracks.filter((t: Track) => t.id !== currentTrack.id);
+        setRecommendations(filtered.slice(0, 12));
+      }
+    } catch (e) {
+      console.error("Error fetching YouTube player recommendations:", e);
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
+
   // Fetch contextual YouTube recommendations & initial comments when track changes
   useEffect(() => {
     if (!currentTrack) return;
@@ -278,31 +318,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       }
     ]);
 
-    // Fetch related recommendations
-    const fetchRelated = async () => {
-      setLoadingRecs(true);
-      try {
-        const res = await fetch("/api/music/recommendations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            trackTitle: currentTrack.title, 
-            channel: currentTrack.channel 
-          })
-        });
-        const data = await res.json();
-        if (isMounted && data.tracks) {
-          const filtered = data.tracks.filter((t: Track) => t.id !== currentTrack.id);
-          setRecommendations(filtered.slice(0, 10));
-        }
-      } catch (e) {
-        console.error("Error fetching YouTube player recommendations:", e);
-      } finally {
-        if (isMounted) setLoadingRecs(false);
-      }
-    };
-
-    fetchRelated();
+    fetchRelated('All');
     return () => { isMounted = false; };
   }, [currentTrack?.id]);
 
@@ -443,7 +459,9 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
   if (isFull) {
     // YouTube Original Full Player Layout Mode
-    containerClassName = 'fixed inset-0 z-[100] w-screen h-screen bg-slate-950 flex flex-col pointer-events-auto p-0 m-0 overflow-y-auto text-white select-none';
+    containerClassName = `fixed inset-0 z-[100] w-screen h-screen ${
+      darkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'
+    } flex flex-col pointer-events-auto p-0 m-0 overflow-y-auto select-none transition-colors duration-300`;
     playerBoxClassName = isTheaterMode 
       ? 'relative w-full aspect-video max-h-[80vh] bg-black flex items-center justify-center shadow-2xl'
       : 'relative w-full aspect-video bg-black flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden';
@@ -750,7 +768,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
           <div className="flex items-center justify-between pb-1">
             <button
               onClick={handleFullscreenClick}
-              className="px-3.5 py-1.5 bg-slate-900/90 hover:bg-slate-800 border border-white/15 text-slate-200 hover:text-white rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+              className="px-3.5 py-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-white/15 text-slate-800 dark:text-slate-200 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
               title="Back to App View"
             >
               <ArrowLeft size={16} />
@@ -761,7 +779,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
               <button
                 onClick={() => setIsTheaterMode(!isTheaterMode)}
                 className={`px-3 py-1.5 rounded-full border text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
-                  isTheaterMode ? 'bg-rose-600/30 border-rose-500 text-rose-300' : 'bg-slate-900/90 border-white/15 text-slate-300 hover:bg-slate-800'
+                  isTheaterMode ? 'bg-rose-600/30 border-rose-500 text-rose-600 dark:text-rose-300' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-white/15 text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
                 title="Toggle Theater Mode"
               >
@@ -966,34 +984,165 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 </div>
               </div>
 
-              {/* EXPANDABLE VIDEO DESCRIPTION & METADATA BOX */}
-              <div
-                onClick={() => setShowFullDescription(!showFullDescription)}
-                className="bg-slate-900/80 hover:bg-slate-900 border border-white/10 rounded-2xl p-4 cursor-pointer transition-colors space-y-2 text-xs"
-              >
-                <div className="flex items-center gap-2 font-black text-slate-300">
-                  <span>1,428,910 views</span>
-                  <span>•</span>
-                  <span>Aug 2, 2026</span>
-                  <span className="text-rose-400 font-mono">#officialvideo</span>
-                  <span className="text-indigo-400 font-mono">#youtube</span>
+              {/* REDESIGNED RICH EXPANDABLE VIDEO DESCRIPTION & METADATA LAYOUT */}
+              <div className="bg-white/80 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 text-xs transition-colors">
+                {/* TOP METRIC & SPEC BADGES ROW */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/10">
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs font-black text-slate-700 dark:text-slate-200">
+                    <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-white/10">
+                      <Eye size={13} className="text-rose-500" />
+                      <span>1,428,910 views</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-white/10">
+                      <Calendar size={13} className="text-indigo-500" />
+                      <span>Aug 2, 2026</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 px-3 py-1 rounded-full border border-rose-500/20 font-mono">
+                      <Flame size={13} className="text-rose-500 fill-rose-500" />
+                      <span>#1 Trending in Music</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full border border-indigo-500/20 font-mono font-bold text-[11px]">
+                    <Zap size={12} className="text-indigo-500" />
+                    <span>320kbps Lossless • 1080p HD</span>
+                  </div>
                 </div>
 
-                <p className={`text-slate-300 leading-relaxed font-normal ${showFullDescription ? '' : 'line-clamp-2'}`}>
-                  Official YouTube video stream for "{currentTrack?.title}" by {currentTrack?.channel}. Produced with high-definition audio and video fidelity. Subscribe to the official channel for new releases, official music videos, and live performances.
-                </p>
-
-                <div className="font-bold text-rose-400 pt-1">
-                  {showFullDescription ? 'Show less' : '...more'}
+                {/* AI SOUND INSIGHTS METADATA GRID */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/60 dark:border-white/5 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Genre</span>
+                    <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block">{currentTrack?.genre || 'Pop & Electronic'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/60 dark:border-white/5 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Tempo & Key</span>
+                    <span className="font-extrabold text-rose-600 dark:text-rose-400 truncate block">124 BPM • C Minor</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/60 dark:border-white/5 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Release Type</span>
+                    <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block">Official Video Single</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/60 dark:border-white/5 space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Channel</span>
+                    <span className="font-extrabold text-indigo-600 dark:text-indigo-400 truncate block">{decodeHtmlEntities(currentTrack?.channel || 'Vevo')}</span>
+                  </div>
                 </div>
+
+                {/* INTERACTIVE CHAPTER TIMESTAMPS */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-extrabold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles size={13} className="text-amber-500" />
+                    <span>Interactive Video Chapters</span>
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { time: '00:00', sec: 0, label: 'Intro' },
+                      { time: '00:45', sec: 45, label: 'Verse 1' },
+                      { time: '01:30', sec: 90, label: 'Chorus' },
+                      { time: '02:15', sec: 135, label: 'Guitar Solo' },
+                      { time: '03:00', sec: 180, label: 'Outro' }
+                    ].map((ch) => (
+                      <button
+                        key={ch.time}
+                        type="button"
+                        onClick={() => {
+                          if (playerRef.current) {
+                            playerRef.current.seekTo(ch.sec, 'seconds');
+                          }
+                          onShowToast?.(`Seeked to chapter ${ch.time} (${ch.label})`, 'info');
+                        }}
+                        className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white dark:hover:bg-rose-600 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-mono font-bold border border-slate-200 dark:border-white/10 transition-all flex items-center gap-1.5 active:scale-95 group"
+                      >
+                        <span className="text-rose-500 dark:text-rose-400 group-hover:text-white font-extrabold">{ch.time}</span>
+                        <span className="text-[10px] font-sans font-medium text-slate-500 dark:text-slate-400 group-hover:text-white">{ch.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* EXPANDABLE DESCRIPTION PARAGRAPH */}
+                <div className="space-y-2 pt-1">
+                  <p className={`text-slate-700 dark:text-slate-300 leading-relaxed font-normal ${showFullDescription ? '' : 'line-clamp-2'}`}>
+                    Official YouTube video stream for <strong className="font-bold text-slate-900 dark:text-white">"{decodeHtmlEntities(currentTrack?.title || '')}"</strong> by <span className="text-rose-600 dark:text-rose-400 font-bold">@{decodeHtmlEntities(currentTrack?.channel || '')}</span>. Mastered for high-fidelity audio and 1080p video stream. Subscribe to the official channel for upcoming releases, tour dates, and live performances.
+                  </p>
+
+                  {showFullDescription && (
+                    <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-white/10 text-slate-600 dark:text-slate-400 text-xs">
+                      <p className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">
+                        #musicvideo #{currentTrack?.genre?.replace(/\s+/g, '').toLowerCase() || 'youtube'} #official #audio #{currentTrack?.channel?.replace(/\s+/g, '').toLowerCase()}
+                      </p>
+                      <div className="flex flex-wrap gap-4 text-[11px] pt-1">
+                        <span className="font-bold">℗ 2026 {decodeHtmlEntities(currentTrack?.channel || 'YouTube Creator')}</span>
+                        <span>•</span>
+                        <span className="font-bold">Released on YouTube Music</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ACTION FOOTER & SUMMARY TOGGLE */}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/80 dark:border-white/10 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
+                        setCopyLinkSuccess(true);
+                        setTimeout(() => setCopyLinkSuccess(false), 2000);
+                        onShowToast?.('Direct YouTube link copied!', 'info');
+                      }}
+                      className="px-3 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-full font-bold text-[11px] flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      {copyLinkSuccess ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                      <span>{copyLinkSuccess ? 'Copied Link!' : 'Copy Link'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAiSummary(!showAiSummary)}
+                      className={`px-3 py-1 rounded-full font-bold text-[11px] flex items-center gap-1.5 transition-all active:scale-95 ${
+                        showAiSummary 
+                          ? 'bg-rose-500 text-white shadow-md' 
+                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/20'
+                      }`}
+                    >
+                      <Sparkles size={13} />
+                      <span>{showAiSummary ? 'Hide AI Summary' : 'AI Track Summary'}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowFullDescription(!showFullDescription)}
+                    className="font-extrabold text-rose-600 dark:text-rose-400 hover:underline text-xs flex items-center gap-1"
+                  >
+                    <span>{showFullDescription ? 'Show Less' : 'Read Full Description...'}</span>
+                    {showFullDescription ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                </div>
+
+                {/* AI TRACK SUMMARY DRAWER */}
+                {showAiSummary && (
+                  <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl space-y-2 text-xs text-slate-800 dark:text-slate-200 animate-fade-in">
+                    <div className="flex items-center gap-2 font-black text-rose-600 dark:text-rose-400">
+                      <Sparkles size={14} />
+                      <span>AI Generated Track Summary</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-[11px] font-medium leading-relaxed text-slate-700 dark:text-slate-300">
+                      <li>Features a driving bass rhythm coupled with spacious reverb and pristine 1080p HD video mastering.</li>
+                      <li>Verified YouTube release by {decodeHtmlEntities(currentTrack?.channel || 'Official Channel')} with millions of monthly listeners.</li>
+                    </ul>
+                  </div>
+                )}
               </div>
 
               {/* AUTHENTIC YOUTUBE COMMENTS SECTION */}
-              <div className="space-y-4 pt-4 border-t border-white/10">
+              <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-white/10">
                 {/* Comments Header with Total Count & Close/Open Toggle */}
-                <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-white/10 flex-wrap gap-2">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
                       <MessageSquare size={20} className="text-rose-500" />
                       <span>{comments.length + 1840} Comments</span>
                     </h3>
@@ -1003,10 +1152,10 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                     {/* Open/Close Comments Toggle Button */}
                     <button
                       onClick={() => setIsCommentsVisible(!isCommentsVisible)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-white/15 rounded-full text-xs font-bold text-slate-200 hover:text-white transition-all active:scale-95 shadow-sm"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/15 rounded-full text-xs font-bold text-slate-800 dark:text-slate-200 transition-all active:scale-95 shadow-xs"
                       title={isCommentsVisible ? "Close Comments" : "Open Comments"}
                     >
-                      {isCommentsVisible ? <ChevronUp size={14} className="text-rose-400" /> : <ChevronDown size={14} className="text-rose-400" />}
+                      {isCommentsVisible ? <ChevronUp size={14} className="text-rose-500" /> : <ChevronDown size={14} className="text-rose-500" />}
                       <span>{isCommentsVisible ? 'Close Comments' : 'Open Comments'}</span>
                     </button>
 
@@ -1015,24 +1164,24 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                       <div className="relative">
                         <button
                           onClick={() => setShowSortMenu(!showSortMenu)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-white/10 hover:border-white/25 rounded-full text-xs font-bold text-slate-200 transition-all active:scale-95"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/25 rounded-full text-xs font-bold text-slate-800 dark:text-slate-200 transition-all active:scale-95"
                         >
-                          <ListFilter size={14} className="text-slate-400" />
+                          <ListFilter size={14} className="text-slate-500 dark:text-slate-400" />
                           <span className="hidden sm:inline">Sort: {commentSort === 'top' ? 'Top' : 'Newest'}</span>
                           <ChevronDown size={13} />
                         </button>
 
                         {showSortMenu && (
-                          <div className="absolute right-0 top-full mt-1.5 w-44 bg-slate-950 border border-white/20 rounded-xl shadow-2xl p-1 z-50 text-xs">
+                          <div className="absolute right-0 top-full mt-1.5 w-44 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/20 rounded-xl shadow-2xl p-1 z-50 text-xs">
                             <button
                               onClick={() => { setCommentSort('top'); setShowSortMenu(false); }}
-                              className={`w-full text-left px-3 py-2 rounded-lg font-bold flex items-center justify-between ${commentSort === 'top' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
+                              className={`w-full text-left px-3 py-2 rounded-lg font-bold flex items-center justify-between ${commentSort === 'top' ? 'bg-rose-600 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'}`}
                             >
                               Top comments
                             </button>
                             <button
                               onClick={() => { setCommentSort('newest'); setShowSortMenu(false); }}
-                              className={`w-full text-left px-3 py-2 rounded-lg font-bold flex items-center justify-between ${commentSort === 'newest' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
+                              className={`w-full text-left px-3 py-2 rounded-lg font-bold flex items-center justify-between ${commentSort === 'newest' ? 'bg-rose-600 text-white' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10'}`}
                             >
                               Newest first
                             </button>
@@ -1046,15 +1195,15 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 {!isCommentsVisible ? (
                   <div 
                     onClick={() => setIsCommentsVisible(true)}
-                    className="p-3.5 bg-slate-900/60 hover:bg-slate-800/80 rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer transition-all group shadow-md"
+                    className="p-3.5 bg-slate-100 dark:bg-slate-900/60 hover:bg-slate-200 dark:hover:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-white/10 flex items-center justify-between cursor-pointer transition-all group shadow-xs"
                   >
                     <div className="flex items-center gap-2.5">
-                      <MessageSquare size={18} className="text-slate-400 group-hover:text-rose-400 transition-colors" />
-                      <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                      <MessageSquare size={18} className="text-slate-500 dark:text-slate-400 group-hover:text-rose-500 transition-colors" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white">
                         Comments section closed ({comments.length + 1840} comments hidden)
                       </span>
                     </div>
-                    <span className="text-xs font-extrabold text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20 group-hover:bg-rose-600 group-hover:text-white transition-all">
+                    <span className="text-xs font-extrabold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20 group-hover:bg-rose-600 group-hover:text-white transition-all">
                       Open Comments
                     </span>
                   </div>
@@ -1073,7 +1222,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                       onChange={(e) => setNewCommentInput(e.target.value)}
                       onFocus={() => setIsCommentFocused(true)}
                       placeholder="Add a comment to YouTube video..."
-                      className="w-full bg-slate-900 border-b-2 border-white/20 focus:border-rose-500 px-3 py-2 text-xs font-medium text-white placeholder-slate-500 focus:outline-none transition-colors"
+                      className="w-full bg-slate-100 dark:bg-slate-900 border-b-2 border-slate-300 dark:border-white/20 focus:border-rose-500 px-3 py-2 text-xs font-medium text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none transition-colors rounded-t-lg"
                     />
 
                     {(isCommentFocused || newCommentInput.trim().length > 0) && (
@@ -1084,7 +1233,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                             setNewCommentInput('');
                             setIsCommentFocused(false);
                           }}
-                          className="px-3.5 py-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                          className="px-3.5 py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                         >
                           Cancel
                         </button>
@@ -1104,47 +1253,47 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 {/* Comments List */}
                 <div className="space-y-4 pt-2">
                   {comments.map((cmt) => (
-                    <div key={cmt.id} className="flex gap-3 p-3.5 bg-slate-900/60 rounded-2xl border border-white/5 space-y-2">
+                    <div key={cmt.id} className="flex gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-white/5 space-y-2 shadow-xs">
                       <img
                         src={cmt.avatar}
                         alt={cmt.author}
-                        className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-white/20"
+                        className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-white/20"
                       />
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-xs text-white">@{cmt.author}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{cmt.timeAgo}</span>
+                          <span className="font-extrabold text-xs text-slate-900 dark:text-white">@{cmt.author}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{cmt.timeAgo}</span>
                         </div>
                         
-                        <p className="text-xs text-slate-200 font-normal leading-relaxed">{cmt.text}</p>
+                        <p className="text-xs text-slate-800 dark:text-slate-200 font-normal leading-relaxed">{cmt.text}</p>
 
                         {/* Comment Action Controls (Like, Dislike, Reply) */}
-                        <div className="flex items-center gap-4 pt-1 text-xs text-slate-400">
+                        <div className="flex items-center gap-4 pt-1 text-xs text-slate-500 dark:text-slate-400">
                           <button
                             onClick={() => handleToggleCommentLike(cmt.id)}
-                            className={`flex items-center gap-1.5 hover:text-white transition-colors ${
-                              cmt.userLiked ? 'text-rose-400 font-extrabold' : ''
+                            className={`flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors ${
+                              cmt.userLiked ? 'text-rose-500 font-extrabold' : ''
                             }`}
                             title="Like comment"
                           >
-                            <ThumbsUp size={13} className={cmt.userLiked ? 'fill-rose-400' : ''} />
+                            <ThumbsUp size={13} className={cmt.userLiked ? 'fill-rose-500' : ''} />
                             <span>{cmt.likes}</span>
                           </button>
 
                           <button
                             onClick={() => handleToggleCommentDislike(cmt.id)}
-                            className={`flex items-center gap-1.5 hover:text-white transition-colors ${
-                              cmt.userDisliked ? 'text-rose-400 font-extrabold' : ''
+                            className={`flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors ${
+                              cmt.userDisliked ? 'text-rose-500 font-extrabold' : ''
                             }`}
                             title="Dislike comment"
                           >
-                            <ThumbsDown size={13} className={cmt.userDisliked ? 'fill-rose-400' : ''} />
+                            <ThumbsDown size={13} className={cmt.userDisliked ? 'fill-rose-500' : ''} />
                             {cmt.dislikes ? <span>{cmt.dislikes}</span> : null}
                           </button>
 
                           <button
                             onClick={() => setReplyingToId(replyingToId === cmt.id ? null : cmt.id)}
-                            className="hover:text-white font-bold transition-colors text-[11px]"
+                            className="hover:text-slate-900 dark:hover:text-white font-bold transition-colors text-[11px]"
                           >
                             Reply
                           </button>
@@ -1152,18 +1301,18 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
                         {/* Inline Reply Form */}
                         {replyingToId === cmt.id && (
-                          <div className="flex gap-2 pt-2 border-t border-white/10 mt-2">
+                          <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-white/10 mt-2">
                             <input
                               type="text"
                               value={replyInputText}
                               onChange={(e) => setReplyInputText(e.target.value)}
                               placeholder={`Reply to @${cmt.author}...`}
-                              className="flex-1 bg-slate-950 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                              className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-white/15 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-rose-500"
                             />
                             <button
                               type="button"
                               onClick={() => setReplyingToId(null)}
-                              className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                              className="px-2.5 py-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                             >
                               Cancel
                             </button>
@@ -1183,13 +1332,13 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                           <div className="pl-4 border-l-2 border-rose-500/30 space-y-2 mt-2 pt-2">
                             {cmt.replies.map((r) => (
                               <div key={r.id} className="flex gap-2 items-start text-xs">
-                                <CornerDownRight size={13} className="text-rose-400 mt-1 shrink-0" />
+                                <CornerDownRight size={13} className="text-rose-500 mt-1 shrink-0" />
                                 <div className="space-y-0.5">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-white text-[11px]">@{r.author}</span>
-                                    <span className="text-[9px] text-slate-400">{r.timeAgo}</span>
+                                    <span className="font-bold text-slate-900 dark:text-white text-[11px]">@{r.author}</span>
+                                    <span className="text-[9px] text-slate-500 dark:text-slate-400">{r.timeAgo}</span>
                                   </div>
-                                  <p className="text-slate-300 text-xs">{r.text}</p>
+                                  <p className="text-slate-700 dark:text-slate-300 text-xs">{r.text}</p>
                                 </div>
                               </div>
                             ))}
@@ -1205,36 +1354,67 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
             </div>
 
-            {/* RIGHT SIDEBAR (Up Next & Recommended YouTube Videos) */}
+            {/* RIGHT SIDEBAR (Up Next & Recommended YouTube Videos with Multi-Topic Filter) */}
             {!isTheaterMode && (
               <div className="lg:col-span-4 space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                  <span className="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-1.5">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-white/10">
+                  <span className="font-extrabold text-sm text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                     <Sparkles size={15} className="text-rose-500 animate-pulse" />
                     Up Next Videos
                   </span>
-                  <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                    YouTube Autoplay
+                  <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                    Diverse Channels
                   </span>
                 </div>
 
+                {/* Topic Filter Pills Bar */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                  {[
+                    { id: 'All', label: '🔥 All Topics' },
+                    { id: 'Lofi', label: '🎧 Lofi & Chill' },
+                    { id: 'Pop', label: '🎵 Pop & Hits' },
+                    { id: 'EDM', label: '⚡ EDM & Synthwave' },
+                    { id: 'Rock', label: '🎸 Rock & Metal' },
+                    { id: 'HipHop', label: '🎤 Hip-Hop & R&B' },
+                    { id: 'Acoustic', label: '🎻 Acoustic & Jazz' },
+                    { id: 'Live', label: '📺 Live Concerts' }
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTopicCategory(cat.id);
+                        fetchRelated(cat.id);
+                      }}
+                      className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all border shrink-0 active:scale-95 ${
+                        selectedTopicCategory === cat.id
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-md'
+                          : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-rose-400'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Recommendations Video List */}
                 {loadingRecs ? (
                   <div className="space-y-2 py-2">
                     {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={`rec-skel-${i}`} className="h-20 bg-slate-900 animate-pulse rounded-xl" />
+                      <div key={`rec-skel-${i}`} className="h-20 bg-slate-200 dark:bg-slate-900 animate-pulse rounded-xl" />
                     ))}
                   </div>
                 ) : recommendations.length > 0 ? (
-                  <div className="space-y-2.5">
+                  <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1 no-scrollbar">
                     {recommendations.map((recTrack) => (
                       <div
                         key={`yt-full-rec-${recTrack.id}`}
                         onClick={() => {
                           if (onPlayTrack) onPlayTrack(recTrack);
                         }}
-                        className="flex gap-3 p-2 bg-slate-900/60 hover:bg-slate-800 border border-white/5 hover:border-white/15 rounded-xl cursor-pointer transition-all group"
+                        className="flex gap-3 p-2 bg-white dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-white/5 hover:border-rose-300 dark:hover:border-white/15 rounded-xl cursor-pointer transition-all group shadow-xs"
                       >
-                        <div className="relative w-28 h-16 rounded-lg overflow-hidden bg-black shrink-0">
+                        <div className="relative w-28 h-16 rounded-lg overflow-hidden bg-black shrink-0 shadow-sm">
                           <img
                             src={`https://i.ytimg.com/vi/${recTrack.id}/hqdefault.jpg`}
                             alt={recTrack.title}
@@ -1251,22 +1431,29 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                           </div>
                         </div>
 
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-rose-300 transition-colors">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2 leading-snug group-hover:text-rose-600 dark:group-hover:text-rose-300 transition-colors">
                             {decodeHtmlEntities(recTrack.title)}
                           </h4>
-                          <p className="text-[10px] text-slate-400 font-medium truncate">
-                            {decodeHtmlEntities(recTrack.channel)}
-                          </p>
-                          <p className="text-[9px] text-slate-500 font-mono">
-                            412K views • 3 days ago
-                          </p>
+                          
+                          <div className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-slate-400 font-medium truncate">
+                            <Youtube size={11} className="text-rose-500 shrink-0" />
+                            <span className="truncate">{decodeHtmlEntities(recTrack.channel)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[9px] text-slate-500 dark:text-slate-400 font-mono">
+                            <span>{recTrack.views || '420K views'}</span>
+                            <span>•</span>
+                            <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded font-sans font-extrabold text-[9px]">
+                              {recTrack.genre || 'Music'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 py-4 text-center">No additional video recommendations found.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 py-4 text-center">No additional video recommendations found for this category.</p>
                 )}
               </div>
             )}

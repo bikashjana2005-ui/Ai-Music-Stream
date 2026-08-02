@@ -812,27 +812,63 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
 });
 
-// Recommendations Endpoint
+// Recommendations Endpoint (Multi-Topic & Multi-Channel Support)
 app.post("/api/music/recommendations", async (req, res) => {
   try {
-    const { mood = "General Trending", genre, trackTitle, channel } = req.body;
-    const cacheKey = `rec_${mood}_${genre || ''}_${trackTitle || ''}_${channel || ''}`;
+    const { mood = "General Trending", genre, trackTitle, channel, category = "All" } = req.body;
+    const cacheKey = `rec_v2_${category}_${mood}_${genre || ''}_${trackTitle || ''}_${channel || ''}`;
     const cached = getCached<any>(cacheKey);
     if (cached) {
       return res.json(cached);
     }
 
-    // Direct YouTube Search for 100% Real, Playable Tracks matching mood or specific track/channel
-    let searchQuery = `${mood} ${genre || ''} official audio full song`.trim();
-    if (trackTitle) {
-      searchQuery = `${trackTitle} ${channel || ''} related music audio`.trim();
+    let scrapedTracks: any[] = [];
+
+    if (category && category !== "All") {
+      // Category specific query across diverse channels
+      const query = `${category} official video music audio live`.trim();
+      scrapedTracks = await searchYouTubeScrape(query);
+    } else if (trackTitle) {
+      // Fetch related videos from different topics & channels
+      const primaryQuery = `${trackTitle} official video music audio`.trim();
+      const topicQueries = [
+        primaryQuery,
+        `${genre || 'trending'} top music videos`,
+        `lofi chill beats live stream`,
+        `pop hit songs 2026`
+      ];
+
+      const searchPromises = topicQueries.map(q => searchYouTubeScrape(q));
+      const results = await Promise.all(searchPromises);
+      
+      // Merge & interleave tracks from different channels
+      const channelSet = new Set<string>();
+      const trackMap = new Map<string, any>();
+      
+      results.flat().forEach(t => {
+        if (t && t.id && !trackMap.has(t.id)) {
+          // Add tag if missing
+          if (!t.genre) {
+            t.genre = t.title.toLowerCase().includes('lofi') ? 'Lofi & Chill'
+                    : t.title.toLowerCase().includes('pop') ? 'Pop & Hits'
+                    : t.title.toLowerCase().includes('rock') ? 'Rock & Indie'
+                    : t.title.toLowerCase().includes('remix') ? 'EDM & Remix'
+                    : 'Trending Music';
+          }
+          trackMap.set(t.id, t);
+        }
+      });
+
+      scrapedTracks = Array.from(trackMap.values());
+    } else {
+      const searchQuery = `${mood} ${genre || ''} official audio full song`.trim();
+      scrapedTracks = await searchYouTubeScrape(searchQuery);
     }
 
-    const scrapedTracks = await searchYouTubeScrape(searchQuery);
-
     if (scrapedTracks && scrapedTracks.length > 0) {
+      // Filter out duplicates and ensure diverse channels
       const result = { tracks: scrapedTracks, isFallback: false };
-      setCached(cacheKey, result);
+      setCached(cacheKey, result, 10 * 60 * 1000);
       return res.json(result);
     }
 

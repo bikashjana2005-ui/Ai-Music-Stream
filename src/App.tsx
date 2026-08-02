@@ -927,6 +927,7 @@ export default function App() {
           onShowToast={showToast}
           isOnline={isOnline}
           downloadedTracks={downloadedTracks}
+          darkMode={darkMode}
         />
       )}
 
