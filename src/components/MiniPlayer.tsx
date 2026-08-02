@@ -297,10 +297,39 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
                     </div>
                   </div>
 
+                  {/* Numerical Figure Inputs */}
+                  <div className="space-y-2 pt-1 border-t border-white/10">
+                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exact Numeric Figures (px)</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-0.5">
+                        <label className="text-[9px] text-gray-400 font-bold block">Height (px)</label>
+                        <input
+                          type="number"
+                          min="48"
+                          max="160"
+                          value={heightFigure}
+                          onChange={(e) => setHeightFigure(parseInt(e.target.value, 10) || 48)}
+                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div className="space-y-0.5">
+                        <label className="text-[9px] text-gray-400 font-bold block">Width (px)</label>
+                        <input
+                          type="number"
+                          min="300"
+                          max="1200"
+                          value={widthFigure}
+                          onChange={(e) => setWidthFigure(parseInt(e.target.value, 10) || 300)}
+                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Height Figure Stepper */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      <span>Exact Height Figure</span>
+                      <span>Height Slider</span>
                       <span className="font-mono text-amber-300">{heightFigure} px</span>
                     </div>
                     <div className="flex items-center gap-2">

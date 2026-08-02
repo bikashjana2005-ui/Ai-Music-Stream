@@ -118,7 +118,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     { id: 'all', label: 'Overview', icon: <SlidersHorizontal size={15} /> },
     { id: 'playback', label: 'Playback & Player', icon: <Volume2 size={15} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={15} /> },
-    { id: 'account', label: 'Account & Sync', icon: <UserIcon size={15} /> },
     { id: 'share', label: 'App Link', icon: <Share2 size={15} /> },
     { id: 'system', label: 'System & Data', icon: <HardDrive size={15} /> },
   ];
@@ -560,100 +559,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           )}
 
-          {/* 3. ACCOUNT & CLOUD SYNC SECTION */}
-          {(activeTab === 'all' || activeTab === 'account') && (
-            <div className="p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                    <UserIcon size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-extrabold text-gray-900 dark:text-white uppercase tracking-wider">
-                      Account & Firestore Sync
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Backup playlists, favorites, and channels to cloud</p>
-                  </div>
-                </div>
-                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${
-                  user
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                }`}>
-                  {user ? 'Firestore Connected' : 'Offline Mode'}
-                </span>
-              </div>
 
-              {user ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
-                  <div className="flex items-center gap-3">
-                    {user.photoURL ? (
-                      <img src={user.photoURL} alt={user.displayName || 'User Avatar'} className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500 shadow-sm" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-lg shadow-sm">
-                        <UserIcon size={22} />
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="font-extrabold text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
-                        {user.displayName || 'Authenticated User'}
-                        <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                      </h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{user.email}</p>
-                      <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                        Synced: {subscriptionsCount} Subscriptions • {favoritesCount} Favorites • {playlistsCount} Playlists
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={async () => {
-                        if (onSyncGoogleAccount) {
-                          setIsSyncing(true);
-                          await onSyncGoogleAccount();
-                          setTimeout(() => setIsSyncing(false), 800);
-                        }
-                      }}
-                      disabled={isSyncing}
-                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95"
-                    >
-                      <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-                      <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
-                    </button>
-
-                    <button
-                      onClick={onOpenAuthModal}
-                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95"
-                    >
-                      <Cloud size={14} />
-                      <span>Manage</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-slate-900/40 rounded-2xl border border-gray-200/80 dark:border-white/10">
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5">
-                      <Cloud size={16} className="text-indigo-500" />
-                      Sign in with Google Account
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
-                      Sync your playlists, favorites, and channel subscriptions securely in real time.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={onOpenAuthModal}
-                    className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
-                  >
-                    <LogIn size={15} />
-                    Sign In & Sync
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* 4. SHARE & APPLICATION LINK SECTION */}
           {(activeTab === 'all' || activeTab === 'share') && (

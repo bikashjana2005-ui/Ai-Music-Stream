@@ -60,10 +60,11 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     const savedH = localStorage.getItem('aura_player_height');
     return {
       width: savedW ? parseInt(savedW, 10) : 380,
-      height: savedH ? parseInt(savedH, 10) : 220,
+      height: savedH ? parseInt(savedH, 10) : 214,
     };
   });
 
+  const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(true);
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
@@ -129,8 +130,8 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     playerBoxClassName = 'relative flex-1 w-full h-full bg-black pointer-events-auto select-none';
   }
 
-  // Handle corner resizing drag events
-  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, corner: 'br' | 'bl' | 'tr' | 'tl') => {
+  // Handle corner and edge resizing drag events with figures calculation
+  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, handle: 'br' | 'bl' | 'tr' | 'tl' | 'r' | 'b' | 'l' | 't') => {
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
@@ -152,18 +153,30 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       const maxWidth = window.innerWidth - 24;
       const maxHeight = window.innerHeight - 24;
 
-      if (corner === 'br') {
-        newWidth = Math.max(240, Math.min(maxWidth, startWidth + deltaX));
-        newHeight = Math.max(140, Math.min(maxHeight, startHeight + deltaY));
-      } else if (corner === 'bl') {
-        newWidth = Math.max(240, Math.min(maxWidth, startWidth - deltaX));
-        newHeight = Math.max(140, Math.min(maxHeight, startHeight + deltaY));
-      } else if (corner === 'tr') {
-        newWidth = Math.max(240, Math.min(maxWidth, startWidth + deltaX));
-        newHeight = Math.max(140, Math.min(maxHeight, startHeight - deltaY));
-      } else if (corner === 'tl') {
-        newWidth = Math.max(240, Math.min(maxWidth, startWidth - deltaX));
-        newHeight = Math.max(140, Math.min(maxHeight, startHeight - deltaY));
+      if (handle === 'br') {
+        newWidth = Math.max(220, Math.min(maxWidth, startWidth + deltaX));
+        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight + deltaY));
+      } else if (handle === 'bl') {
+        newWidth = Math.max(220, Math.min(maxWidth, startWidth - deltaX));
+        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight + deltaY));
+      } else if (handle === 'tr') {
+        newWidth = Math.max(220, Math.min(maxWidth, startWidth + deltaX));
+        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight - deltaY));
+      } else if (handle === 'tl') {
+        newWidth = Math.max(220, Math.min(maxWidth, startWidth - deltaX));
+        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight - deltaY));
+      } else if (handle === 'r') {
+        newWidth = Math.max(220, Math.min(maxWidth, startWidth + deltaX));
+        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : startHeight;
+      } else if (handle === 'b') {
+        newHeight = Math.max(135, Math.min(maxHeight, startHeight + deltaY));
+        newWidth = lockAspectRatio ? Math.round(newHeight * (16 / 9)) : startWidth;
+      } else if (handle === 'l') {
+        newWidth = Math.max(220, Math.min(maxWidth, startWidth - deltaX));
+        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : startHeight;
+      } else if (handle === 't') {
+        newHeight = Math.max(135, Math.min(maxHeight, startHeight - deltaY));
+        newWidth = lockAspectRatio ? Math.round(newHeight * (16 / 9)) : startWidth;
       }
 
       setDimensions({ width: newWidth, height: newHeight });
@@ -344,18 +357,62 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                     </div>
                   </div>
 
-                  {/* Width & Height Figure Stepper */}
+                  {/* Width & Height Numerical Figure Inputs */}
                   <div className="space-y-1.5 pt-1 border-t border-white/10">
                     <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
-                      <span>Width Figure</span>
-                      <span className="font-mono text-amber-300">{dimensions.width}px</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
+                      <span>Exact Figure Inputs (px)</span>
                       <button
-                        onClick={() => applyPresetSize(Math.max(220, dimensions.width - 40), Math.round(Math.max(220, dimensions.width - 40) * (9/16)))}
-                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold"
+                        onClick={() => setLockAspectRatio(!lockAspectRatio)}
+                        className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold transition-all border ${
+                          lockAspectRatio 
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                            : 'bg-white/10 text-gray-400 border-white/10'
+                        }`}
                       >
-                        -40
+                        {lockAspectRatio ? '🔒 16:9 Locked' : '🔓 Custom Ratio'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-0.5">
+                        <label className="text-[9px] text-gray-400 font-bold block">Width Figure</label>
+                        <input
+                          type="number"
+                          min="220"
+                          max="1280"
+                          value={dimensions.width}
+                          onChange={(e) => {
+                            const w = parseInt(e.target.value, 10) || 220;
+                            const h = lockAspectRatio ? Math.round(w * (9/16)) : dimensions.height;
+                            applyPresetSize(w, h);
+                          }}
+                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <label className="text-[9px] text-gray-400 font-bold block">Height Figure</label>
+                        <input
+                          type="number"
+                          min="135"
+                          max="720"
+                          value={dimensions.height}
+                          onChange={(e) => {
+                            const h = parseInt(e.target.value, 10) || 135;
+                            const w = lockAspectRatio ? Math.round(h * (16/9)) : dimensions.width;
+                            applyPresetSize(w, h);
+                          }}
+                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => applyPresetSize(Math.max(220, dimensions.width - 40), lockAspectRatio ? Math.round(Math.max(220, dimensions.width - 40) * (9/16)) : dimensions.height)}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold text-gray-200"
+                      >
+                        -40 W
                       </button>
                       <input 
                         type="range"
@@ -365,15 +422,15 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                         value={dimensions.width}
                         onChange={(e) => {
                           const w = parseInt(e.target.value, 10);
-                          applyPresetSize(w, Math.round(w * (9/16)));
+                          applyPresetSize(w, lockAspectRatio ? Math.round(w * (9/16)) : dimensions.height);
                         }}
                         className="flex-1 accent-indigo-500 cursor-pointer"
                       />
                       <button
-                        onClick={() => applyPresetSize(Math.min(960, dimensions.width + 40), Math.round(Math.min(960, dimensions.width + 40) * (9/16)))}
-                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold"
+                        onClick={() => applyPresetSize(Math.min(960, dimensions.width + 40), lockAspectRatio ? Math.round(Math.min(960, dimensions.width + 40) * (9/16)) : dimensions.height)}
+                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold text-gray-200"
                       >
-                        +40
+                        +40 W
                       </button>
                     </div>
                   </div>
@@ -560,38 +617,71 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
           </div>
         )}
 
-        {/* Floating Mode Corner Resize Grips */}
+        {/* Floating Mode Corner & Edge Resize Handles with Figures Display */}
         {isFloating && (
           <>
-            {/* Bottom Right Resize Handle */}
+            {/* Live Dimension Figures Badge Handle (Bottom Right) */}
             <div
               onMouseDown={(e) => handleResizeStart(e, 'br')}
               onTouchStart={(e) => handleResizeStart(e, 'br')}
-              className="absolute bottom-0 right-0 w-6 h-6 z-40 cursor-se-resize flex items-end justify-end p-1 text-white/50 hover:text-amber-400 transition-colors bg-gradient-to-tl from-black/80 to-transparent rounded-br-2xl"
-              title="Drag corner to resize"
+              className="absolute bottom-0 right-0 z-40 cursor-se-resize flex items-center gap-1 px-2 py-1 bg-slate-950/90 border-t border-l border-amber-500/40 text-amber-300 font-mono text-[10px] font-extrabold rounded-tl-xl rounded-br-2xl shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 group"
+              title="Drag corner to resize mini video player"
             >
-              <Scaling size={12} />
+              <Scaling size={11} className="text-amber-400 group-hover:text-white" />
+              <span>{dimensions.width}×{dimensions.height} px</span>
             </div>
+
+            {/* Right Edge Resize Handle */}
+            <div
+              onMouseDown={(e) => handleResizeStart(e, 'r')}
+              onTouchStart={(e) => handleResizeStart(e, 'r')}
+              className="absolute top-8 bottom-6 right-0 w-2.5 z-40 cursor-e-resize hover:bg-amber-400/40 transition-colors"
+              title="Drag right edge to change width figure"
+            />
+
+            {/* Bottom Edge Resize Handle */}
+            <div
+              onMouseDown={(e) => handleResizeStart(e, 'b')}
+              onTouchStart={(e) => handleResizeStart(e, 'b')}
+              className="absolute left-6 right-24 bottom-0 h-2.5 z-40 cursor-s-resize hover:bg-amber-400/40 transition-colors"
+              title="Drag bottom edge to change height figure"
+            />
+
+            {/* Left Edge Resize Handle */}
+            <div
+              onMouseDown={(e) => handleResizeStart(e, 'l')}
+              onTouchStart={(e) => handleResizeStart(e, 'l')}
+              className="absolute top-8 bottom-6 left-0 w-2.5 z-40 cursor-w-resize hover:bg-amber-400/40 transition-colors"
+              title="Drag left edge to change width figure"
+            />
+
+            {/* Top Edge Resize Handle */}
+            <div
+              onMouseDown={(e) => handleResizeStart(e, 't')}
+              onTouchStart={(e) => handleResizeStart(e, 't')}
+              className="absolute left-6 right-6 top-0 h-2.5 z-40 cursor-n-resize hover:bg-amber-400/40 transition-colors"
+              title="Drag top edge to change height figure"
+            />
 
             {/* Bottom Left Resize Handle */}
             <div
               onMouseDown={(e) => handleResizeStart(e, 'bl')}
               onTouchStart={(e) => handleResizeStart(e, 'bl')}
-              className="absolute bottom-0 left-0 w-5 h-5 z-40 cursor-sw-resize flex items-end justify-start p-1 text-white/30 hover:text-amber-400 transition-colors rounded-bl-2xl"
+              className="absolute bottom-0 left-0 w-6 h-6 z-40 cursor-sw-resize flex items-end justify-start p-1 text-white/40 hover:text-amber-400 transition-colors rounded-bl-2xl bg-gradient-to-tr from-black/80 to-transparent"
             />
 
             {/* Top Right Resize Handle */}
             <div
               onMouseDown={(e) => handleResizeStart(e, 'tr')}
               onTouchStart={(e) => handleResizeStart(e, 'tr')}
-              className="absolute top-0 right-0 w-5 h-5 z-40 cursor-ne-resize flex items-start justify-end p-1 text-white/30 hover:text-amber-400 transition-colors rounded-tr-2xl"
+              className="absolute top-0 right-0 w-6 h-6 z-40 cursor-ne-resize flex items-start justify-end p-1 text-white/40 hover:text-amber-400 transition-colors rounded-tr-2xl bg-gradient-to-bl from-black/80 to-transparent"
             />
 
             {/* Top Left Resize Handle */}
             <div
               onMouseDown={(e) => handleResizeStart(e, 'tl')}
               onTouchStart={(e) => handleResizeStart(e, 'tl')}
-              className="absolute top-0 left-0 w-5 h-5 z-40 cursor-nw-resize flex items-start justify-start p-1 text-white/30 hover:text-amber-400 transition-colors rounded-tl-2xl"
+              className="absolute top-0 left-0 w-6 h-6 z-40 cursor-nw-resize flex items-start justify-start p-1 text-white/40 hover:text-amber-400 transition-colors rounded-tl-2xl bg-gradient-to-br from-black/80 to-transparent"
             />
           </>
         )}

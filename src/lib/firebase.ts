@@ -3,6 +3,8 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInAnonymously,
@@ -27,7 +29,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore
-export const db = getFirestore(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 // Initialize Auth
 export const auth = getAuth(app);
@@ -102,6 +104,33 @@ export async function loginWithGoogle() {
     } else {
       console.error('Google Auth Error:', error);
     }
+    throw error;
+  }
+}
+
+export async function loginWithGoogleRedirect() {
+  try {
+    await signInWithRedirect(auth, googleProvider);
+  } catch (error: any) {
+    console.error('Google Redirect Sign-In Error:', error);
+    throw error;
+  }
+}
+
+export async function handleGoogleRedirectResult() {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken || null;
+      if (accessToken) {
+        sessionStorage.setItem('aura_yt_access_token', accessToken);
+      }
+      return { user: result.user, accessToken };
+    }
+    return null;
+  } catch (error: any) {
+    console.error('Error getting Google redirect result:', error);
     throw error;
   }
 }

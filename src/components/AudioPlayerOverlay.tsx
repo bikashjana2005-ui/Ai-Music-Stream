@@ -20,7 +20,8 @@ import {
   Settings2,
   Globe,
   ExternalLink,
-  Zap
+  Zap,
+  Info
 } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
@@ -38,6 +39,7 @@ interface AudioPlayerOverlayProps {
   isFavorite?: boolean;
   onToggleFavorite?: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
+  onOpenMetadata?: (track: Track) => void;
   volume: number;
   setVolume: (v: number) => void;
   isMuted: boolean;
@@ -68,6 +70,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
   isFavorite = false,
   onToggleFavorite,
   onOpenAddToPlaylist,
+  onOpenMetadata,
   volume,
   setVolume,
   isMuted,
@@ -499,9 +502,21 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
         )}
 
         {/* Track Title & Artist */}
-        <div className="text-center mt-3 w-full">
+        <div className="text-center mt-3 w-full flex flex-col items-center">
           <h2 className="text-xl sm:text-2xl font-bold text-white truncate px-2">{title}</h2>
-          <p className="text-sm text-gray-400 mt-1 font-medium truncate">{channel}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-sm text-gray-400 font-medium truncate">{channel}</p>
+            {onOpenMetadata && track && (
+              <button
+                onClick={() => onOpenMetadata(track)}
+                className="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-full text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95"
+                title="View Real-Time YouTube Video Metadata"
+              >
+                <Info size={12} />
+                <span>YouTube Metadata</span>
+              </button>
+            )}
+          </div>
           {track.aiMoodTags && (
             <span className="inline-block mt-2 px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-full text-xs font-semibold tracking-wide">
               {track.aiMoodTags}

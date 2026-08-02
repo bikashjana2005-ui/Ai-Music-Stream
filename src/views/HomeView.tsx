@@ -25,6 +25,7 @@ interface HomeViewProps {
   onClearHistory?: () => void;
   onToggleFavorite: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
+  onOpenMetadata?: (track: Track) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -47,6 +48,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   history = [],
   onToggleFavorite,
   onOpenAddToPlaylist,
+  onOpenMetadata,
   onShowToast
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -237,6 +239,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   isFavorite={favorites.some((f) => f.id === track.id)}
                   onToggleFavorite={onToggleFavorite}
                   onOpenAddToPlaylist={onOpenAddToPlaylist}
+                  onOpenMetadata={onOpenMetadata}
                   viewMode="grid"
                 />
               </div>
@@ -308,6 +311,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               isFavorite={favorites.some((f) => f.id === track.id)}
               onToggleFavorite={onToggleFavorite}
               onOpenAddToPlaylist={onOpenAddToPlaylist}
+              onOpenMetadata={onOpenMetadata}
               viewMode={viewMode}
             />
           ))}

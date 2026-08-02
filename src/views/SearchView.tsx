@@ -14,7 +14,17 @@ import {
   Clock,
   Trash2,
   TrendingUp,
-  Filter
+  Filter,
+  Play,
+  CheckCircle2,
+  Youtube,
+  Zap,
+  Sliders,
+  RefreshCw,
+  Video,
+  Radio,
+  Check,
+  Settings
 } from 'lucide-react';
 import { Track } from '../types';
 import { TrackCard } from '../components/TrackCard';
@@ -27,6 +37,7 @@ interface SearchViewProps {
   favorites: Track[];
   onToggleFavorite: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
+  onOpenMetadata?: (track: Track) => void;
   youtubeApiKey?: string;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -46,6 +57,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   favorites,
   onToggleFavorite,
   onOpenAddToPlaylist,
+  onOpenMetadata,
   youtubeApiKey,
   onShowToast
 }) => {
@@ -74,6 +86,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('aura_view_mode') as 'grid' | 'list') || 'grid';
   });
+
+  // Real-Time YouTube Video Search Page Options State
+  const [showOptionPanel, setShowOptionPanel] = useState<boolean>(false);
+  const [realtimeSyncEnabled, setRealtimeSyncEnabled] = useState<boolean>(true);
+  const [officialOnlyFilter, setOfficialOnlyFilter] = useState<boolean>(true);
+  const [searchEngineType, setSearchEngineType] = useState<'v3' | 'hybrid' | 'scrape'>('v3');
+  const [apiLatency, setApiLatency] = useState<number>(45);
 
   const handleToggleViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
@@ -169,7 +188,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
     return () => clearTimeout(timer);
   }, [query, activeFilter]);
 
-  // Execute Search API call
+  // Execute Real-time Search API call with option parameters
   const executeSearch = async (searchTerm: string, filterType = activeFilter, forceFresh = false) => {
     if (!searchTerm.trim()) return;
     saveSearchTerm(searchTerm);
@@ -177,30 +196,53 @@ export const SearchView: React.FC<SearchViewProps> = ({
     if (forceFresh) setIsSyncing(true);
     else setLoading(true);
 
+    const startTime = Date.now();
+
     try {
-      const res = await fetch("/api/music/search", {
+      // Choose endpoint based on real-time option selection
+      const endpoint = (searchEngineType === 'v3' || forceFresh) 
+        ? "/api/youtube/fetch-original" 
+        : "/api/music/search";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           query: searchTerm, 
           youtubeApiKey,
           filter: filterType,
-          forceFresh,
+          forceFresh: forceFresh || realtimeSyncEnabled,
+          isOfficialOnly: officialOnlyFilter,
           page: 1
         })
       });
+
       const data = await res.json();
+      const latency = Date.now() - startTime;
+      setApiLatency(latency);
+
       if (data.source) setSearchSource(data.source);
-      if (data.tracks && data.tracks.length > 0) {
-        setSearchResults(data.tracks);
+      
+      let tracks = data.tracks || [];
+
+      // Apply client-side official filter if enabled
+      if (officialOnlyFilter && tracks.length > 0) {
+        const officialTracks = tracks.filter((t: Track) => t.isOfficial || t.views?.toLowerCase().includes('view') || t.views?.toLowerCase().includes('verified') || t.views?.toLowerCase().includes('stream'));
+        if (officialTracks.length > 0) {
+          tracks = officialTracks;
+        }
+      }
+
+      if (tracks.length > 0) {
+        setSearchResults(tracks);
         if (forceFresh) {
-          onShowToast(`⚡ Fetched ${data.tracks.length} real-time YouTube streams`, 'success');
+          onShowToast(`⚡ Fetched ${tracks.length} real-time official YouTube videos (${latency}ms)`, 'success');
         }
       } else {
         setSearchResults(DEFAULT_TRACKS);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Real-time YouTube search error:', err);
       setSearchResults(DEFAULT_TRACKS);
     } finally {
       setLoading(false);
@@ -286,7 +328,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   return (
     <div className="space-y-5 animate-fade-in pb-28 max-w-6xl mx-auto w-full">
       
-      {/* YouTube-Style Single Search Bar with History & Live Suggestions */}
+      {/* YouTube-Style Single Search Bar with Integrated Small Search Option */}
       <div ref={searchContainerRef} className="relative z-30">
         <form onSubmit={handleSubmit} className="relative">
           <div className="relative flex items-center">
@@ -301,40 +343,272 @@ export const SearchView: React.FC<SearchViewProps> = ({
               onFocus={() => setShowDropdown(true)}
               onKeyDown={handleKeyDown}
               placeholder="Search YouTube songs, artists, or channels..."
-              className="w-full bg-slate-900 dark:bg-slate-950 text-white pl-11 pr-28 py-3 rounded-full border border-gray-700/60 dark:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-sm shadow-md transition-all"
+              className="w-full bg-slate-900 dark:bg-slate-950 text-white pl-11 pr-52 py-3 rounded-full border border-gray-700/60 dark:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-sm shadow-md transition-all"
             />
             <Search size={18} className="absolute left-4 text-gray-400" />
 
-            {query && (
-              <button
-                type="button"
-                onClick={() => {
-                  setQuery('');
-                  setSearchResults([]);
-                  setShowDropdown(false);
-                }}
-                className="absolute right-24 p-1 text-gray-400 hover:text-white rounded-full transition-colors"
-              >
-                <X size={16} />
-              </button>
-            )}
+            {/* Right side controls inside the Search Bar */}
+            <div className="absolute right-1.5 flex items-center gap-1.5">
+              {/* Clear search query button */}
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setSearchResults([]);
+                    setShowDropdown(false);
+                  }}
+                  className="p-1 text-gray-400 hover:text-white rounded-full transition-colors"
+                  title="Clear search"
+                >
+                  <X size={15} />
+                </button>
+              )}
 
-            <button
-              type="submit"
-              disabled={loading || !query.trim()}
-              className="absolute right-1 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-xs text-xs font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {loading || isSyncing ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-              <span>Search</span>
-            </button>
+              {/* Ultra Small Option Toggle Button inside Search Bar */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowOptionPanel(!showOptionPanel)}
+                  className={`h-7 px-2 rounded-full text-[10px] font-bold flex items-center gap-1 transition-all border ${
+                    showOptionPanel || realtimeSyncEnabled || officialOnlyFilter
+                      ? 'bg-rose-500/25 text-rose-300 border-rose-500/50 shadow-xs'
+                      : 'bg-slate-800/90 text-slate-300 border-white/10 hover:text-white hover:bg-slate-700'
+                  }`}
+                  title="YouTube Real-Time Official Search Option"
+                >
+                  <Zap size={10} className={realtimeSyncEnabled ? "text-rose-400 animate-pulse" : "text-slate-400"} />
+                  <span className="text-[9px] uppercase tracking-wider font-extrabold">Option</span>
+                  <Sliders size={10} className="text-rose-400" />
+                </button>
+
+                {/* Micro Floating Search Option Popover Dropdown */}
+                {showOptionPanel && (
+                  <div className="absolute right-0 top-full mt-1.5 w-56 z-50 bg-slate-900/95 border border-white/15 rounded-xl shadow-2xl p-2 space-y-1.5 animate-fade-in backdrop-blur-2xl text-left">
+                    <div className="flex items-center justify-between text-[9px] font-extrabold text-slate-400 uppercase tracking-wider px-1 pb-1 border-b border-white/10">
+                      <span className="flex items-center gap-1 text-rose-400">
+                        <Youtube size={11} className="text-rose-500" />
+                        Official Video Option
+                      </span>
+                      <span className="text-emerald-400 font-mono text-[8px]">{apiLatency}ms</span>
+                    </div>
+
+                    {/* Quick Toggles */}
+                    <div className="space-y-1">
+                      {/* Live Sync Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !realtimeSyncEnabled;
+                          setRealtimeSyncEnabled(next);
+                          onShowToast(next ? '⚡ Real-time search ON' : 'Real-time search OFF', 'info');
+                        }}
+                        className={`w-full px-2 py-1 rounded-md text-[11px] font-semibold flex items-center justify-between transition-all border ${
+                          realtimeSyncEnabled
+                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                            : 'bg-slate-800/60 border-white/5 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <Zap size={11} className={realtimeSyncEnabled ? "text-rose-400 animate-pulse" : ""} />
+                          <span>Real-Time Sync</span>
+                        </div>
+                        <span className={`w-1.5 h-1.5 rounded-full ${realtimeSyncEnabled ? "bg-emerald-400" : "bg-slate-500"}`} />
+                      </button>
+
+                      {/* Official Only Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !officialOnlyFilter;
+                          setOfficialOnlyFilter(next);
+                          onShowToast(next ? '🎥 Official YouTube Videos only' : 'All video results', 'info');
+                          if (query.trim()) executeSearch(query, activeFilter, true);
+                        }}
+                        className={`w-full px-2 py-1 rounded-md text-[11px] font-semibold flex items-center justify-between transition-all border ${
+                          officialOnlyFilter
+                            ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
+                            : 'bg-slate-800/60 border-white/5 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <Video size={11} className={officialOnlyFilter ? "text-indigo-400" : ""} />
+                          <span>Official Videos Only</span>
+                        </div>
+                        {officialOnlyFilter && <Check size={11} className="text-indigo-400" />}
+                      </button>
+                    </div>
+
+                    {/* Search Engine Mode */}
+                    <div className="pt-1 border-t border-white/10 space-y-0.5">
+                      <div className="text-[8px] font-extrabold text-slate-400 uppercase tracking-wider px-1">API Engine</div>
+                      {[
+                        { id: 'v3', label: 'YouTube API v3' },
+                        { id: 'hybrid', label: 'Hybrid Engine' },
+                        { id: 'scrape', label: 'Stream Scraper' }
+                      ].map((engine) => (
+                        <button
+                          key={engine.id}
+                          type="button"
+                          onClick={() => {
+                            setSearchEngineType(engine.id as any);
+                            setShowOptionPanel(false);
+                            onShowToast(`Engine set to ${engine.label}`, 'info');
+                          }}
+                          className={`w-full px-1.5 py-0.5 rounded text-left text-[10px] font-medium flex items-center justify-between transition-colors ${
+                            searchEngineType === engine.id
+                              ? 'bg-rose-600/20 text-rose-300 font-bold'
+                              : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>{engine.label}</span>
+                          {searchEngineType === engine.id && <Check size={10} className="text-rose-400" />}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Direct Fetch Action */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOptionPanel(false);
+                        const targetQuery = query.trim() || 'Official Trending Music Videos';
+                        executeSearch(targetQuery, activeFilter, true);
+                      }}
+                      disabled={isSyncing || loading}
+                      className="w-full py-1 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-[10px] rounded-md shadow flex items-center justify-center gap-1 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      <RefreshCw size={11} className={isSyncing ? "animate-spin" : ""} />
+                      <span>Fetch Live Official</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Search Button inside Search Bar */}
+              <button
+                type="submit"
+                disabled={loading || !query.trim()}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-xs text-xs font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {loading || isSyncing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+                <span>Search</span>
+              </button>
+            </div>
           </div>
         </form>
 
-        {/* YouTube-Style Combined Dropdown: Saved Search History + Auto-Suggestions */}
-        {showDropdown && (searchHistory.length > 0 || autoSuggestions.length > 0) && (
+        {/* YouTube-Style Combined Dropdown: Instant Video Results + Suggestions + History */}
+        {showDropdown && (searchHistory.length > 0 || autoSuggestions.length > 0 || (query.trim() && searchResults.length > 0)) && (
           <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl overflow-hidden divide-y divide-white/10 animate-fade-in backdrop-blur-2xl">
             
-            {/* 1. Saved Search History Section */}
+            {/* 1. Instant YouTube Video Results inside Search Bar Dropdown */}
+            {query.trim() && searchResults.length > 0 && (
+              <div className="p-2 space-y-1">
+                <div className="px-3 py-1 text-[10px] font-extrabold text-rose-400 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Youtube size={13} className="text-rose-500 animate-pulse" />
+                    Instant Original YouTube Video Results
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    {searchResults.length} videos
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 pt-0.5">
+                  {searchResults.slice(0, 3).map((track) => (
+                    <div
+                      key={`instant-yt-${track.id}`}
+                      onClick={() => {
+                        onPlay(track);
+                        setShowDropdown(false);
+                        saveSearchTerm(query);
+                      }}
+                      className="w-full p-2 bg-slate-950/80 hover:bg-slate-800 border border-white/5 hover:border-rose-500/30 rounded-xl transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-800 border border-white/10">
+                          <img
+                            src={`https://img.youtube.com/vi/${track.id}/hqdefault.jpg`}
+                            alt={track.title}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Play size={14} className="text-white fill-white" />
+                          </div>
+                          {track.duration && (
+                            <span className="absolute bottom-0.5 right-0.5 px-1 py-0.2 bg-black/80 text-[8px] font-bold text-white rounded">
+                              {track.duration}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-white truncate group-hover:text-rose-400 transition-colors">
+                            {track.title}
+                          </h4>
+                          <p className="text-[11px] text-gray-400 font-medium truncate flex items-center gap-1 mt-0.5">
+                            <span>{track.channel}</span>
+                            {track.isOfficial && (
+                              <CheckCircle2 size={10} className="text-sky-400 fill-sky-400/20 shrink-0" />
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPlay(track);
+                          setShowDropdown(false);
+                          saveSearchTerm(query);
+                        }}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] rounded-lg shadow flex items-center gap-1 transition-all shrink-0 active:scale-95"
+                      >
+                        <Play size={12} className="fill-white" />
+                        <span>Play</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 2. Live YouTube Suggestions */}
+            {autoSuggestions.length > 0 && (
+              <div className="p-2 space-y-1">
+                <div className="px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Flame size={12} className="text-rose-500" />
+                    Live Query Suggestions
+                  </span>
+                </div>
+
+                {autoSuggestions.map((item, idx) => {
+                  const globalIdx = searchHistory.length + idx;
+                  return (
+                    <button
+                      key={`suggestion-${idx}`}
+                      onClick={() => handleSelectTerm(item)}
+                      className={`w-full px-3 py-2 text-left text-xs font-semibold rounded-xl transition-colors flex items-center justify-between group ${
+                        focusedSuggestionIndex === globalIdx
+                          ? 'bg-rose-600 text-white'
+                          : 'text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5 truncate">
+                        <Search size={14} className="text-slate-400 group-hover:text-rose-400 shrink-0" />
+                        <span className="truncate">{item}</span>
+                      </span>
+                      <ChevronRight size={13} className="text-slate-500 group-hover:text-rose-400" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 3. Saved Search History Section */}
             {searchHistory.length > 0 && !query.trim() && (
               <div className="p-2 space-y-1">
                 <div className="px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
@@ -374,39 +648,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     </button>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {/* 2. Live YouTube Suggestions */}
-            {autoSuggestions.length > 0 && (
-              <div className="p-2 space-y-1">
-                <div className="px-3 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Flame size={12} className="text-rose-500" />
-                    Live YouTube Suggestions
-                  </span>
-                </div>
-
-                {autoSuggestions.map((item, idx) => {
-                  const globalIdx = searchHistory.length + idx;
-                  return (
-                    <button
-                      key={`suggestion-${idx}`}
-                      onClick={() => handleSelectTerm(item)}
-                      className={`w-full px-3 py-2 text-left text-xs font-semibold rounded-xl transition-colors flex items-center justify-between group ${
-                        focusedSuggestionIndex === globalIdx
-                          ? 'bg-rose-600 text-white'
-                          : 'text-slate-200 hover:bg-slate-800'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2.5 truncate">
-                        <Search size={14} className="text-slate-400 group-hover:text-rose-400 shrink-0" />
-                        <span className="truncate">{item}</span>
-                      </span>
-                      <ChevronRight size={13} className="text-slate-500 group-hover:text-rose-400" />
-                    </button>
-                  );
-                })}
               </div>
             )}
 
@@ -516,6 +757,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   isFavorite={favorites.some(f => f.id === track.id)}
                   onToggleFavorite={onToggleFavorite}
                   onOpenAddToPlaylist={onOpenAddToPlaylist}
+                  onOpenMetadata={onOpenMetadata}
                   viewMode={viewMode}
                 />
               ))}

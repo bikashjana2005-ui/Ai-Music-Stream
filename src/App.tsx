@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions } from './lib/firebase';
+import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult } from './lib/firebase';
 import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack } from './types';
 import { DEFAULT_TRACKS, DEFAULT_CHANNELS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
@@ -13,6 +13,7 @@ import { AddToPlaylistModal } from './components/AddToPlaylistModal';
 import { ShareAppModal } from './components/ShareAppModal';
 import { ChannelSubscriptionsModal } from './components/ChannelSubscriptionsModal';
 import { UserAuthModal } from './components/UserAuthModal';
+import { YouTubeMetadataModal } from './components/YouTubeMetadataModal';
 import { Toast } from './components/Toast';
 import { HomeView } from './views/HomeView';
 import { SubscriptionsView } from './views/SubscriptionsView';
@@ -190,6 +191,9 @@ export default function App() {
   // Add To Playlist Modal track
   const [addToPlaylistTrack, setAddToPlaylistTrack] = useState<Track | null>(null);
 
+  // YouTube Metadata Modal track
+  const [metadataTrack, setMetadataTrack] = useState<Track | null>(null);
+
   // Share Modal
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
 
@@ -332,6 +336,15 @@ export default function App() {
   useEffect(() => {
     testFirebaseConnection();
     
+    // Check if coming back from Google OAuth redirect sign-in
+    handleGoogleRedirectResult().then((res) => {
+      if (res?.user) {
+        showToast(`Signed in via Google! Welcome ${res.user.displayName || 'Music Listener'}.`, 'success');
+      }
+    }).catch((err) => {
+      console.warn('Redirect sign-in result check:', err);
+    });
+
     let isInitialLoad = true;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
@@ -705,10 +718,10 @@ export default function App() {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 6, scale: 0.99 }}
+            initial={{ opacity: 0, y: 10, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.99 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            exit={{ opacity: 0, y: -8, scale: 0.99 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center"
           >
             {activeTab === 'home' && (
@@ -721,6 +734,7 @@ export default function App() {
                 onClearHistory={handleClearHistory}
                 onToggleFavorite={handleToggleFavorite}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+                onOpenMetadata={(track) => setMetadataTrack(track)}
                 onShowToast={showToast}
               />
             )}
@@ -749,6 +763,7 @@ export default function App() {
                 favorites={favorites}
                 onToggleFavorite={handleToggleFavorite}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+                onOpenMetadata={(track) => setMetadataTrack(track)}
                 youtubeApiKey={youtubeApiKey}
                 onShowToast={showToast}
               />
@@ -769,6 +784,7 @@ export default function App() {
                 onDeletePlaylist={handleDeletePlaylist}
                 onRemoveTrackFromPlaylist={handleRemoveFromPlaylist}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+                onOpenMetadata={(track) => setMetadataTrack(track)}
                 onShowToast={showToast}
               />
             )}
@@ -831,6 +847,7 @@ export default function App() {
           isFavorite={favorites.some(f => f.id === currentTrack.id)}
           onToggleFavorite={handleToggleFavorite}
           onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+          onOpenMetadata={(track) => setMetadataTrack(track)}
           volume={volume}
           setVolume={setVolume}
           isMuted={isMuted}
@@ -913,6 +930,20 @@ export default function App() {
         />
       )}
 
+      {/* Real-time YouTube Video Metadata Modal */}
+      {metadataTrack && (
+        <YouTubeMetadataModal
+          isOpen={!!metadataTrack}
+          track={metadataTrack}
+          onClose={() => setMetadataTrack(null)}
+          onPlay={handlePlayTrack}
+          onDownload={(track) => setDownloadTrack(track)}
+          onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+          onShowToast={showToast}
+          youtubeApiKey={youtubeApiKey}
+        />
+      )}
+
       {/* Share App Modal */}
       <ShareAppModal
         isOpen={isShareModalOpen}
@@ -930,17 +961,7 @@ export default function App() {
         onShowToast={showToast}
       />
 
-      {/* Firebase User Auth & Cloud Sync Modal */}
-      <UserAuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        user={user}
-        onShowToast={showToast}
-        onSyncGoogleAccount={handleSyncGoogleAccount}
-        favoritesCount={favorites.length}
-        subscriptionsCount={subscriptions.length}
-        playlistsCount={playlists.length}
-      />
+
 
     </div>
   );

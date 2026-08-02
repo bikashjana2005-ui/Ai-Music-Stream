@@ -17,6 +17,29 @@ export interface Track {
   genre?: string;
   publishedTime?: string;
   addedAt?: string;
+  description?: string;
+  likeCount?: string;
+  commentCount?: string;
+  isOfficial?: boolean;
+  channelId?: string;
+}
+
+export interface YouTubeVideoMetadata {
+  id: string;
+  title: string;
+  channel: string;
+  channelId?: string;
+  publishedAt?: string;
+  description?: string;
+  duration: string;
+  views: string;
+  likeCount?: string;
+  commentCount?: string;
+  tags?: string[];
+  thumbnail?: string;
+  isOfficial?: boolean;
+  liveBroadcastContent?: string;
+  source?: string;
 }
 
 export interface DownloadedTrack extends Track {

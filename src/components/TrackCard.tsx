@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Heart, Music, ListPlus, Trash2 } from 'lucide-react';
+import { Play, Download, Heart, Music, ListPlus, Trash2, Info } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 
@@ -11,6 +11,7 @@ interface TrackCardProps {
   onToggleFavorite?: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
   onRemoveFromPlaylist?: (track: Track) => void;
+  onOpenMetadata?: (track: Track) => void;
   isPlayingCurrent?: boolean;
   viewMode?: 'grid' | 'list';
 }
@@ -23,6 +24,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   onToggleFavorite,
   onOpenAddToPlaylist,
   onRemoveFromPlaylist,
+  onOpenMetadata,
   isPlayingCurrent = false,
   viewMode = 'grid'
 }) => {
@@ -113,6 +115,16 @@ export const TrackCard: React.FC<TrackCardProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {onOpenMetadata && (
+            <button
+              onClick={() => onOpenMetadata(track)}
+              className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-slate-700/60 rounded-xl transition-all active:scale-90"
+              title="Official YouTube Metadata & Stats"
+            >
+              <Info size={16} />
+            </button>
+          )}
+
           {onOpenAddToPlaylist && (
             <button
               onClick={() => onOpenAddToPlaylist(track)}
@@ -225,6 +237,16 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {onOpenMetadata && (
+            <button
+              onClick={() => onOpenMetadata(track)}
+              className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-slate-700/60 rounded-xl transition-all active:scale-90"
+              title="Official YouTube Metadata & Stats"
+            >
+              <Info size={17} />
+            </button>
+          )}
+
           {onOpenAddToPlaylist && (
             <button
               onClick={() => onOpenAddToPlaylist(track)}

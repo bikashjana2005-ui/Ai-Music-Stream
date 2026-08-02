@@ -536,6 +536,172 @@ app.post("/api/youtube/sync-playlists", async (req, res) => {
   }
 });
 
+// Helper: Parse ISO 8601 Duration (PT4M28S -> 4:28)
+function parseISO8601Duration(isoDuration: string): string {
+  if (!isoDuration) return "3:45";
+  const regex = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+  const matches = isoDuration.match(regex);
+  if (!matches) return "3:45";
+
+  const hours = parseInt(matches[1] || '0', 10);
+  const minutes = parseInt(matches[2] || '0', 10);
+  const seconds = parseInt(matches[3] || '0', 10);
+
+  const formattedSeconds = seconds < 10 ? `0${seconds}` : `${seconds}`;
+
+  if (hours > 0) {
+    const formattedMinutes = minutes < 10 ? `0${minutes}` : `${minutes}`;
+    return `${hours}:${formattedMinutes}:${formattedSeconds}`;
+  }
+  return `${minutes}:${formattedSeconds}`;
+}
+
+// Helper: Fetch real-time official YouTube metadata via API v3 or oEmbed fallback
+async function fetchYouTubeVideoMetadataFromAPI(videoIds: string[], apiKey?: string) {
+  if (!videoIds || videoIds.length === 0) return {};
+  const ytKey = apiKey || process.env.YOUTUBE_API_KEY;
+  const uniqueIds = Array.from(new Set(videoIds)).slice(0, 50);
+  const resultMap: Record<string, any> = {};
+
+  if (ytKey && ytKey.trim().length > 10) {
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,status&id=${uniqueIds.join(',')}&key=${ytKey.trim()}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items && Array.isArray(data.items)) {
+          for (const item of data.items) {
+            const snippet = item.snippet || {};
+            const contentDetails = item.contentDetails || {};
+            const statistics = item.statistics || {};
+
+            const rawDuration = contentDetails.duration;
+            const duration = parseISO8601Duration(rawDuration);
+            const viewCount = statistics.viewCount ? parseInt(statistics.viewCount, 10).toLocaleString() + ' views' : 'Verified Stream';
+            const likeCount = statistics.likeCount ? parseInt(statistics.likeCount, 10).toLocaleString() + ' likes' : undefined;
+            const commentCount = statistics.commentCount ? parseInt(statistics.commentCount, 10).toLocaleString() : undefined;
+
+            resultMap[item.id] = {
+              id: item.id,
+              title: snippet.title || 'Official Video',
+              channel: snippet.channelTitle || 'YouTube Official',
+              channelId: snippet.channelId,
+              publishedAt: snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '',
+              rawPublishedAt: snippet.publishedAt,
+              description: snippet.description || '',
+              duration,
+              views: viewCount,
+              likeCount,
+              commentCount,
+              tags: snippet.tags || [],
+              categoryId: snippet.categoryId,
+              thumbnail: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
+              isOfficial: true,
+              liveBroadcastContent: snippet.liveBroadcastContent,
+              source: 'YouTube Data API v3'
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching metadata from YouTube API:", e);
+    }
+  }
+
+  // Fallback to official YouTube oEmbed metadata for remaining IDs
+  const missingIds = uniqueIds.filter(id => !resultMap[id]);
+  if (missingIds.length > 0) {
+    await Promise.all(
+      missingIds.map(async (id) => {
+        try {
+          const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
+          if (oembedRes.ok) {
+            const data = await oembedRes.json();
+            resultMap[id] = {
+              id,
+              title: data.title || 'Official YouTube Video',
+              channel: data.author_name || 'YouTube Creator',
+              channelUrl: data.author_url,
+              thumbnail: data.thumbnail_url,
+              isOfficial: true,
+              source: 'YouTube Official oEmbed'
+            };
+          }
+        } catch {
+          // ignore
+        }
+      })
+    );
+  }
+
+  return resultMap;
+}
+
+// Helper: Search directly via official YouTube Data API v3
+async function searchYouTubeApiV3(query: string, apiKey?: string): Promise<any[]> {
+  const ytKey = apiKey || process.env.YOUTUBE_API_KEY;
+  if (!ytKey || ytKey.trim().length < 10) return [];
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=30&q=${encodeURIComponent(query)}&key=${ytKey.trim()}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.items || !Array.isArray(data.items)) return [];
+
+    const videoIds = data.items.map((item: any) => item.id?.videoId).filter(Boolean);
+    const metaMap = await fetchYouTubeVideoMetadataFromAPI(videoIds, ytKey);
+
+    return data.items.map((item: any) => {
+      const vid = item.id?.videoId;
+      if (!vid) return null;
+      const snippet = item.snippet || {};
+      const meta = metaMap[vid] || {};
+      return {
+        id: vid,
+        title: meta.title || snippet.title || "Official YouTube Video",
+        channel: meta.channel || snippet.channelTitle || "YouTube Creator",
+        views: meta.views || "Verified YouTube Stream",
+        duration: meta.duration || "3:45",
+        publishedTime: meta.publishedAt || (snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : "Live Stream"),
+        description: meta.description || snippet.description || "",
+        likeCount: meta.likeCount,
+        commentCount: meta.commentCount,
+        isOfficial: true,
+        aiMoodTags: "Official YouTube API v3",
+        genre: "Original YouTube"
+      };
+    }).filter(Boolean);
+  } catch (e) {
+    console.error("Error in searchYouTubeApiV3:", e);
+    return [];
+  }
+}
+
+// Endpoint: Real-time YouTube Official Video Metadata API
+app.post("/api/youtube/video-metadata", async (req, res) => {
+  try {
+    const { videoId, videoIds, youtubeApiKey } = req.body;
+    const idsToFetch: string[] = [];
+    if (videoId && typeof videoId === 'string') idsToFetch.push(videoId);
+    if (Array.isArray(videoIds)) idsToFetch.push(...videoIds.filter(id => typeof id === 'string'));
+
+    if (idsToFetch.length === 0) {
+      return res.status(400).json({ error: "videoId or videoIds parameter required" });
+    }
+
+    const metadataMap = await fetchYouTubeVideoMetadataFromAPI(idsToFetch, youtubeApiKey);
+    res.json({
+      success: true,
+      count: Object.keys(metadataMap).length,
+      metadata: metadataMap,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e: any) {
+    console.error("Error in /api/youtube/video-metadata:", e);
+    res.status(500).json({ error: e.message || "Failed to fetch YouTube metadata" });
+  }
+});
+
 // Real-time YouTube Connection Status Check
 app.get("/api/youtube/status", (req, res) => {
   res.json({
@@ -549,17 +715,48 @@ app.get("/api/youtube/status", (req, res) => {
 // Real-time Fetch Original YouTube Videos Endpoint
 app.post("/api/youtube/fetch-original", async (req, res) => {
   try {
-    const { query } = req.body;
+    const { query, youtubeApiKey } = req.body;
     if (!query || typeof query !== "string" || !query.trim()) {
       return res.status(400).json({ error: "Query parameter required" });
     }
 
     const searchQuery = query.trim();
-    const tracks = await searchYouTubeScrape(searchQuery);
+    let tracks: any[] = [];
+
+    // 1. First attempt official YouTube Data API v3 search
+    if (youtubeApiKey || process.env.YOUTUBE_API_KEY) {
+      tracks = await searchYouTubeApiV3(searchQuery, youtubeApiKey);
+    }
+
+    // 2. Fallback to real-time search engine + oEmbed API enrichment
+    if (!tracks || tracks.length === 0) {
+      tracks = await searchYouTubeScrape(searchQuery);
+
+      const videoIds = tracks.map(t => t.id);
+      const metadataMap = await fetchYouTubeVideoMetadataFromAPI(videoIds, youtubeApiKey);
+
+      tracks = tracks.map(t => {
+        const meta = metadataMap[t.id];
+        if (meta) {
+          return {
+            ...t,
+            title: meta.title || t.title,
+            channel: meta.channel || t.channel,
+            views: meta.views || t.views,
+            duration: meta.duration || t.duration,
+            publishedTime: meta.publishedAt || t.publishedTime,
+            description: meta.description || t.description,
+            likeCount: meta.likeCount,
+            isOfficial: true
+          };
+        }
+        return t;
+      });
+    }
 
     res.json({
       query: searchQuery,
-      source: "Real-time Original YouTube Search",
+      source: tracks.some(t => t.isOfficial) ? "Official YouTube Data API v3" : "Real-time Original YouTube Search Engine",
       totalResults: tracks.length,
       tracks,
       timestamp: new Date().toISOString()

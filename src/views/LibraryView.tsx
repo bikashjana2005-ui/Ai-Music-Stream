@@ -17,6 +17,7 @@ interface LibraryViewProps {
   onDeletePlaylist: (id: string) => void;
   onRemoveTrackFromPlaylist?: (playlistId: string, trackId: string) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
+  onOpenMetadata?: (track: Track) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -34,6 +35,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onDeletePlaylist,
   onRemoveTrackFromPlaylist,
   onOpenAddToPlaylist,
+  onOpenMetadata,
   onShowToast
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'favorites' | 'playlists' | 'history'>('favorites');
@@ -378,6 +380,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       onToggleFavorite={onToggleFavorite}
                       onRemoveFromPlaylist={onRemoveTrackFromPlaylist ? () => onRemoveTrackFromPlaylist(selectedPlaylist.id, track.id) : undefined}
                       onOpenAddToPlaylist={onOpenAddToPlaylist}
+                      onOpenMetadata={onOpenMetadata}
                       viewMode={viewMode}
                     />
                   ))}

@@ -267,23 +267,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* Profile Tab in Nav Bar */}
-            {onOpenAuthModal && (
-              <button
-                data-tab="profile"
-                onClick={onOpenAuthModal}
-                className="relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white shrink-0"
-              >
-                <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
-                  {user?.photoURL ? (
-                    <img src={user.photoURL} alt="Avatar" className="w-4 h-4 rounded-full object-cover ring-1 ring-emerald-500" />
-                  ) : (
-                    <User size={14} className={user ? "text-emerald-500" : ""} />
-                  )}
-                  <span>{user ? (user.displayName?.split(' ')[0] || 'Profile') : 'Profile'}</span>
-                </span>
-              </button>
-            )}
+
           </nav>
 
           {/* Right Top Bar Actions */}
@@ -332,34 +316,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* User Profile / Auth Modal Trigger in Top Header */}
-            {onOpenAuthModal && (
-              <button
-                onClick={onOpenAuthModal}
-                className={`px-2.5 py-1.5 rounded-2xl border backdrop-blur-xl transition-all active:scale-95 flex items-center gap-2 text-xs font-bold shadow-xs ${
-                  user
-                    ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                    : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/25'
-                }`}
-                title={user ? `Profile: ${user.email}` : 'Sign in to Profile'}
-              >
-                <div className="relative flex items-center justify-center shrink-0">
-                  {user?.photoURL ? (
-                    <img src={user.photoURL} alt="User Avatar" className="w-5 h-5 rounded-full object-cover ring-2 ring-emerald-500 shadow-xs" />
-                  ) : (
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white ${user ? 'bg-emerald-600' : 'bg-gradient-to-tr from-indigo-600 to-purple-600'}`}>
-                      <User size={12} />
-                    </div>
-                  )}
-                  <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-slate-900 ${
-                    user ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                  }`} />
-                </div>
-                <span className="hidden sm:inline font-bold">
-                  {user ? (user.displayName?.split(' ')[0] || 'Profile') : 'Sign In'}
-                </span>
-              </button>
-            )}
+
 
             {/* Share App Link Button */}
             {onOpenShareModal && (
@@ -616,30 +573,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Settings</span>
           </button>
 
-          {/* Profile Tab in Bottom Nav Dock */}
-          {onOpenAuthModal && (
-            <button
-              data-tab="profile"
-              onClick={onOpenAuthModal}
-              className="relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold transition-all duration-300 shrink-0"
-            >
-              <div className="px-2 py-0.5 rounded-full transition-all duration-300 flex items-center justify-center relative bg-transparent">
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="User Avatar" className="w-4 h-4 rounded-full object-cover ring-2 ring-emerald-500 shadow-xs" />
-                ) : (
-                  <div className={`w-4.5 h-4.5 rounded-full flex items-center justify-center text-white shadow-xs ${user ? 'bg-emerald-600' : 'bg-gradient-to-tr from-indigo-600 to-purple-600'}`}>
-                    <User size={12} />
-                  </div>
-                )}
-                <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-slate-900 ${
-                  user ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                }`} />
-              </div>
-              <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                {user ? (user.displayName?.split(' ')[0] || 'Profile') : 'Profile'}
-              </span>
-            </button>
-          )}
+
 
         </nav>
       </div>
