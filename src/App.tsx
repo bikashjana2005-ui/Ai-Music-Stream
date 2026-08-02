@@ -891,6 +891,14 @@ export default function App() {
           seekToSeconds={seekToSeconds}
           playerEngine={playerEngine}
           onChangePlayerEngine={handleChangePlayerEngine}
+          onPlayTrack={handlePlayTrack}
+          onDownloadTrack={(track) => setDownloadTrack(track)}
+          onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+          isFavorite={favorites.some(f => f.id === currentTrack.id)}
+          onToggleFavorite={handleToggleFavorite}
+          isSubscribed={subscriptions.some(s => s.channelName.toLowerCase() === (currentTrack.channel || '').toLowerCase())}
+          onToggleSubscribe={handleToggleSubscribe}
+          onShowToast={showToast}
         />
       )}
 

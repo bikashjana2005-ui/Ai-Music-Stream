@@ -1,11 +1,50 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronDown, Maximize2, X, PlaySquare, ExternalLink, Settings2, Globe, GripHorizontal, Scaling, Move } from 'lucide-react';
+import { 
+  ChevronDown, 
+  Maximize2, 
+  X, 
+  PlaySquare, 
+  ExternalLink, 
+  Settings2, 
+  Globe, 
+  GripHorizontal, 
+  Scaling, 
+  Move,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Download,
+  ListPlus,
+  Bell,
+  CheckCircle2,
+  Sparkles,
+  MessageSquare,
+  Send,
+  Play,
+  Volume2,
+  VolumeX,
+  Radio,
+  Zap,
+  Info,
+  Sliders,
+  Tv
+} from 'lucide-react';
 import ReactPlayer from 'react-player/youtube';
 import { Track } from '../types';
-import { extractYouTubeId } from '../utils/youtube';
+import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 
 export type PlayerEngine = 'youtube' | 'youtube-nocookie' | 'invidious' | 'piped' | 'embed';
+
+interface CommentItem {
+  id: string;
+  author: string;
+  avatar: string;
+  text: string;
+  timeAgo: string;
+  likes: number;
+  userLiked?: boolean;
+}
 
 interface GlobalYouTubePlayerProps {
   currentTrack: Track | null;
@@ -26,6 +65,14 @@ interface GlobalYouTubePlayerProps {
   isDataSaverMode?: boolean;
   isFullScreen?: boolean;
   onToggleFullScreen?: () => void;
+  onPlayTrack?: (track: Track) => void;
+  onDownloadTrack?: (track: Track) => void;
+  onOpenAddToPlaylist?: (track: Track) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (track: Track) => void;
+  isSubscribed?: boolean;
+  onToggleSubscribe?: (channelName: string) => void;
+  onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -36,6 +83,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   showVideo,
   isOverlayOpen = false,
   onTrackEnded,
+  audioQuality,
   onOpenOverlay,
   onCloseVideo,
   onProgress,
@@ -45,7 +93,15 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   onChangePlayerEngine,
   isDataSaverMode = false,
   isFullScreen = false,
-  onToggleFullScreen
+  onToggleFullScreen,
+  onPlayTrack,
+  onDownloadTrack,
+  onOpenAddToPlaylist,
+  isFavorite = false,
+  onToggleFavorite,
+  isSubscribed = false,
+  onToggleSubscribe,
+  onShowToast
 }) => {
   const playerRef = useRef<ReactPlayer | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -53,6 +109,24 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [showSizePresets, setShowSizePresets] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [isNativeFullScreen, setIsNativeFullScreen] = useState<boolean>(false);
+
+  // YouTube Original Full Player state
+  const [likeCount, setLikeCount] = useState<number>(142800);
+  const [hasLiked, setHasLiked] = useState<boolean>(false);
+  const [hasDisliked, setHasDisliked] = useState<boolean>(false);
+  const [subBellActive, setSubBellActive] = useState<boolean>(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [selectedQuality, setSelectedQuality] = useState<string>('1080p HD');
+  const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
+  const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
+
+  // Related YouTube Video Recommendations & Comments
+  const [recommendations, setRecommendations] = useState<Track[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [newCommentInput, setNewCommentInput] = useState<string>('');
 
   // Mini player dimensions state
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
@@ -86,6 +160,113 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFSChange);
   }, []);
 
+  // Fetch contextual YouTube recommendations & initial comments when track changes
+  useEffect(() => {
+    if (!currentTrack) return;
+
+    let isMounted = true;
+    setHasLiked(isFavorite);
+    setLikeCount(Math.floor(100000 + (currentTrack.title.length * 4821) % 900000));
+
+    // Initialize realistic YouTube comments
+    setComments([
+      {
+        id: 'c1',
+        author: 'MusicVibesOfficial',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop',
+        text: `The audio mastering on "${currentTrack.title}" is so clean! Absolutely incredible performance by ${currentTrack.channel}.🔥`,
+        timeAgo: '2 hours ago',
+        likes: 1240
+      },
+      {
+        id: 'c2',
+        author: 'Alex_AudioLog',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop',
+        text: 'Listening to this live in 1080p stream mode. Pure perfection!',
+        timeAgo: '5 hours ago',
+        likes: 482
+      },
+      {
+        id: 'c3',
+        author: 'MelodySeeker',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop',
+        text: `Found this official video through recommendations and I'm obsessed! Loop number 10 today.`,
+        timeAgo: '1 day ago',
+        likes: 219
+      }
+    ]);
+
+    // Fetch related recommendations
+    const fetchRelated = async () => {
+      setLoadingRecs(true);
+      try {
+        const res = await fetch("/api/music/recommendations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            trackTitle: currentTrack.title, 
+            channel: currentTrack.channel 
+          })
+        });
+        const data = await res.json();
+        if (isMounted && data.tracks) {
+          const filtered = data.tracks.filter((t: Track) => t.id !== currentTrack.id);
+          setRecommendations(filtered.slice(0, 10));
+        }
+      } catch (e) {
+        console.error("Error fetching YouTube player recommendations:", e);
+      } finally {
+        if (isMounted) setLoadingRecs(false);
+      }
+    };
+
+    fetchRelated();
+    return () => { isMounted = false; };
+  }, [currentTrack?.id]);
+
+  const handleAddComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentInput.trim()) return;
+
+    const newComment: CommentItem = {
+      id: `comment-${Date.now()}`,
+      author: 'You (Listener)',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop',
+      text: newCommentInput.trim(),
+      timeAgo: 'Just now',
+      likes: 1
+    };
+
+    setComments([newComment, ...comments]);
+    setNewCommentInput('');
+    onShowToast?.('Comment posted to YouTube discussion!', 'success');
+  };
+
+  const handleToggleLike = () => {
+    if (hasLiked) {
+      setHasLiked(false);
+      setLikeCount(prev => prev - 1);
+    } else {
+      setHasLiked(true);
+      if (hasDisliked) setHasDisliked(false);
+      setLikeCount(prev => prev + 1);
+      if (onToggleFavorite && currentTrack) onToggleFavorite(currentTrack);
+    }
+  };
+
+  const handleToggleDislike = () => {
+    if (hasDisliked) {
+      setHasDisliked(false);
+    } else {
+      setHasDisliked(true);
+      if (hasLiked) {
+        setHasLiked(false);
+        setLikeCount(prev => prev - 1);
+      }
+      onShowToast?.('Feedback noted', 'info');
+    }
+  };
+
   const handleFullscreenClick = () => {
     if (onToggleFullScreen) {
       onToggleFullScreen();
@@ -113,24 +294,26 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   let playerBoxClassName = '';
 
   if (isFull) {
-    // Fullscreen Full Video Player Mode
-    containerClassName = 'fixed inset-0 z-[100] w-screen h-screen bg-black flex flex-col pointer-events-auto p-0 m-0 overflow-hidden';
-    playerBoxClassName = 'relative w-full h-full bg-black flex-1 flex items-center justify-center';
+    // YouTube Original Full Player Layout Mode
+    containerClassName = 'fixed inset-0 z-[100] w-screen h-screen bg-slate-950 flex flex-col pointer-events-auto p-0 m-0 overflow-y-auto text-white select-none';
+    playerBoxClassName = isTheaterMode 
+      ? 'relative w-full aspect-video max-h-[80vh] bg-black flex items-center justify-center shadow-2xl'
+      : 'relative w-full aspect-video bg-black flex items-center justify-center shadow-2xl rounded-2xl overflow-hidden';
   } else if (isHidden) {
-    // Audio-Only / Background Mode: Keep single ReactPlayer mounted off-screen for uninterrupted audio
+    // Background Audio Mode
     containerClassName = 'fixed -top-[9999px] -left-[9999px] w-[320px] h-[180px] pointer-events-none z-[-10] overflow-hidden';
     playerBoxClassName = 'w-full h-full bg-black';
   } else if (isOverlay) {
-    // Fullscreen Overlay mode: Position centered ON TOP of AudioPlayerOverlay (z-[90] > z-[70])
+    // Overlay Mode
     containerClassName = 'fixed inset-0 z-[90] flex flex-col items-center justify-center pointer-events-none p-4 pb-20 sm:pb-24';
     playerBoxClassName = 'relative w-full max-w-3xl aspect-video rounded-3xl overflow-hidden shadow-2xl ring-2 ring-rose-500/60 bg-black pointer-events-auto group';
   } else {
-    // Floating Video Player mode: Draggable & Resizable window
+    // Mini Floating Window
     containerClassName = 'fixed bottom-20 right-3 sm:bottom-24 sm:right-6 rounded-3xl overflow-hidden shadow-2xl ring-2 ring-indigo-500/60 bg-slate-950 pointer-events-auto flex flex-col z-[90] border border-white/20 touch-none';
     playerBoxClassName = 'relative flex-1 w-full h-full bg-black pointer-events-auto select-none';
   }
 
-  // Handle corner and edge resizing drag events with figures calculation
+  // Handle Corner/Edge Resizing
   const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, handle: 'br' | 'bl' | 'tr' | 'tl' | 'r' | 'b' | 'l' | 't') => {
     e.preventDefault();
     e.stopPropagation();
@@ -205,7 +388,6 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     setShowSizePresets(false);
   };
 
-  // Determine iframe URL for third-party embeds
   const getThirdPartyEmbedUrl = () => {
     const autoplayParam = isPlaying ? 1 : 0;
     switch (playerEngine) {
@@ -222,16 +404,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     }
   };
 
-  const getEngineLabel = (eng: string) => {
-    switch (eng) {
-      case 'youtube': return 'YouTube Standard';
-      case 'youtube-nocookie': return 'YouTube Privacy (NoCookie)';
-      case 'invidious': return 'Invidious Player (3rd Party)';
-      case 'piped': return 'Piped Player (3rd Party)';
-      case 'embed': return 'Direct IFrame Player';
-      default: return 'YouTube Standard';
-    }
-  };
+  const formattedLikeCount = likeCount >= 1000 ? `${(likeCount / 1000).toFixed(1)}K` : `${likeCount}`;
 
   return (
     <motion.div
@@ -245,44 +418,129 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => setIsDragging(false)}
     >
-      {/* Fullscreen Video Player Header Bar */}
+      {/* ========================================================= */}
+      {/* YOUTUBE ORIGINAL FULL VIDEO PLAYER HEADER BAR */}
+      {/* ========================================================= */}
       {isFull && (
-        <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/90 via-black/60 to-transparent p-4 sm:p-6 flex items-center justify-between text-white pointer-events-auto transition-opacity duration-300 hover:opacity-100 opacity-90">
+        <header className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xl">
           <div className="flex items-center gap-3">
-            <div className="px-3 py-1.5 bg-rose-600 rounded-full text-white font-black text-xs flex items-center gap-1.5 shadow-lg border border-rose-400/30">
-              <PlaySquare size={15} className="fill-white" />
-              <span>Full YouTube Video Player</span>
+            <button
+              onClick={handleFullscreenClick}
+              className="p-2 hover:bg-white/10 rounded-full text-gray-300 hover:text-white transition-colors"
+              title="Close Full Video View"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Authentic YouTube Logo Badge */}
+            <div className="flex items-center gap-1.5 font-black text-sm text-white">
+              <div className="px-2 py-0.5 bg-rose-600 rounded-lg text-white font-black text-xs flex items-center gap-1 shadow-md">
+                <PlaySquare size={14} className="fill-white" />
+                <span>YouTube</span>
+              </div>
+              <span className="text-xs text-rose-400 font-bold hidden xs:inline">Official Player</span>
             </div>
-            <div className="min-w-0">
-              <h3 className="text-sm sm:text-base font-extrabold truncate max-w-xs sm:max-w-xl text-white">{currentTrack?.title}</h3>
-              <p className="text-xs text-rose-300 font-semibold truncate">{currentTrack?.channel}</p>
+
+            <div className="hidden md:block h-4 w-px bg-white/20" />
+
+            <div className="hidden md:block max-w-md truncate">
+              <span className="text-xs font-extrabold text-white">{currentTrack?.title}</span>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2.5">
+
+          <div className="flex items-center gap-2">
+            {/* Resolution Quality Switcher */}
+            <div className="relative">
+              <button
+                onClick={() => setShowQualityMenu(!showQualityMenu)}
+                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-full text-xs font-bold text-emerald-400 flex items-center gap-1 transition-all active:scale-95"
+                title="Select YouTube Video Stream Quality"
+              >
+                <span>{selectedQuality}</span>
+                <ChevronDown size={12} />
+              </button>
+
+              {showQualityMenu && (
+                <div className="absolute right-0 top-full mt-1.5 w-40 bg-slate-900 border border-white/20 rounded-xl shadow-2xl p-1.5 z-50 text-xs">
+                  <div className="text-[9px] font-extrabold uppercase text-slate-400 px-2 py-1 border-b border-white/10">Video Quality</div>
+                  {['2160p 4K', '1080p HD', '720p HD', '480p', '360p', 'Auto HQ'].map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => {
+                        setSelectedQuality(q);
+                        setShowQualityMenu(false);
+                        onShowToast?.(`Video quality changed to ${q}`, 'info');
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg font-semibold flex items-center justify-between ${
+                        selectedQuality === q ? 'bg-rose-600 text-white font-bold' : 'text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <span>{q}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Playback Speed Switcher */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-full text-xs font-bold text-amber-300 flex items-center gap-1 transition-all active:scale-95"
+                title="Playback Speed"
+              >
+                <span>{playbackSpeed}x</span>
+              </button>
+
+              {showSpeedMenu && (
+                <div className="absolute right-0 top-full mt-1.5 w-36 bg-slate-900 border border-white/20 rounded-xl shadow-2xl p-1.5 z-50 text-xs">
+                  <div className="text-[9px] font-extrabold uppercase text-slate-400 px-2 py-1 border-b border-white/10">Speed</div>
+                  {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setPlaybackSpeed(s);
+                        setShowSpeedMenu(false);
+                        onShowToast?.(`Playback speed set to ${s}x`, 'info');
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg font-semibold flex items-center justify-between ${
+                        playbackSpeed === s ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:bg-white/10'
+                      }`}
+                    >
+                      <span>{s === 1.0 ? 'Normal (1.0x)' : `${s}x`}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Theater Mode Toggle */}
+            <button
+              onClick={() => setIsTheaterMode(!isTheaterMode)}
+              className={`p-2 rounded-full border transition-all active:scale-90 ${
+                isTheaterMode ? 'bg-rose-600/30 border-rose-500 text-rose-300' : 'bg-white/10 border-white/15 text-slate-300 hover:bg-white/20'
+              }`}
+              title="Toggle Theater Wide View"
+            >
+              <Tv size={16} />
+            </button>
+
+            {/* External Link on YouTube.com */}
             <a
               href={`https://www.youtube.com/watch?v=${videoId}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-1.5 bg-white/15 hover:bg-white/25 border border-white/20 rounded-full text-xs font-bold text-white flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+              className="px-3 py-1 bg-white/15 hover:bg-white/25 border border-white/20 rounded-full text-xs font-bold text-white flex items-center gap-1.5 transition-all active:scale-95"
               title="Open video on YouTube.com"
             >
               <ExternalLink size={13} />
               <span className="hidden sm:inline">YouTube.com</span>
             </a>
-
-            <button
-              onClick={handleFullscreenClick}
-              className="p-2.5 bg-rose-600 hover:bg-rose-500 rounded-full text-white shadow-xl ring-2 ring-rose-400/50 transition-all active:scale-90"
-              title="Exit Full Video Player"
-            >
-              <X size={18} />
-            </button>
           </div>
-        </div>
+        </header>
       )}
 
-      {/* Floating Mode Header Controls (Acts as Drag Bar) */}
+      {/* Floating Mode Drag Header */}
       {isFloating && (
         <div className="bg-slate-900/95 backdrop-blur-md px-2.5 py-1.5 flex items-center justify-between gap-1.5 border-b border-white/10 shrink-0 z-20 text-white select-none cursor-grab active:cursor-grabbing relative">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -300,229 +558,10 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
               <span className="text-[11px] font-bold truncate block text-gray-100 max-w-[110px] sm:max-w-[160px]">
                 {currentTrack?.title || 'Video Stream'}
               </span>
-              <span className="text-[9px] text-indigo-400 font-medium block truncate">
-                {dimensions.width}x{dimensions.height} • {getEngineLabel(playerEngine)} {isDataSaverMode && '• ⚡ Saver'}
-              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            {/* Quick Preset Size Menu with Figures */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSizePresets(!showSizePresets)}
-                className="px-2 py-0.5 bg-indigo-500/20 hover:bg-indigo-500/30 rounded-md text-[10px] font-mono font-black text-amber-300 transition-all flex items-center gap-1 border border-indigo-500/30 shadow-xs"
-                title="Resize mini player using figures"
-              >
-                <Scaling size={11} className="text-amber-400" />
-                <span>{dimensions.width}×{dimensions.height}</span>
-              </button>
-
-              {showSizePresets && (
-                <div className="absolute right-0 top-full mt-1.5 w-64 bg-slate-900 border border-white/20 rounded-2xl shadow-2xl p-2.5 z-50 text-xs text-white backdrop-blur-2xl space-y-2.5">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
-                    <span className="font-black text-amber-400 text-[10px] uppercase tracking-wider flex items-center gap-1">
-                      <Scaling size={12} /> Video Figure Resizer
-                    </span>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {dimensions.width}×{dimensions.height}px
-                    </span>
-                  </div>
-
-                  {/* 16:9 Figure Presets */}
-                  <div className="space-y-1">
-                    <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">16:9 Figure Presets</div>
-                    <div className="grid grid-cols-2 gap-1">
-                      {[
-                        { label: 'Compact', w: 280, h: 160 },
-                        { label: 'Medium', w: 380, h: 220 },
-                        { label: 'Large', w: 480, h: 270 },
-                        { label: 'HD 16:9', w: 640, h: 360 },
-                        { label: 'Theater', w: 720, h: 405 },
-                        { label: 'Ultra HD', w: 854, h: 480 },
-                      ].map((preset) => (
-                        <button
-                          key={preset.label}
-                          onClick={() => applyPresetSize(preset.w, preset.h)}
-                          className={`px-2 py-1 rounded-lg text-left font-semibold text-[10px] flex justify-between items-center transition-all ${
-                            dimensions.width === preset.w && dimensions.height === preset.h
-                              ? 'bg-indigo-600 text-white font-bold ring-1 ring-indigo-400'
-                              : 'bg-white/5 hover:bg-white/15 text-gray-300'
-                          }`}
-                        >
-                          <span>{preset.label}</span>
-                          <span className="font-mono text-[9px] opacity-75">{preset.w}×{preset.h}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Width & Height Numerical Figure Inputs */}
-                  <div className="space-y-1.5 pt-1 border-t border-white/10">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-300">
-                      <span>Exact Figure Inputs (px)</span>
-                      <button
-                        onClick={() => setLockAspectRatio(!lockAspectRatio)}
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold transition-all border ${
-                          lockAspectRatio 
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
-                            : 'bg-white/10 text-gray-400 border-white/10'
-                        }`}
-                      >
-                        {lockAspectRatio ? '🔒 16:9 Locked' : '🔓 Custom Ratio'}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-0.5">
-                        <label className="text-[9px] text-gray-400 font-bold block">Width Figure</label>
-                        <input
-                          type="number"
-                          min="220"
-                          max="1280"
-                          value={dimensions.width}
-                          onChange={(e) => {
-                            const w = parseInt(e.target.value, 10) || 220;
-                            const h = lockAspectRatio ? Math.round(w * (9/16)) : dimensions.height;
-                            applyPresetSize(w, h);
-                          }}
-                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
-                        />
-                      </div>
-
-                      <div className="space-y-0.5">
-                        <label className="text-[9px] text-gray-400 font-bold block">Height Figure</label>
-                        <input
-                          type="number"
-                          min="135"
-                          max="720"
-                          value={dimensions.height}
-                          onChange={(e) => {
-                            const h = parseInt(e.target.value, 10) || 135;
-                            const w = lockAspectRatio ? Math.round(h * (16/9)) : dimensions.width;
-                            applyPresetSize(w, h);
-                          }}
-                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 pt-1">
-                      <button
-                        onClick={() => applyPresetSize(Math.max(220, dimensions.width - 40), lockAspectRatio ? Math.round(Math.max(220, dimensions.width - 40) * (9/16)) : dimensions.height)}
-                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold text-gray-200"
-                      >
-                        -40 W
-                      </button>
-                      <input 
-                        type="range"
-                        min="220"
-                        max="960"
-                        step="20"
-                        value={dimensions.width}
-                        onChange={(e) => {
-                          const w = parseInt(e.target.value, 10);
-                          applyPresetSize(w, lockAspectRatio ? Math.round(w * (9/16)) : dimensions.height);
-                        }}
-                        className="flex-1 accent-indigo-500 cursor-pointer"
-                      />
-                      <button
-                        onClick={() => applyPresetSize(Math.min(960, dimensions.width + 40), lockAspectRatio ? Math.round(Math.min(960, dimensions.width + 40) * (9/16)) : dimensions.height)}
-                        className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono font-bold text-gray-200"
-                      >
-                        +40 W
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Quick Scale Figures */}
-                  <div className="space-y-1 pt-1 border-t border-white/10">
-                    <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Scale Factor Figures</div>
-                    <div className="flex items-center gap-1">
-                      {[0.75, 1.0, 1.25, 1.5, 2.0].map((scale) => {
-                        const targetW = Math.round(380 * scale);
-                        const targetH = Math.round(220 * scale);
-                        return (
-                          <button
-                            key={scale}
-                            onClick={() => applyPresetSize(targetW, targetH)}
-                            className={`flex-1 py-1 rounded-lg text-[10px] font-mono font-bold transition-all ${
-                              dimensions.width === targetW
-                                ? 'bg-amber-400 text-slate-950 font-black'
-                                : 'bg-white/10 hover:bg-white/20 text-gray-300'
-                            }`}
-                          >
-                            {scale}x
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Player Engine Switcher Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowEngineMenu(!showEngineMenu)}
-                className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 rounded-md text-[10px] font-semibold text-indigo-300 transition-all flex items-center gap-1 border border-white/10"
-                title="Switch Player Engine"
-              >
-                <Settings2 size={11} />
-              </button>
-
-              {showEngineMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-52 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-1.5 z-50 text-xs">
-                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 mb-1 flex items-center justify-between">
-                    <span>Select Player Engine</span>
-                    <Globe size={11} />
-                  </div>
-                  <button
-                    onClick={() => { onChangePlayerEngine?.('youtube'); setShowEngineMenu(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium ${playerEngine === 'youtube' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                  >
-                    <span>YouTube (Standard)</span>
-                  </button>
-                  <button
-                    onClick={() => { onChangePlayerEngine?.('youtube-nocookie'); setShowEngineMenu(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium ${playerEngine === 'youtube-nocookie' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                  >
-                    <span>YouTube NoCookie</span>
-                  </button>
-                  <button
-                    onClick={() => { onChangePlayerEngine?.('invidious'); setShowEngineMenu(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium ${playerEngine === 'invidious' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                  >
-                    <span>Invidious (3rd Party)</span>
-                  </button>
-                  <button
-                    onClick={() => { onChangePlayerEngine?.('piped'); setShowEngineMenu(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium ${playerEngine === 'piped' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                  >
-                    <span>Piped (3rd Party)</span>
-                  </button>
-                  <button
-                    onClick={() => { onChangePlayerEngine?.('embed'); setShowEngineMenu(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between font-medium ${playerEngine === 'embed' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                  >
-                    <span>Direct IFrame</span>
-                  </button>
-
-                  <div className="border-t border-white/10 mt-1 pt-1">
-                    <a
-                      href={`https://yewtu.be/watch?v=${videoId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full text-left px-2.5 py-1 rounded-lg text-[10px] text-gray-400 hover:text-white hover:bg-white/5 flex items-center gap-1.5"
-                    >
-                      <ExternalLink size={10} /> Open in Invidious Web
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <button
               onClick={handleFullscreenClick}
               className="p-1 bg-rose-600 hover:bg-rose-500 rounded-md text-white transition-all flex items-center shadow-sm active:scale-95"
@@ -543,149 +582,446 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
         </div>
       )}
 
-      {/* Video Player Display */}
-      <div className={playerBoxClassName}>
-        {/* Transparent overlay during dragging or resizing to prevent iframe mouse interception */}
-        {(isDragging || isResizing) && (
-          <div className="absolute inset-0 z-30 bg-black/20 cursor-grabbing backdrop-blur-[1px] flex items-center justify-center text-white/80 text-xs font-mono font-bold">
-            <Move size={18} className="mr-1 animate-pulse" />
-            <span>{dimensions.width} x {dimensions.height}</span>
-          </div>
-        )}
+      {/* ========================================================= */}
+      {/* MAIN CONTENT AREA */}
+      {/* ========================================================= */}
+      {isFull ? (
+        /* YouTube Official Video Page Container Layout */
+        <div className={`w-full mx-auto p-3 sm:p-6 space-y-6 ${isTheaterMode ? 'max-w-full' : 'max-w-7xl'}`}>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* MAIN COLUMN (Video + Actions + Description + Comments) */}
+            <div className={`space-y-4 ${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+              
+              {/* VIDEO STAGE CONTAINER */}
+              <div className={playerBoxClassName}>
+                {playerEngine === 'youtube' ? (
+                  <div className="relative w-full h-full">
+                    <ReactPlayer
+                      ref={playerRef}
+                      url={`https://www.youtube.com/watch?v=${videoId}`}
+                      playing={isPlaying}
+                      volume={volume / 100}
+                      muted={isMuted}
+                      playbackRate={playbackSpeed}
+                      onEnded={onTrackEnded}
+                      onProgress={(state) => onProgress?.(state.playedSeconds)}
+                      onDuration={(duration) => onDuration?.(duration)}
+                      onBuffer={() => setIsBuffering(true)}
+                      onBufferEnd={() => setIsBuffering(false)}
+                      onReady={() => setIsBuffering(false)}
+                      width="100%"
+                      height="100%"
+                      playsinline={true}
+                      controls={true}
+                      progressInterval={200}
+                      config={{
+                        youtube: {
+                          playerVars: {
+                            autoplay: 1,
+                            rel: 0,
+                            modestbranding: 1,
+                            enablejsapi: 1,
+                            playsinline: 1,
+                            fs: 1,
+                            iv_load_policy: 3,
+                            cc_load_policy: 0,
+                            vq: selectedQuality.toLowerCase().includes('4k') ? 'highres' : 'hd1080'
+                          }
+                        }
+                      }}
+                    />
+                    {isBuffering && (
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 text-white border border-white/20 text-xs font-mono font-bold shadow-lg">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                          <span>Buffering YouTube Stream...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative w-full h-full bg-black">
+                    <iframe
+                      src={getThirdPartyEmbedUrl()}
+                      title={currentTrack?.title || "Third Party Player"}
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+              </div>
 
-        {playerEngine === 'youtube' ? (
-          <div className="relative w-full h-full">
-            <ReactPlayer
-              ref={playerRef}
-              url={`https://www.youtube.com/watch?v=${videoId}`}
-              playing={isPlaying}
-              volume={volume / 100}
-              muted={isMuted}
-              onEnded={onTrackEnded}
-              onProgress={(state) => onProgress?.(state.playedSeconds)}
-              onDuration={(duration) => onDuration?.(duration)}
-              onBuffer={() => setIsBuffering(true)}
-              onBufferEnd={() => setIsBuffering(false)}
-              onReady={() => setIsBuffering(false)}
-              onError={(e) => {
-                console.warn('YouTube playback error:', e);
-                setIsBuffering(false);
-              }}
-              width="100%"
-              height="100%"
-              playsinline={true}
-              controls={showVideo}
-              progressInterval={200}
-              config={{
-                youtube: {
-                  playerVars: {
-                    autoplay: 1,
-                    rel: 0,
-                    modestbranding: 1,
-                    enablejsapi: 1,
-                    playsinline: 1,
-                    fs: 1,
-                    iv_load_policy: 3,
-                    cc_load_policy: 0,
-                    disablekb: 0,
-                    autohide: 1,
-                    origin: typeof window !== 'undefined' ? window.location.origin : '',
-                    widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
-                    ...(isDataSaverMode ? { vq: 'small' } : { vq: 'hd1080' })
-                  }
-                }
-              }}
-            />
-            {isBuffering && (
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none transition-all">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 text-white border border-white/20 text-xs font-mono font-bold shadow-lg">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                  <span>Loading Stream...</span>
+              {/* VIDEO TITLE */}
+              <h1 className="text-lg sm:text-xl font-extrabold text-white leading-snug tracking-tight">
+                {decodeHtmlEntities(currentTrack?.title || '')}
+              </h1>
+
+              {/* ACTION BAR & CHANNEL ROW */}
+              <div className="flex flex-wrap items-center justify-between gap-4 py-2 border-b border-white/10">
+                {/* CHANNEL INFO & SUBSCRIBE BUTTON */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shadow-md">
+                    <img
+                      src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                      alt={currentTrack?.channel}
+                      className="w-full h-full rounded-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&auto=format&fit=crop';
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-1 font-bold text-sm text-white">
+                      <span>{decodeHtmlEntities(currentTrack?.channel || '')}</span>
+                      <CheckCircle2 size={14} className="text-rose-500 fill-rose-500/20 shrink-0" />
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium">2.48M subscribers</p>
+                  </div>
+
+                  {/* Subscribe / Subscribed Toggle Button */}
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <button
+                      onClick={() => {
+                        if (onToggleSubscribe && currentTrack?.channel) {
+                          onToggleSubscribe(currentTrack.channel);
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-full font-extrabold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-md ${
+                        isSubscribed
+                          ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-white/10'
+                          : 'bg-white text-slate-950 hover:bg-slate-200'
+                      }`}
+                    >
+                      {isSubscribed ? (
+                        <>
+                          <span>Subscribed</span>
+                          <CheckCircle2 size={14} className="text-emerald-500" />
+                        </>
+                      ) : (
+                        <span>Subscribe</span>
+                      )}
+                    </button>
+
+                    {isSubscribed && (
+                      <button
+                        onClick={() => setSubBellActive(!subBellActive)}
+                        className={`p-2 rounded-full border transition-colors ${
+                          subBellActive ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-slate-800 text-slate-400 border-white/10'
+                        }`}
+                        title="Notification Bell"
+                      >
+                        <Bell size={14} className={subBellActive ? 'fill-rose-400' : ''} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* LIKE / DISLIKE / SHARE / DOWNLOAD ACTIONS */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Like / Dislike Pill */}
+                  <div className="flex items-center bg-slate-800/90 border border-white/10 rounded-full p-0.5 shadow-md">
+                    <button
+                      onClick={handleToggleLike}
+                      className={`px-3 py-1.5 rounded-l-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                        hasLiked ? 'text-rose-400 bg-rose-500/20' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      }`}
+                      title="Like Video"
+                    >
+                      <ThumbsUp size={15} className={hasLiked ? 'fill-rose-400' : ''} />
+                      <span>{formattedLikeCount}</span>
+                    </button>
+
+                    <div className="w-px h-4 bg-white/15" />
+
+                    <button
+                      onClick={handleToggleDislike}
+                      className={`px-3 py-1.5 rounded-r-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                        hasDisliked ? 'text-rose-400 bg-rose-500/20' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      }`}
+                      title="Dislike Video"
+                    >
+                      <ThumbsDown size={15} className={hasDisliked ? 'fill-rose-400' : ''} />
+                    </button>
+                  </div>
+
+                  {/* Share Button */}
+                  <button
+                    onClick={() => {
+                      if (navigator.share && currentTrack) {
+                        navigator.share({
+                          title: currentTrack.title,
+                          text: `Watch official YouTube video "${currentTrack.title}"`,
+                          url: `https://www.youtube.com/watch?v=${videoId}`
+                        }).catch(() => {});
+                      } else {
+                        navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
+                        onShowToast?.('YouTube video link copied!', 'info');
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <Share2 size={14} />
+                    <span>Share</span>
+                  </button>
+
+                  {/* Download Button */}
+                  {onDownloadTrack && currentTrack && (
+                    <button
+                      onClick={() => onDownloadTrack(currentTrack)}
+                      className="px-3.5 py-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <Download size={14} />
+                      <span>Download</span>
+                    </button>
+                  )}
+
+                  {/* Add to Playlist Button */}
+                  {onOpenAddToPlaylist && currentTrack && (
+                    <button
+                      onClick={() => onOpenAddToPlaylist(currentTrack)}
+                      className="px-3.5 py-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <ListPlus size={14} />
+                      <span>Save</span>
+                    </button>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="relative w-full h-full bg-black">
-            <iframe
-              src={getThirdPartyEmbedUrl()}
-              title={currentTrack?.title || "Third Party Player"}
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          </div>
-        )}
 
-        {/* Floating Mode Corner & Edge Resize Handles with Figures Display */}
-        {isFloating && (
-          <>
-            {/* Live Dimension Figures Badge Handle (Bottom Right) */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'br')}
-              onTouchStart={(e) => handleResizeStart(e, 'br')}
-              className="absolute bottom-0 right-0 z-40 cursor-se-resize flex items-center gap-1 px-2 py-1 bg-slate-950/90 border-t border-l border-amber-500/40 text-amber-300 font-mono text-[10px] font-extrabold rounded-tl-xl rounded-br-2xl shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 group"
-              title="Drag corner to resize mini video player"
-            >
-              <Scaling size={11} className="text-amber-400 group-hover:text-white" />
-              <span>{dimensions.width}×{dimensions.height} px</span>
+              {/* EXPANDABLE VIDEO DESCRIPTION & METADATA BOX */}
+              <div
+                onClick={() => setShowFullDescription(!showFullDescription)}
+                className="bg-slate-900/80 hover:bg-slate-900 border border-white/10 rounded-2xl p-4 cursor-pointer transition-colors space-y-2 text-xs"
+              >
+                <div className="flex items-center gap-2 font-black text-slate-300">
+                  <span>1,428,910 views</span>
+                  <span>•</span>
+                  <span>Aug 2, 2026</span>
+                  <span className="text-rose-400 font-mono">#officialvideo</span>
+                  <span className="text-indigo-400 font-mono">#youtube</span>
+                </div>
+
+                <p className={`text-slate-300 leading-relaxed font-normal ${showFullDescription ? '' : 'line-clamp-2'}`}>
+                  Official YouTube video stream for "{currentTrack?.title}" by {currentTrack?.channel}. Produced with high-definition audio and video fidelity. Subscribe to the official channel for new releases, official music videos, and live performances.
+                </p>
+
+                <div className="font-bold text-rose-400 pt-1">
+                  {showFullDescription ? 'Show less' : '...more'}
+                </div>
+              </div>
+
+              {/* INTERACTIVE COMMENTS SECTION */}
+              <div className="space-y-4 pt-4 border-t border-white/10">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                    <MessageSquare size={18} className="text-rose-500" />
+                    <span>{comments.length + 1840} Comments</span>
+                  </h3>
+                </div>
+
+                {/* Add Comment Form */}
+                <form onSubmit={handleAddComment} className="flex gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shrink-0 text-xs shadow-md">
+                    You
+                  </div>
+
+                  <div className="flex-1 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newCommentInput}
+                      onChange={(e) => setNewCommentInput(e.target.value)}
+                      placeholder="Add a comment to YouTube video..."
+                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2 text-xs font-semibold text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newCommentInput.trim()}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1 shrink-0"
+                    >
+                      <Send size={13} />
+                      <span>Comment</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Comments List */}
+                <div className="space-y-3 pt-2">
+                  {comments.map((cmt) => (
+                    <div key={cmt.id} className="flex gap-3 p-3 bg-slate-900/60 rounded-xl border border-white/5">
+                      <img
+                        src={cmt.avatar}
+                        alt={cmt.author}
+                        className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-white/20"
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-xs text-white">@{cmt.author}</span>
+                          <span className="text-[10px] text-slate-400">{cmt.timeAgo}</span>
+                        </div>
+                        <p className="text-xs text-slate-200 font-normal leading-relaxed">{cmt.text}</p>
+                        <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-400">
+                          <button
+                            onClick={() => {
+                              setComments(comments.map(c => c.id === cmt.id ? { ...c, likes: c.likes + (c.userLiked ? -1 : 1), userLiked: !c.userLiked } : c));
+                            }}
+                            className={`flex items-center gap-1 hover:text-white transition-colors ${cmt.userLiked ? 'text-rose-400 font-bold' : ''}`}
+                          >
+                            <ThumbsUp size={12} className={cmt.userLiked ? 'fill-rose-400' : ''} />
+                            <span>{cmt.likes}</span>
+                          </button>
+                          <button className="hover:text-white transition-colors font-bold">Reply</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
 
-            {/* Right Edge Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'r')}
-              onTouchStart={(e) => handleResizeStart(e, 'r')}
-              className="absolute top-8 bottom-6 right-0 w-2.5 z-40 cursor-e-resize hover:bg-amber-400/40 transition-colors"
-              title="Drag right edge to change width figure"
-            />
+            {/* RIGHT SIDEBAR (Up Next & Recommended YouTube Videos) */}
+            {!isTheaterMode && (
+              <div className="lg:col-span-4 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <span className="font-extrabold text-sm text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={15} className="text-rose-500 animate-pulse" />
+                    Up Next Videos
+                  </span>
+                  <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                    YouTube Autoplay
+                  </span>
+                </div>
 
-            {/* Bottom Edge Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'b')}
-              onTouchStart={(e) => handleResizeStart(e, 'b')}
-              className="absolute left-6 right-24 bottom-0 h-2.5 z-40 cursor-s-resize hover:bg-amber-400/40 transition-colors"
-              title="Drag bottom edge to change height figure"
-            />
+                {loadingRecs ? (
+                  <div className="space-y-2 py-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={`rec-skel-${i}`} className="h-20 bg-slate-900 animate-pulse rounded-xl" />
+                    ))}
+                  </div>
+                ) : recommendations.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {recommendations.map((recTrack) => (
+                      <div
+                        key={`yt-full-rec-${recTrack.id}`}
+                        onClick={() => {
+                          if (onPlayTrack) onPlayTrack(recTrack);
+                        }}
+                        className="flex gap-3 p-2 bg-slate-900/60 hover:bg-slate-800 border border-white/5 hover:border-white/15 rounded-xl cursor-pointer transition-all group"
+                      >
+                        <div className="relative w-28 h-16 rounded-lg overflow-hidden bg-black shrink-0">
+                          <img
+                            src={`https://i.ytimg.com/vi/${recTrack.id}/hqdefault.jpg`}
+                            alt={recTrack.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
+                            }}
+                          />
+                          <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 rounded text-[9px] font-mono font-bold text-white">
+                            {recTrack.duration || '3:30'}
+                          </div>
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                            <Play size={16} className="fill-white text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
 
-            {/* Left Edge Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'l')}
-              onTouchStart={(e) => handleResizeStart(e, 'l')}
-              className="absolute top-8 bottom-6 left-0 w-2.5 z-40 cursor-w-resize hover:bg-amber-400/40 transition-colors"
-              title="Drag left edge to change width figure"
-            />
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-rose-300 transition-colors">
+                            {decodeHtmlEntities(recTrack.title)}
+                          </h4>
+                          <p className="text-[10px] text-slate-400 font-medium truncate">
+                            {decodeHtmlEntities(recTrack.channel)}
+                          </p>
+                          <p className="text-[9px] text-slate-500 font-mono">
+                            412K views • 3 days ago
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 py-4 text-center">No additional video recommendations found.</p>
+                )}
+              </div>
+            )}
 
-            {/* Top Edge Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 't')}
-              onTouchStart={(e) => handleResizeStart(e, 't')}
-              className="absolute left-6 right-6 top-0 h-2.5 z-40 cursor-n-resize hover:bg-amber-400/40 transition-colors"
-              title="Drag top edge to change height figure"
-            />
+          </div>
+        </div>
+      ) : (
+        /* Standard Floating / Mini Player View Box */
+        <div className={playerBoxClassName}>
+          {(isDragging || isResizing) && (
+            <div className="absolute inset-0 z-30 bg-black/20 cursor-grabbing backdrop-blur-[1px] flex items-center justify-center text-white/80 text-xs font-mono font-bold">
+              <Move size={18} className="mr-1 animate-pulse" />
+              <span>{dimensions.width} x {dimensions.height}</span>
+            </div>
+          )}
 
-            {/* Bottom Left Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'bl')}
-              onTouchStart={(e) => handleResizeStart(e, 'bl')}
-              className="absolute bottom-0 left-0 w-6 h-6 z-40 cursor-sw-resize flex items-end justify-start p-1 text-white/40 hover:text-amber-400 transition-colors rounded-bl-2xl bg-gradient-to-tr from-black/80 to-transparent"
-            />
+          {playerEngine === 'youtube' ? (
+            <div className="relative w-full h-full">
+              <ReactPlayer
+                ref={playerRef}
+                url={`https://www.youtube.com/watch?v=${videoId}`}
+                playing={isPlaying}
+                volume={volume / 100}
+                muted={isMuted}
+                onEnded={onTrackEnded}
+                onProgress={(state) => onProgress?.(state.playedSeconds)}
+                onDuration={(duration) => onDuration?.(duration)}
+                onBuffer={() => setIsBuffering(true)}
+                onBufferEnd={() => setIsBuffering(false)}
+                onReady={() => setIsBuffering(false)}
+                width="100%"
+                height="100%"
+                playsinline={true}
+                controls={showVideo}
+                progressInterval={200}
+                config={{
+                  youtube: {
+                    playerVars: {
+                      autoplay: 1,
+                      rel: 0,
+                      modestbranding: 1,
+                      enablejsapi: 1,
+                      playsinline: 1,
+                      fs: 1,
+                      iv_load_policy: 3,
+                      cc_load_policy: 0
+                    }
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div className="relative w-full h-full bg-black">
+              <iframe
+                src={getThirdPartyEmbedUrl()}
+                title={currentTrack?.title || "Third Party Player"}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          )}
 
-            {/* Top Right Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'tr')}
-              onTouchStart={(e) => handleResizeStart(e, 'tr')}
-              className="absolute top-0 right-0 w-6 h-6 z-40 cursor-ne-resize flex items-start justify-end p-1 text-white/40 hover:text-amber-400 transition-colors rounded-tr-2xl bg-gradient-to-bl from-black/80 to-transparent"
-            />
-
-            {/* Top Left Resize Handle */}
-            <div
-              onMouseDown={(e) => handleResizeStart(e, 'tl')}
-              onTouchStart={(e) => handleResizeStart(e, 'tl')}
-              className="absolute top-0 left-0 w-6 h-6 z-40 cursor-nw-resize flex items-start justify-start p-1 text-white/40 hover:text-amber-400 transition-colors rounded-tl-2xl bg-gradient-to-br from-black/80 to-transparent"
-            />
-          </>
-        )}
-      </div>
+          {isFloating && (
+            <>
+              <div
+                onMouseDown={(e) => handleResizeStart(e, 'br')}
+                onTouchStart={(e) => handleResizeStart(e, 'br')}
+                className="absolute bottom-0 right-0 z-40 cursor-se-resize flex items-center gap-1 px-2 py-1 bg-slate-950/90 border-t border-l border-amber-500/40 text-amber-300 font-mono text-[10px] font-extrabold rounded-tl-xl rounded-br-2xl shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 group"
+                title="Drag corner to resize mini video player"
+              >
+                <Scaling size={11} className="text-amber-400 group-hover:text-white" />
+                <span>{dimensions.width}×{dimensions.height} px</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 };

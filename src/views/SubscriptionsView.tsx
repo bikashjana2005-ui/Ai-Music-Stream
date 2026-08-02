@@ -131,13 +131,24 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
     <div className="space-y-5 animate-fade-in pb-28 max-w-6xl mx-auto w-full">
       
       {/* 1. YOUTUBE-STYLE CREATOR CHANNELS ROW */}
-      <div className="bg-slate-900/40 dark:bg-slate-900/60 p-3.5 rounded-2xl border border-gray-200/50 dark:border-white/10 space-y-3">
+      <div className="bg-slate-900/80 p-4 rounded-3xl border border-white/10 space-y-3.5 shadow-lg">
         
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">
-              Subscriptions ({subscriptions.length})
-            </span>
+            <div className="w-8 h-8 rounded-xl bg-rose-600/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+              <CheckCircle2 size={16} />
+            </div>
+            <div>
+              <h2 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                Subscribed Creators & Labels
+                <span className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/30">
+                  {subscriptions.length}
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-400 font-medium">
+                {selectedChannelFilter ? `Filtering feed by ${selectedChannelFilter}` : 'Showing latest uploads from all your subscribed channels'}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -147,17 +158,17 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
                 onShowToast("Syncing channel uploads...", "info");
               }}
               disabled={isRealtimeSyncing}
-              className="p-1.5 sm:px-2.5 sm:py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 text-xs font-semibold rounded-xl flex items-center gap-1 transition-all"
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all border border-white/10 active:scale-95"
               title="Sync Subscriptions"
             >
-              <RefreshCw size={13} className={isRealtimeSyncing ? "animate-spin text-rose-500" : "text-gray-500"} />
-              <span className="hidden sm:inline">Sync</span>
+              <RefreshCw size={13} className={isRealtimeSyncing ? "animate-spin text-rose-400" : "text-slate-400"} />
+              <span className="hidden sm:inline">Sync Feed</span>
             </button>
 
             {channelTracks.length > 0 && (
               <button
                 onClick={handlePlayAllFeed}
-                className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1 transition-all active:scale-95"
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95"
               >
                 <Play size={13} className="fill-white" />
                 <span>Play Feed</span>
@@ -166,29 +177,31 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
 
             <button
               onClick={onOpenSubscriptionsModal}
-              className="px-3 py-1 bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-900 dark:text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1 transition-all active:scale-95"
+              className="px-3.5 py-1.5 bg-white text-slate-950 hover:bg-slate-200 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95"
             >
-              <Plus size={14} />
-              <span>Manage</span>
+              <Plus size={15} />
+              <span>Add / Manage</span>
             </button>
           </div>
         </div>
 
-        {/* Horizontal Creator Avatar Row */}
-        <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth py-1">
+        {/* Horizontal Creator Avatar Carousel */}
+        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar scroll-smooth py-1">
+          {/* Add Channel Button Avatar */}
           <button
             onClick={onOpenSubscriptionsModal}
             className="flex flex-col items-center gap-1 shrink-0 group cursor-pointer"
             title="Subscribe to YouTube Channel"
           >
-            <div className="w-12 h-12 rounded-full border-2 border-dashed border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 flex items-center justify-center transition-all group-hover:scale-105">
-              <UserPlus size={18} />
+            <div className="w-13 h-13 rounded-full border-2 border-dashed border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition-all group-hover:scale-105 shadow-sm">
+              <UserPlus size={20} />
             </div>
-            <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 group-hover:text-rose-500 truncate max-w-[64px]">
+            <span className="text-[10px] font-extrabold text-slate-300 group-hover:text-rose-400 truncate max-w-[68px]">
               + Add
             </span>
           </button>
 
+          {/* ALL Feed Filter Button */}
           <button
             onClick={() => {
               setSelectedChannelFilter(null);
@@ -196,20 +209,21 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
             }}
             className="flex flex-col items-center gap-1 shrink-0 group cursor-pointer"
           >
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all p-0.5 ${
+            <div className={`w-13 h-13 rounded-full flex items-center justify-center transition-all p-0.5 ${
               !selectedChannelFilter
-                ? 'bg-rose-600 ring-2 ring-rose-500 shadow-xs scale-105'
-                : 'bg-gray-200 dark:bg-slate-800 hover:bg-gray-300'
+                ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 shadow-md scale-105'
+                : 'bg-slate-800 hover:bg-slate-700'
             }`}>
-              <div className="w-full h-full rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-[10px]">
+              <div className="w-full h-full rounded-full bg-slate-950 text-white flex items-center justify-center font-black text-[10px] tracking-wider">
                 ALL
               </div>
             </div>
-            <span className={`text-[10px] font-bold truncate max-w-[64px] ${!selectedChannelFilter ? 'text-rose-500 font-black' : 'text-gray-500 dark:text-gray-400'}`}>
-              All
+            <span className={`text-[10px] font-bold truncate max-w-[68px] ${!selectedChannelFilter ? 'text-rose-400 font-extrabold' : 'text-slate-400'}`}>
+              All Feeds
             </span>
           </button>
 
+          {/* Subscribed Creators Avatars List */}
           {subscriptions.map((ch) => {
             const isSelected = selectedChannelFilter?.toLowerCase() === ch.name.toLowerCase();
             return (
@@ -221,9 +235,9 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
                 }}
                 className="flex flex-col items-center gap-1 shrink-0 group cursor-pointer relative"
               >
-                <div className={`w-12 h-12 rounded-full p-0.5 transition-all relative ${
+                <div className={`w-13 h-13 rounded-full p-0.5 transition-all relative ${
                   isSelected
-                    ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 scale-105 shadow-xs'
+                    ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 scale-105 shadow-md'
                     : 'bg-rose-500/40 hover:bg-rose-500 hover:scale-105'
                 }`}>
                   <img
@@ -235,12 +249,12 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
                     }}
                   />
                   
-                  {/* YouTube Unread Blue/Red Dot */}
-                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-rose-600 border-2 border-slate-900 rounded-full" />
+                  {/* YouTube Unread Live Badge */}
+                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-rose-600 border-2 border-slate-900 rounded-full" />
                 </div>
 
-                <span className={`text-[10px] font-bold truncate max-w-[64px] ${
-                  isSelected ? 'text-rose-500 font-extrabold' : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                <span className={`text-[10px] font-bold truncate max-w-[68px] ${
+                  isSelected ? 'text-rose-400 font-extrabold' : 'text-slate-400 group-hover:text-white'
                 }`}>
                   {ch.name}
                 </span>
