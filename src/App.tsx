@@ -28,6 +28,9 @@ const TAB_ORDER: TabType[] = ['home', 'search', 'subscriptions', 'library', 'dow
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  const handleCompleteSplash = useCallback(() => {
+    setShowSplash(false);
+  }, []);
   const [activeTab, setActiveTabState] = useState<TabType>('home');
   const [tabDirection, setTabDirection] = useState<number>(1);
 
@@ -39,6 +42,13 @@ export default function App() {
       setTabDirection(newIndex >= currentIndex ? 1 : -1);
       return newTab;
     });
+  }, []);
+
+  // Toast notification state & callback
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
   }, []);
   const [downloadedTracks, setDownloadedTracks] = useState<DownloadedTrack[]>(() => {
     try {
@@ -218,9 +228,6 @@ export default function App() {
 
   // Share Modal
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
-
-  // Toast notification
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Favorites state from localStorage
   const [favorites, setFavorites] = useState<Track[]>(() => {
@@ -466,10 +473,6 @@ export default function App() {
     localStorage.setItem('aura_ai_history', JSON.stringify(history));
   }, [history]);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ message, type });
-  };
-
   const handlePlayTrack = (track: Track) => {
     setIsMiniPlayerDismissed(false);
     setShowVideo(true);
@@ -688,7 +691,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors selection:bg-indigo-500 selection:text-white relative overflow-x-hidden flex flex-col items-center justify-start w-full">
       <AnimatePresence>
-        {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+        {showSplash && <SplashScreen onComplete={handleCompleteSplash} />}
       </AnimatePresence>
       
       {/* iOS Liquid Glass Ambient Background Mesh Orbs */}

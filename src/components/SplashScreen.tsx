@@ -1,14 +1,17 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Play } from 'lucide-react';
 
 export const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      onComplete();
-    }, 1000);
+      onCompleteRef.current();
+    }, 900);
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, []);
 
   return (
     <motion.div

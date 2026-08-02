@@ -148,6 +148,33 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [isPlaybackError, setIsPlaybackError] = useState<boolean>(false);
   const [offlinePlayedSeconds, setOfflinePlayedSeconds] = useState<number>(0);
 
+  // YouTube Original Full Player state
+  const [likeCount, setLikeCount] = useState<number>(142800);
+  const [hasLiked, setHasLiked] = useState<boolean>(false);
+  const [hasDisliked, setHasDisliked] = useState<boolean>(false);
+  const [subBellActive, setSubBellActive] = useState<boolean>(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [selectedQuality, setSelectedQuality] = useState<string>('1080p HD');
+  const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
+  const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
+  const [selectedTopicCategory, setSelectedTopicCategory] = useState<string>('All');
+  const [showAiSummary, setShowAiSummary] = useState<boolean>(false);
+  const [copyLinkSuccess, setCopyLinkSuccess] = useState<boolean>(false);
+
+  // Related YouTube Video Recommendations & Comments
+  const [recommendations, setRecommendations] = useState<Track[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [newCommentInput, setNewCommentInput] = useState<string>('');
+  const [isCommentFocused, setIsCommentFocused] = useState<boolean>(false);
+  const [commentSort, setCommentSort] = useState<'top' | 'newest'>('top');
+  const [showSortMenu, setShowSortMenu] = useState<boolean>(false);
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyInputText, setReplyInputText] = useState<string>('');
+  const [isCommentsVisible, setIsCommentsVisible] = useState<boolean>(true);
+
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Check if current track is downloaded locally
@@ -194,33 +221,6 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
     return () => clearInterval(timer);
   }, [isOfflineMode, isPlaying, playbackSpeed, onProgress, onDuration, onTrackEnded]);
-
-  // YouTube Original Full Player state
-  const [likeCount, setLikeCount] = useState<number>(142800);
-  const [hasLiked, setHasLiked] = useState<boolean>(false);
-  const [hasDisliked, setHasDisliked] = useState<boolean>(false);
-  const [subBellActive, setSubBellActive] = useState<boolean>(true);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const [selectedQuality, setSelectedQuality] = useState<string>('1080p HD');
-  const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
-  const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
-  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
-  const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
-  const [selectedTopicCategory, setSelectedTopicCategory] = useState<string>('All');
-  const [showAiSummary, setShowAiSummary] = useState<boolean>(false);
-  const [copyLinkSuccess, setCopyLinkSuccess] = useState<boolean>(false);
-
-  // Related YouTube Video Recommendations & Comments
-  const [recommendations, setRecommendations] = useState<Track[]>([]);
-  const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [newCommentInput, setNewCommentInput] = useState<string>('');
-  const [isCommentFocused, setIsCommentFocused] = useState<boolean>(false);
-  const [commentSort, setCommentSort] = useState<'top' | 'newest'>('top');
-  const [showSortMenu, setShowSortMenu] = useState<boolean>(false);
-  const [replyingToId, setReplyingToId] = useState<string | null>(null);
-  const [replyInputText, setReplyInputText] = useState<string>('');
-  const [isCommentsVisible, setIsCommentsVisible] = useState<boolean>(true);
 
   // Mini player dimensions state
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
