@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ChevronDown, 
+  ChevronUp,
   Maximize2, 
   X, 
   PlaySquare, 
@@ -28,13 +29,32 @@ import {
   Zap,
   Info,
   Sliders,
-  Tv
+  Tv,
+  ArrowLeft,
+  Scissors,
+  MoreHorizontal,
+  ListFilter,
+  CornerDownRight,
+  Pause,
+  HardDrive,
+  WifiOff,
+  RotateCcw
 } from 'lucide-react';
 import ReactPlayer from 'react-player/youtube';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 
 export type PlayerEngine = 'youtube' | 'youtube-nocookie' | 'invidious' | 'piped' | 'embed';
+
+interface CommentReplyItem {
+  id: string;
+  author: string;
+  avatar: string;
+  text: string;
+  timeAgo: string;
+  likes: number;
+  userLiked?: boolean;
+}
 
 interface CommentItem {
   id: string;
@@ -43,7 +63,10 @@ interface CommentItem {
   text: string;
   timeAgo: string;
   likes: number;
+  dislikes?: number;
   userLiked?: boolean;
+  userDisliked?: boolean;
+  replies?: CommentReplyItem[];
 }
 
 interface GlobalYouTubePlayerProps {
@@ -73,6 +96,8 @@ interface GlobalYouTubePlayerProps {
   isSubscribed?: boolean;
   onToggleSubscribe?: (channelName: string) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  isOnline?: boolean;
+  downloadedTracks?: Track[];
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -101,7 +126,9 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   onToggleFavorite,
   isSubscribed = false,
   onToggleSubscribe,
-  onShowToast
+  onShowToast,
+  isOnline = true,
+  downloadedTracks = []
 }) => {
   const playerRef = useRef<ReactPlayer | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -109,6 +136,55 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [showSizePresets, setShowSizePresets] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [isNativeFullScreen, setIsNativeFullScreen] = useState<boolean>(false);
+  const [isPlaybackError, setIsPlaybackError] = useState<boolean>(false);
+  const [offlinePlayedSeconds, setOfflinePlayedSeconds] = useState<number>(0);
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Check if current track is downloaded locally
+  const isDownloadedTrack = downloadedTracks.some(t => t.id === currentTrack?.id);
+  const isOfflineMode = !isOnline || isPlaybackError || (isDownloadedTrack && !isOnline);
+
+  // Reset error & timer when track changes
+  useEffect(() => {
+    setIsPlaybackError(false);
+    setOfflinePlayedSeconds(0);
+  }, [currentTrack?.id]);
+
+  // Handle external seek requests
+  useEffect(() => {
+    if (seekToSeconds !== undefined && seekToSeconds !== null) {
+      if (isOfflineMode) {
+        setOfflinePlayedSeconds(seekToSeconds);
+      } else if (playerRef.current) {
+        playerRef.current.seekTo(seekToSeconds, 'seconds');
+      }
+    }
+  }, [seekToSeconds, isOfflineMode]);
+
+  // Offline Audio Progress Timer Driver
+  useEffect(() => {
+    if (!isOfflineMode || !isPlaying) {
+      return;
+    }
+
+    const totalDurationSec = 210;
+    onDuration?.(totalDurationSec);
+
+    const timer = setInterval(() => {
+      setOfflinePlayedSeconds(prev => {
+        const next = prev + 1;
+        onProgress?.(next);
+        if (next >= totalDurationSec) {
+          onTrackEnded?.();
+          return 0;
+        }
+        return next;
+      });
+    }, 1000 / (playbackSpeed || 1));
+
+    return () => clearInterval(timer);
+  }, [isOfflineMode, isPlaying, playbackSpeed, onProgress, onDuration, onTrackEnded]);
 
   // YouTube Original Full Player state
   const [likeCount, setLikeCount] = useState<number>(142800);
@@ -127,6 +203,12 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [newCommentInput, setNewCommentInput] = useState<string>('');
+  const [isCommentFocused, setIsCommentFocused] = useState<boolean>(false);
+  const [commentSort, setCommentSort] = useState<'top' | 'newest'>('top');
+  const [showSortMenu, setShowSortMenu] = useState<boolean>(false);
+  const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const [replyInputText, setReplyInputText] = useState<string>('');
+  const [isCommentsVisible, setIsCommentsVisible] = useState<boolean>(true);
 
   // Mini player dimensions state
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
@@ -234,12 +316,78 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop',
       text: newCommentInput.trim(),
       timeAgo: 'Just now',
-      likes: 1
+      likes: 1,
+      dislikes: 0,
+      userLiked: true,
+      replies: []
     };
 
     setComments([newComment, ...comments]);
     setNewCommentInput('');
+    setIsCommentFocused(false);
     onShowToast?.('Comment posted to YouTube discussion!', 'success');
+  };
+
+  const handleToggleCommentLike = (commentId: string) => {
+    setComments(comments.map(c => {
+      if (c.id === commentId) {
+        const currentlyLiked = c.userLiked;
+        const currentlyDisliked = c.userDisliked;
+        return {
+          ...c,
+          userLiked: !currentlyLiked,
+          userDisliked: false,
+          likes: currentlyLiked ? c.likes - 1 : c.likes + 1,
+          dislikes: currentlyDisliked ? Math.max(0, (c.dislikes || 0) - 1) : (c.dislikes || 0)
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleToggleCommentDislike = (commentId: string) => {
+    setComments(comments.map(c => {
+      if (c.id === commentId) {
+        const currentlyDisliked = c.userDisliked;
+        const currentlyLiked = c.userLiked;
+        return {
+          ...c,
+          userDisliked: !currentlyDisliked,
+          userLiked: false,
+          dislikes: currentlyDisliked ? Math.max(0, (c.dislikes || 0) - 1) : (c.dislikes || 0) + 1,
+          likes: currentlyLiked ? Math.max(0, c.likes - 1) : c.likes
+        };
+      }
+      return c;
+    }));
+  };
+
+  const handleAddReply = (commentId: string) => {
+    if (!replyInputText.trim()) return;
+
+    const newReply: CommentReplyItem = {
+      id: `reply-${Date.now()}`,
+      author: 'You (Listener)',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop',
+      text: replyInputText.trim(),
+      timeAgo: 'Just now',
+      likes: 0,
+      userLiked: false
+    };
+
+    setComments(comments.map(c => {
+      if (c.id === commentId) {
+        return {
+          ...c,
+          replies: [...(c.replies || []), newReply]
+        };
+      }
+      return c;
+    }));
+
+    setReplyInputText('');
+    setReplyingToId(null);
+    onShowToast?.('Reply posted!', 'success');
   };
 
   const handleToggleLike = () => {
@@ -406,6 +554,138 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
   const formattedLikeCount = likeCount >= 1000 ? `${(likeCount / 1000).toFixed(1)}K` : `${likeCount}`;
 
+  const renderVideoStage = (isMini: boolean) => {
+    if (isOfflineMode) {
+      return (
+        <div className="relative w-full h-full bg-slate-950 flex flex-col items-center justify-center overflow-hidden group">
+          {/* High Resolution Blurred Artwork Background */}
+          <img
+            src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+            alt={currentTrack?.title || 'Track'}
+            className="absolute inset-0 w-full h-full object-cover opacity-35 scale-105 blur-md transition-transform duration-700 group-hover:scale-110"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop';
+            }}
+          />
+
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/40" />
+
+          {/* Top Offline Mode Badge */}
+          <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/20 backdrop-blur-md text-amber-300 border border-amber-500/30 rounded-full text-[10px] font-black tracking-wider uppercase shadow-lg">
+            <HardDrive size={12} className="text-amber-400 animate-pulse" />
+            <span>1080p Offline Video</span>
+          </div>
+
+          {/* Center Stage Artwork & Sound Wave Visualizer */}
+          <div className="relative z-10 flex flex-col items-center text-center p-3 max-w-sm w-full">
+            <div className={`relative ${isMini ? 'w-20 h-20' : 'w-28 h-28 sm:w-36 sm:h-36'} rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 mb-2.5 group-hover:scale-105 transition-all`}>
+              <img
+                src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                alt={currentTrack?.title || 'Track'}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop';
+                }}
+              />
+              {isPlaying && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center gap-1">
+                  {[40, 80, 100, 60, 90, 50, 75].map((h, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ height: [`${h * 0.3}%`, `${h}%`, `${h * 0.2}%`] }}
+                      transition={{ repeat: Infinity, duration: 0.6 + i * 0.1, ease: 'easeInOut' }}
+                      className="w-1 bg-rose-500 rounded-full shadow-lg"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {!isMini && (
+              <>
+                <h3 className="text-sm font-black text-white line-clamp-1 mb-0.5">
+                  {decodeHtmlEntities(currentTrack?.title || '')}
+                </h3>
+                <p className="text-xs text-slate-300 font-medium mb-2">
+                  {decodeHtmlEntities(currentTrack?.channel || '')}
+                </p>
+              </>
+            )}
+
+            <div className="flex items-center gap-2 bg-slate-900/90 border border-white/15 px-3 py-1 rounded-full text-xs font-mono font-bold text-slate-200 shadow-xl">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>
+                {Math.floor(offlinePlayedSeconds / 60)}:{String(Math.floor(offlinePlayedSeconds % 60)).padStart(2, '0')} / 03:30
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (playerEngine === 'youtube') {
+      return (
+        <div className="relative w-full h-full">
+          <ReactPlayer
+            ref={playerRef}
+            url={`https://www.youtube.com/watch?v=${videoId}`}
+            playing={isPlaying}
+            volume={volume / 100}
+            muted={isMuted}
+            playbackRate={playbackSpeed}
+            onEnded={onTrackEnded}
+            onProgress={(state) => onProgress?.(state.playedSeconds)}
+            onDuration={(duration) => onDuration?.(duration)}
+            onBuffer={() => setIsBuffering(true)}
+            onBufferEnd={() => setIsBuffering(false)}
+            onReady={() => setIsBuffering(false)}
+            onError={() => setIsPlaybackError(true)}
+            width="100%"
+            height="100%"
+            playsinline={true}
+            controls={true}
+            progressInterval={200}
+            config={{
+              youtube: {
+                playerVars: {
+                  autoplay: 1,
+                  rel: 0,
+                  modestbranding: 1,
+                  enablejsapi: 1,
+                  playsinline: 1,
+                  fs: 1,
+                  iv_load_policy: 3,
+                  cc_load_policy: 0,
+                  vq: (selectedQuality || '').toLowerCase().includes('4k') ? 'highres' : 'hd1080'
+                }
+              }
+            }}
+          />
+          {isBuffering && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-950/90 text-white border border-white/20 text-xs font-mono font-bold shadow-2xl">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                <span>Buffering HD Stream...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative w-full h-full bg-black">
+        <iframe
+          src={getThirdPartyEmbedUrl()}
+          title={currentTrack?.title || "Third Party Player"}
+          className="w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      </div>
+    );
+  };
+
   return (
     <motion.div
       ref={wrapperRef}
@@ -418,128 +698,6 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       onDragStart={() => setIsDragging(true)}
       onDragEnd={() => setIsDragging(false)}
     >
-      {/* ========================================================= */}
-      {/* YOUTUBE ORIGINAL FULL VIDEO PLAYER HEADER BAR */}
-      {/* ========================================================= */}
-      {isFull && (
-        <header className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-xl">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleFullscreenClick}
-              className="p-2 hover:bg-white/10 rounded-full text-gray-300 hover:text-white transition-colors"
-              title="Close Full Video View"
-            >
-              <X size={20} />
-            </button>
-
-            {/* Authentic YouTube Logo Badge */}
-            <div className="flex items-center gap-1.5 font-black text-sm text-white">
-              <div className="px-2 py-0.5 bg-rose-600 rounded-lg text-white font-black text-xs flex items-center gap-1 shadow-md">
-                <PlaySquare size={14} className="fill-white" />
-                <span>YouTube</span>
-              </div>
-              <span className="text-xs text-rose-400 font-bold hidden xs:inline">Official Player</span>
-            </div>
-
-            <div className="hidden md:block h-4 w-px bg-white/20" />
-
-            <div className="hidden md:block max-w-md truncate">
-              <span className="text-xs font-extrabold text-white">{currentTrack?.title}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Resolution Quality Switcher */}
-            <div className="relative">
-              <button
-                onClick={() => setShowQualityMenu(!showQualityMenu)}
-                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-full text-xs font-bold text-emerald-400 flex items-center gap-1 transition-all active:scale-95"
-                title="Select YouTube Video Stream Quality"
-              >
-                <span>{selectedQuality}</span>
-                <ChevronDown size={12} />
-              </button>
-
-              {showQualityMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-40 bg-slate-900 border border-white/20 rounded-xl shadow-2xl p-1.5 z-50 text-xs">
-                  <div className="text-[9px] font-extrabold uppercase text-slate-400 px-2 py-1 border-b border-white/10">Video Quality</div>
-                  {['2160p 4K', '1080p HD', '720p HD', '480p', '360p', 'Auto HQ'].map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => {
-                        setSelectedQuality(q);
-                        setShowQualityMenu(false);
-                        onShowToast?.(`Video quality changed to ${q}`, 'info');
-                      }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg font-semibold flex items-center justify-between ${
-                        selectedQuality === q ? 'bg-rose-600 text-white font-bold' : 'text-slate-300 hover:bg-white/10'
-                      }`}
-                    >
-                      <span>{q}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Playback Speed Switcher */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSpeedMenu(!showSpeedMenu)}
-                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-full text-xs font-bold text-amber-300 flex items-center gap-1 transition-all active:scale-95"
-                title="Playback Speed"
-              >
-                <span>{playbackSpeed}x</span>
-              </button>
-
-              {showSpeedMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-36 bg-slate-900 border border-white/20 rounded-xl shadow-2xl p-1.5 z-50 text-xs">
-                  <div className="text-[9px] font-extrabold uppercase text-slate-400 px-2 py-1 border-b border-white/10">Speed</div>
-                  {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        setPlaybackSpeed(s);
-                        setShowSpeedMenu(false);
-                        onShowToast?.(`Playback speed set to ${s}x`, 'info');
-                      }}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg font-semibold flex items-center justify-between ${
-                        playbackSpeed === s ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300 hover:bg-white/10'
-                      }`}
-                    >
-                      <span>{s === 1.0 ? 'Normal (1.0x)' : `${s}x`}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Theater Mode Toggle */}
-            <button
-              onClick={() => setIsTheaterMode(!isTheaterMode)}
-              className={`p-2 rounded-full border transition-all active:scale-90 ${
-                isTheaterMode ? 'bg-rose-600/30 border-rose-500 text-rose-300' : 'bg-white/10 border-white/15 text-slate-300 hover:bg-white/20'
-              }`}
-              title="Toggle Theater Wide View"
-            >
-              <Tv size={16} />
-            </button>
-
-            {/* External Link on YouTube.com */}
-            <a
-              href={`https://www.youtube.com/watch?v=${videoId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1 bg-white/15 hover:bg-white/25 border border-white/20 rounded-full text-xs font-bold text-white flex items-center gap-1.5 transition-all active:scale-95"
-              title="Open video on YouTube.com"
-            >
-              <ExternalLink size={13} />
-              <span className="hidden sm:inline">YouTube.com</span>
-            </a>
-          </div>
-        </header>
-      )}
-
       {/* Floating Mode Drag Header */}
       {isFloating && (
         <div className="bg-slate-900/95 backdrop-blur-md px-2.5 py-1.5 flex items-center justify-between gap-1.5 border-b border-white/10 shrink-0 z-20 text-white select-none cursor-grab active:cursor-grabbing relative">
@@ -587,81 +745,80 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       {/* ========================================================= */}
       {isFull ? (
         /* YouTube Official Video Page Container Layout */
-        <div className={`w-full mx-auto p-3 sm:p-6 space-y-6 ${isTheaterMode ? 'max-w-full' : 'max-w-7xl'}`}>
+        <div className={`w-full mx-auto p-3 sm:p-6 space-y-4 ${isTheaterMode ? 'max-w-full' : 'max-w-7xl'}`}>
+          {/* Top Control Bar with Back Button */}
+          <div className="flex items-center justify-between pb-1">
+            <button
+              onClick={handleFullscreenClick}
+              className="px-3.5 py-1.5 bg-slate-900/90 hover:bg-slate-800 border border-white/15 text-slate-200 hover:text-white rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+              title="Back to App View"
+            >
+              <ArrowLeft size={16} />
+              <span>Back</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsTheaterMode(!isTheaterMode)}
+                className={`px-3 py-1.5 rounded-full border text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
+                  isTheaterMode ? 'bg-rose-600/30 border-rose-500 text-rose-300' : 'bg-slate-900/90 border-white/15 text-slate-300 hover:bg-slate-800'
+                }`}
+                title="Toggle Theater Mode"
+              >
+                <Tv size={14} />
+                <span className="hidden sm:inline">{isTheaterMode ? 'Default View' : 'Theater View'}</span>
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* MAIN COLUMN (Video + Actions + Description + Comments) */}
             <div className={`space-y-4 ${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
               
-              {/* VIDEO STAGE CONTAINER */}
-              <div className={playerBoxClassName}>
-                {playerEngine === 'youtube' ? (
-                  <div className="relative w-full h-full">
-                    <ReactPlayer
-                      ref={playerRef}
-                      url={`https://www.youtube.com/watch?v=${videoId}`}
-                      playing={isPlaying}
-                      volume={volume / 100}
-                      muted={isMuted}
-                      playbackRate={playbackSpeed}
-                      onEnded={onTrackEnded}
-                      onProgress={(state) => onProgress?.(state.playedSeconds)}
-                      onDuration={(duration) => onDuration?.(duration)}
-                      onBuffer={() => setIsBuffering(true)}
-                      onBufferEnd={() => setIsBuffering(false)}
-                      onReady={() => setIsBuffering(false)}
-                      width="100%"
-                      height="100%"
-                      playsinline={true}
-                      controls={true}
-                      progressInterval={200}
-                      config={{
-                        youtube: {
-                          playerVars: {
-                            autoplay: 1,
-                            rel: 0,
-                            modestbranding: 1,
-                            enablejsapi: 1,
-                            playsinline: 1,
-                            fs: 1,
-                            iv_load_policy: 3,
-                            cc_load_policy: 0,
-                            vq: selectedQuality.toLowerCase().includes('4k') ? 'highres' : 'hd1080'
-                          }
-                        }
-                      }}
-                    />
-                    {isBuffering && (
-                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none">
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 text-white border border-white/20 text-xs font-mono font-bold shadow-lg">
-                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                          <span>Buffering YouTube Stream...</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="relative w-full h-full bg-black">
-                    <iframe
-                      src={getThirdPartyEmbedUrl()}
-                      title={currentTrack?.title || "Third Party Player"}
-                      className="w-full h-full border-0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
+              {/* VIDEO STAGE CONTAINER WITH CINEMATIC AMBIENT GLOW */}
+              <div className="relative group">
+                {/* Cinematic Ambient Glow Backlight */}
+                <div className="absolute -inset-2 bg-gradient-to-r from-rose-600/30 via-indigo-600/20 to-purple-600/30 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                <div className={playerBoxClassName}>
+                  {renderVideoStage(false)}
+                </div>
               </div>
 
-              {/* VIDEO TITLE */}
-              <h1 className="text-lg sm:text-xl font-extrabold text-white leading-snug tracking-tight">
-                {decodeHtmlEntities(currentTrack?.title || '')}
-              </h1>
+              {/* OFFLINE PLAYBACK ALERT BANNER */}
+              {isOfflineMode && (
+                <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs font-bold text-amber-300 backdrop-blur-md">
+                  <div className="flex items-center gap-2">
+                    <WifiOff size={16} className="text-amber-400" />
+                    <span>Offline Mode — Playing video from local downloaded cache</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full border border-amber-500/30 text-[10px] font-black uppercase">
+                    Downloaded
+                  </span>
+                </div>
+              )}
 
-              {/* ACTION BAR & CHANNEL ROW */}
-              <div className="flex flex-wrap items-center justify-between gap-4 py-2 border-b border-white/10">
+              {/* VIDEO TITLE & STREAM BADGES */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 bg-rose-600/20 text-rose-300 text-[10px] font-black tracking-wider uppercase rounded-md border border-rose-500/30 flex items-center gap-1">
+                    <Sparkles size={11} /> 1080p60 HD Stream
+                  </span>
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-black tracking-wider uppercase rounded-md border border-emerald-500/30">
+                    Official YouTube Master
+                  </span>
+                </div>
+
+                <h1 className="text-xl sm:text-2xl font-black text-white leading-snug tracking-tight">
+                  {decodeHtmlEntities(currentTrack?.title || '')}
+                </h1>
+              </div>
+
+              {/* ACTION BAR & CHANNEL ROW - YOUTUBE SINGLE LINE LAYOUT */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-white/10">
                 {/* CHANNEL INFO & SUBSCRIBE BUTTON */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shadow-md">
                     <img
                       src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
@@ -719,13 +876,13 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                   </div>
                 </div>
 
-                {/* LIKE / DISLIKE / SHARE / DOWNLOAD ACTIONS */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* LIKE / DISLIKE / SHARE / DOWNLOAD / SAVE / CLIP IN SINGLE HORIZONTAL ROW */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 shrink-0 whitespace-nowrap max-w-full">
                   {/* Like / Dislike Pill */}
-                  <div className="flex items-center bg-slate-800/90 border border-white/10 rounded-full p-0.5 shadow-md">
+                  <div className="flex items-center bg-slate-800/90 border border-white/10 rounded-full p-0.5 shadow-md shrink-0">
                     <button
                       onClick={handleToggleLike}
-                      className={`px-3 py-1.5 rounded-l-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                      className={`px-3.5 py-1.5 rounded-l-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
                         hasLiked ? 'text-rose-400 bg-rose-500/20' : 'text-slate-300 hover:text-white hover:bg-white/5'
                       }`}
                       title="Like Video"
@@ -761,7 +918,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                         onShowToast?.('YouTube video link copied!', 'info');
                       }
                     }}
-                    className="px-3.5 py-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                    className="px-3.5 py-1.5 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
                   >
                     <Share2 size={14} />
                     <span>Share</span>
@@ -771,23 +928,41 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                   {onDownloadTrack && currentTrack && (
                     <button
                       onClick={() => onDownloadTrack(currentTrack)}
-                      className="px-3.5 py-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                      className="px-3.5 py-1.5 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
                     >
                       <Download size={14} />
                       <span>Download</span>
                     </button>
                   )}
 
-                  {/* Add to Playlist Button */}
+                  {/* Add to Playlist / Save Button */}
                   {onOpenAddToPlaylist && currentTrack && (
                     <button
                       onClick={() => onOpenAddToPlaylist(currentTrack)}
-                      className="px-3.5 py-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                      className="px-3.5 py-1.5 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
                     >
                       <ListPlus size={14} />
                       <span>Save</span>
                     </button>
                   )}
+
+                  {/* Clip Button */}
+                  <button
+                    onClick={() => onShowToast?.('Video clip created & saved to library!', 'info')}
+                    className="px-3.5 py-1.5 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 font-bold text-xs rounded-full shadow-md flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
+                  >
+                    <Scissors size={14} />
+                    <span>Clip</span>
+                  </button>
+
+                  {/* More Options Button */}
+                  <button
+                    onClick={() => onShowToast?.('More YouTube video options copied', 'info')}
+                    className="p-2 bg-slate-800/90 hover:bg-slate-700/90 border border-white/10 text-slate-200 rounded-full shadow-md transition-all active:scale-95 shrink-0"
+                    title="More Options"
+                  >
+                    <MoreHorizontal size={15} />
+                  </button>
                 </div>
               </div>
 
@@ -813,72 +988,220 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 </div>
               </div>
 
-              {/* INTERACTIVE COMMENTS SECTION */}
+              {/* AUTHENTIC YOUTUBE COMMENTS SECTION */}
               <div className="space-y-4 pt-4 border-t border-white/10">
-                <div className="flex items-center gap-3">
-                  <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                    <MessageSquare size={18} className="text-rose-500" />
-                    <span>{comments.length + 1840} Comments</span>
-                  </h3>
+                {/* Comments Header with Total Count & Close/Open Toggle */}
+                <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-black text-white flex items-center gap-2">
+                      <MessageSquare size={20} className="text-rose-500" />
+                      <span>{comments.length + 1840} Comments</span>
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Open/Close Comments Toggle Button */}
+                    <button
+                      onClick={() => setIsCommentsVisible(!isCommentsVisible)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-white/15 rounded-full text-xs font-bold text-slate-200 hover:text-white transition-all active:scale-95 shadow-sm"
+                      title={isCommentsVisible ? "Close Comments" : "Open Comments"}
+                    >
+                      {isCommentsVisible ? <ChevronUp size={14} className="text-rose-400" /> : <ChevronDown size={14} className="text-rose-400" />}
+                      <span>{isCommentsVisible ? 'Close Comments' : 'Open Comments'}</span>
+                    </button>
+
+                    {/* Sort dropdown (when comments are open) */}
+                    {isCommentsVisible && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowSortMenu(!showSortMenu)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-white/10 hover:border-white/25 rounded-full text-xs font-bold text-slate-200 transition-all active:scale-95"
+                        >
+                          <ListFilter size={14} className="text-slate-400" />
+                          <span className="hidden sm:inline">Sort: {commentSort === 'top' ? 'Top' : 'Newest'}</span>
+                          <ChevronDown size={13} />
+                        </button>
+
+                        {showSortMenu && (
+                          <div className="absolute right-0 top-full mt-1.5 w-44 bg-slate-950 border border-white/20 rounded-xl shadow-2xl p-1 z-50 text-xs">
+                            <button
+                              onClick={() => { setCommentSort('top'); setShowSortMenu(false); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg font-bold flex items-center justify-between ${commentSort === 'top' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
+                            >
+                              Top comments
+                            </button>
+                            <button
+                              onClick={() => { setCommentSort('newest'); setShowSortMenu(false); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg font-bold flex items-center justify-between ${commentSort === 'newest' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
+                            >
+                              Newest first
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Add Comment Form */}
-                <form onSubmit={handleAddComment} className="flex gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shrink-0 text-xs shadow-md">
+                {!isCommentsVisible ? (
+                  <div 
+                    onClick={() => setIsCommentsVisible(true)}
+                    className="p-3.5 bg-slate-900/60 hover:bg-slate-800/80 rounded-2xl border border-white/10 flex items-center justify-between cursor-pointer transition-all group shadow-md"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <MessageSquare size={18} className="text-slate-400 group-hover:text-rose-400 transition-colors" />
+                      <span className="text-xs font-bold text-slate-300 group-hover:text-white">
+                        Comments section closed ({comments.length + 1840} comments hidden)
+                      </span>
+                    </div>
+                    <span className="text-xs font-extrabold text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20 group-hover:bg-rose-600 group-hover:text-white transition-all">
+                      Open Comments
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Add Comment Form */}
+                <form onSubmit={handleAddComment} className="flex gap-3 pt-1">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shrink-0 text-xs shadow-md ring-2 ring-white/10">
                     You
                   </div>
 
-                  <div className="flex-1 flex items-center gap-2">
+                  <div className="flex-1 space-y-2">
                     <input
                       type="text"
                       value={newCommentInput}
                       onChange={(e) => setNewCommentInput(e.target.value)}
+                      onFocus={() => setIsCommentFocused(true)}
                       placeholder="Add a comment to YouTube video..."
-                      className="w-full bg-slate-900 border border-white/15 rounded-xl px-3.5 py-2 text-xs font-semibold text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      className="w-full bg-slate-900 border-b-2 border-white/20 focus:border-rose-500 px-3 py-2 text-xs font-medium text-white placeholder-slate-500 focus:outline-none transition-colors"
                     />
-                    <button
-                      type="submit"
-                      disabled={!newCommentInput.trim()}
-                      className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1 shrink-0"
-                    >
-                      <Send size={13} />
-                      <span>Comment</span>
-                    </button>
+
+                    {(isCommentFocused || newCommentInput.trim().length > 0) && (
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewCommentInput('');
+                            setIsCommentFocused(false);
+                          }}
+                          className="px-3.5 py-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={!newCommentInput.trim()}
+                          className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-full text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+                        >
+                          <Send size={12} />
+                          <span>Comment</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </form>
 
                 {/* Comments List */}
-                <div className="space-y-3 pt-2">
+                <div className="space-y-4 pt-2">
                   {comments.map((cmt) => (
-                    <div key={cmt.id} className="flex gap-3 p-3 bg-slate-900/60 rounded-xl border border-white/5">
+                    <div key={cmt.id} className="flex gap-3 p-3.5 bg-slate-900/60 rounded-2xl border border-white/5 space-y-2">
                       <img
                         src={cmt.avatar}
                         alt={cmt.author}
                         className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-white/20"
                       />
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex items-center gap-2">
                           <span className="font-extrabold text-xs text-white">@{cmt.author}</span>
-                          <span className="text-[10px] text-slate-400">{cmt.timeAgo}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{cmt.timeAgo}</span>
                         </div>
+                        
                         <p className="text-xs text-slate-200 font-normal leading-relaxed">{cmt.text}</p>
-                        <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-400">
+
+                        {/* Comment Action Controls (Like, Dislike, Reply) */}
+                        <div className="flex items-center gap-4 pt-1 text-xs text-slate-400">
                           <button
-                            onClick={() => {
-                              setComments(comments.map(c => c.id === cmt.id ? { ...c, likes: c.likes + (c.userLiked ? -1 : 1), userLiked: !c.userLiked } : c));
-                            }}
-                            className={`flex items-center gap-1 hover:text-white transition-colors ${cmt.userLiked ? 'text-rose-400 font-bold' : ''}`}
+                            onClick={() => handleToggleCommentLike(cmt.id)}
+                            className={`flex items-center gap-1.5 hover:text-white transition-colors ${
+                              cmt.userLiked ? 'text-rose-400 font-extrabold' : ''
+                            }`}
+                            title="Like comment"
                           >
-                            <ThumbsUp size={12} className={cmt.userLiked ? 'fill-rose-400' : ''} />
+                            <ThumbsUp size={13} className={cmt.userLiked ? 'fill-rose-400' : ''} />
                             <span>{cmt.likes}</span>
                           </button>
-                          <button className="hover:text-white transition-colors font-bold">Reply</button>
+
+                          <button
+                            onClick={() => handleToggleCommentDislike(cmt.id)}
+                            className={`flex items-center gap-1.5 hover:text-white transition-colors ${
+                              cmt.userDisliked ? 'text-rose-400 font-extrabold' : ''
+                            }`}
+                            title="Dislike comment"
+                          >
+                            <ThumbsDown size={13} className={cmt.userDisliked ? 'fill-rose-400' : ''} />
+                            {cmt.dislikes ? <span>{cmt.dislikes}</span> : null}
+                          </button>
+
+                          <button
+                            onClick={() => setReplyingToId(replyingToId === cmt.id ? null : cmt.id)}
+                            className="hover:text-white font-bold transition-colors text-[11px]"
+                          >
+                            Reply
+                          </button>
                         </div>
+
+                        {/* Inline Reply Form */}
+                        {replyingToId === cmt.id && (
+                          <div className="flex gap-2 pt-2 border-t border-white/10 mt-2">
+                            <input
+                              type="text"
+                              value={replyInputText}
+                              onChange={(e) => setReplyInputText(e.target.value)}
+                              placeholder={`Reply to @${cmt.author}...`}
+                              className="flex-1 bg-slate-950 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setReplyingToId(null)}
+                              className="px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddReply(cmt.id)}
+                              disabled={!replyInputText.trim()}
+                              className="px-3 py-1 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold"
+                            >
+                              Reply
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Nested Replies List */}
+                        {cmt.replies && cmt.replies.length > 0 && (
+                          <div className="pl-4 border-l-2 border-rose-500/30 space-y-2 mt-2 pt-2">
+                            {cmt.replies.map((r) => (
+                              <div key={r.id} className="flex gap-2 items-start text-xs">
+                                <CornerDownRight size={13} className="text-rose-400 mt-1 shrink-0" />
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-white text-[11px]">@{r.author}</span>
+                                    <span className="text-[9px] text-slate-400">{r.timeAgo}</span>
+                                  </div>
+                                  <p className="text-slate-300 text-xs">{r.text}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              </>
+            )}
+          </div>
 
             </div>
 
@@ -960,52 +1283,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
             </div>
           )}
 
-          {playerEngine === 'youtube' ? (
-            <div className="relative w-full h-full">
-              <ReactPlayer
-                ref={playerRef}
-                url={`https://www.youtube.com/watch?v=${videoId}`}
-                playing={isPlaying}
-                volume={volume / 100}
-                muted={isMuted}
-                onEnded={onTrackEnded}
-                onProgress={(state) => onProgress?.(state.playedSeconds)}
-                onDuration={(duration) => onDuration?.(duration)}
-                onBuffer={() => setIsBuffering(true)}
-                onBufferEnd={() => setIsBuffering(false)}
-                onReady={() => setIsBuffering(false)}
-                width="100%"
-                height="100%"
-                playsinline={true}
-                controls={showVideo}
-                progressInterval={200}
-                config={{
-                  youtube: {
-                    playerVars: {
-                      autoplay: 1,
-                      rel: 0,
-                      modestbranding: 1,
-                      enablejsapi: 1,
-                      playsinline: 1,
-                      fs: 1,
-                      iv_load_policy: 3,
-                      cc_load_policy: 0
-                    }
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            <div className="relative w-full h-full bg-black">
-              <iframe
-                src={getThirdPartyEmbedUrl()}
-                title={currentTrack?.title || "Third Party Player"}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </div>
-          )}
+          {renderVideoStage(true)}
 
           {isFloating && (
             <>

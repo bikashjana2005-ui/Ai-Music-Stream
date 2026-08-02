@@ -52,6 +52,28 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aura_ai_downloads', JSON.stringify(downloadedTracks));
   }, [downloadedTracks]);
+
+  // Online / Offline state tracking
+  const [isOnline, setIsOnline] = useState<boolean>(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast('Internet connection restored - YouTube server connected', 'success');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast('You are offline - Switched to Local Offline Downloads mode', 'info');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showToast]);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('aura_ai_theme');
     return saved ? saved === 'dark' : true;
@@ -798,6 +820,8 @@ export default function App() {
                 onShowToast={showToast}
                 downloadedTracks={downloadedTracks}
                 onRemoveDownload={(trackId) => setDownloadedTracks(prev => prev.filter(t => t.id !== trackId))}
+                onClearAllDownloads={() => setDownloadedTracks([])}
+                isOnline={isOnline}
               />
             )}
 
@@ -901,6 +925,8 @@ export default function App() {
           isSubscribed={subscriptions.some(s => (s.name || '').toLowerCase() === (currentTrack.channel || '').toLowerCase())}
           onToggleSubscribe={handleToggleSubscribe}
           onShowToast={showToast}
+          isOnline={isOnline}
+          downloadedTracks={downloadedTracks}
         />
       )}
 
@@ -924,6 +950,8 @@ export default function App() {
               }
               return prev;
             });
+            handlePlayTrack(track);
+            showToast(`Downloaded "${track.title}" - Playing video now!`, 'success');
           }}
         />
       )}

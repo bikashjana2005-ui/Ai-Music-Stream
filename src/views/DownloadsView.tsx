@@ -13,7 +13,8 @@ import {
   Sparkles,
   Music,
   CheckCircle2,
-  ListMusic
+  ListMusic,
+  WifiOff
 } from 'lucide-react';
 import { Track, DownloadedTrack } from '../types';
 import { TrackCard } from '../components/TrackCard';
@@ -24,6 +25,8 @@ interface DownloadsViewProps {
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   downloadedTracks?: DownloadedTrack[];
   onRemoveDownload?: (trackId: string) => void;
+  onClearAllDownloads?: () => void;
+  isOnline?: boolean;
 }
 
 export const DownloadsView: React.FC<DownloadsViewProps> = ({
@@ -31,11 +34,14 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
   currentTrackId,
   onShowToast,
   downloadedTracks = [],
-  onRemoveDownload
+  onRemoveDownload,
+  onClearAllDownloads,
+  isOnline = true
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [formatFilter, setFormatFilter] = useState<'all' | 'mp3' | 'mp4'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const totalFiles = downloadedTracks.length;
   const mp3Count = downloadedTracks.filter(t => t.format === 'mp3').length;
@@ -64,6 +70,24 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto w-full animate-fade-in pb-24">
+      {/* Offline Status Alert Banner */}
+      {!isOnline && (
+        <div className="p-4 bg-amber-500/15 border border-amber-500/30 rounded-3xl backdrop-blur-xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500/20 rounded-2xl text-amber-500 shrink-0">
+              <WifiOff size={22} />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-amber-800 dark:text-amber-300">Offline Mode Active</h4>
+              <p className="text-xs text-amber-700/80 dark:text-amber-400/80">You are disconnected from internet. All {totalFiles} downloaded videos & tracks are ready for offline playback.</p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full text-xs font-bold border border-amber-500/30 shrink-0">
+            Offline Storage
+          </span>
+        </div>
+      )}
+
       {/* Storage Meter & Control Bar */}
       <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-3xl border border-gray-200/60 dark:border-white/10 rounded-3xl p-5 shadow-sm relative overflow-hidden">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
@@ -75,18 +99,28 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
                 <HardDrive size={16} className="text-emerald-500" />
                 <span>Local Offline Cache Space</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 <span className="text-xs font-bold font-mono text-indigo-600 dark:text-indigo-400">
                   ~{totalSizeMB} MB used of 5 GB
                 </span>
                 {downloadedTracks.length > 0 && (
-                  <button
-                    onClick={handlePlayAllDownloads}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
-                  >
-                    <Play size={13} className="fill-white" />
-                    <span>Play All Offline ({filteredDownloads.length})</span>
-                  </button>
+                  <>
+                    <button
+                      onClick={handlePlayAllDownloads}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <Play size={13} className="fill-white" />
+                      <span>Play All ({filteredDownloads.length})</span>
+                    </button>
+                    <button
+                      onClick={() => setShowClearConfirm(true)}
+                      className="px-3 py-1.5 bg-rose-600/15 hover:bg-rose-600 text-rose-600 hover:text-white dark:text-rose-400 border border-rose-500/30 font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
+                      title="Clear all local downloaded items"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete All</span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -244,17 +278,18 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
               />
 
               {/* Remove Download Button Overlay */}
-              <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute top-2 right-2 flex items-center gap-1.5 z-20 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onRemoveDownload?.(track.id);
-                    onShowToast(`Removed "${track.title}" from local downloads`, 'info');
+                    onShowToast(`Deleted "${track.title}" from downloads`, 'info');
                   }}
-                  className="p-2 bg-rose-600/90 hover:bg-rose-600 text-white rounded-xl shadow-lg transition-all backdrop-blur-md active:scale-90"
-                  title="Remove from downloads"
+                  className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all backdrop-blur-md active:scale-95 flex items-center gap-1"
+                  title="Delete download"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={13} />
+                  <span className="hidden sm:inline text-[11px]">Delete</span>
                 </button>
               </div>
 
@@ -286,6 +321,43 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
           >
             <Search size={16} /> Explore & Download Music
           </button>
+        </div>
+      )}
+
+      {/* Clear All Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/15 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-500">
+              <div className="p-3 bg-rose-500/10 rounded-2xl">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-gray-900 dark:text-white">Delete All Downloads?</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">This action will remove all {totalFiles} downloaded videos/tracks from your offline cache.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onClearAllDownloads?.();
+                  setShowClearConfirm(false);
+                  onShowToast('All downloaded tracks deleted from local cache', 'success');
+                }}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>Yes, Delete All</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

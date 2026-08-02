@@ -17,7 +17,9 @@ import {
   Cloud,
   Share2,
   Download,
-  Zap
+  Zap,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
@@ -39,6 +41,7 @@ interface NavbarProps {
   onOpenShareModal?: () => void;
   isDataSaverMode?: boolean;
   onToggleDataSaverMode?: (enabled: boolean) => void;
+  isOnline?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -57,7 +60,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuthModal,
   onOpenShareModal,
   isDataSaverMode = false,
-  onToggleDataSaverMode
+  onToggleDataSaverMode,
+  isOnline = true
 }) => {
   const topNavRef = useRef<HTMLDivElement>(null);
   const bottomDockRef = useRef<HTMLDivElement>(null);
@@ -289,6 +293,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                 )}
               </button>
+            )}
+
+            {!isOnline && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-500/15 dark:bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30 backdrop-blur-md animate-pulse" title="You are currently offline. Local downloaded tracks will play seamlessly.">
+                <WifiOff size={13} className="text-amber-500" />
+                <span>Offline Mode</span>
+              </span>
             )}
 
             {hasYouTubeKey && (

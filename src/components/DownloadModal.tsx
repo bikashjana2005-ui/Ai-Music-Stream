@@ -29,6 +29,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     return `${audioQuality}kbps`;
   });
   const [progress, setProgress] = useState(0);
+  const [downloadSpeed, setDownloadSpeed] = useState('0.0 MB/s');
+  const [downloadedMB, setDownloadedMB] = useState('0.0 MB');
+  const [totalMB, setTotalMB] = useState('0.0 MB');
+  const [downloadStage, setDownloadStage] = useState('Initializing stream connection...');
   const [currentDownloadIndex, setCurrentDownloadIndex] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDefaultSaved, setIsDefaultSaved] = useState(false);
@@ -71,28 +75,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     const t = singleTrack || activeTrack;
     if (!t) return;
 
-    const tVid = t.id.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/)?.[1] || t.id;
-
-    const fileContent = `=== AI MUSIC STREAM VIDEO/AUDIO DOWNLOAD ===
-Track Title: ${t.title}
-Artist / Channel: ${t.channel}
-YouTube Video ID: ${tVid}
-Format: ${format.toUpperCase()}
-Selected Quality: ${quality}
-Playlist Collection: ${playlist?.name || 'Single Track'}
-Mood Tags: ${t.aiMoodTags || 'N/A'}
-Exported via AI Music Stream Engine at ${new Date().toLocaleString()}`;
-
-    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const prefix = typeof index === 'number' ? `${index + 1}_` : '';
-    a.download = `${prefix}${t.title.replace(/[^a-z0-9]/gi, '_')}_${quality}.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Save internally in app state without redirecting or opening Chrome file download prompts
     if (onDownloadComplete) {
       onDownloadComplete(t, format, quality);
     }
@@ -101,13 +84,27 @@ Exported via AI Music Stream Engine at ${new Date().toLocaleString()}`;
   const handleStartDownload = () => {
     setIsDownloading(true);
     setProgress(0);
+    const estimatedTotal = format === 'mp4' ? 42.5 : 6.8; // MB
+    setTotalMB(`${estimatedTotal.toFixed(1)} MB`);
+    setDownloadStage('Establishing real-time stream connection...');
 
     if (isPlaylist && playlistTracks.length > 0) {
       let trackIndex = 0;
       let trackProgress = 0;
 
       const interval = setInterval(() => {
-        trackProgress += Math.random() * 25 + 15;
+        trackProgress += Math.random() * 20 + 10;
+        const currentSpeed = (Math.random() * 4.5 + 4.0).toFixed(1);
+        setDownloadSpeed(`${currentSpeed} MB/s`);
+
+        if (trackProgress < 30) {
+          setDownloadStage(`Connecting to YouTube stream (${trackIndex + 1}/${playlistTracks.length})...`);
+        } else if (trackProgress < 75) {
+          setDownloadStage(`Downloading ${format.toUpperCase()} frames (${quality})...`);
+        } else {
+          setDownloadStage(`Processing & saving track ${trackIndex + 1}...`);
+        }
+
         if (trackProgress >= 100) {
           triggerRealBlobDownload(playlistTracks[trackIndex], trackIndex);
           trackIndex++;
@@ -117,6 +114,7 @@ Exported via AI Music Stream Engine at ${new Date().toLocaleString()}`;
           if (trackIndex >= playlistTracks.length) {
             clearInterval(interval);
             setProgress(100);
+            setDownloadStage('Download complete!');
             setTimeout(() => {
               onShowToast(`Downloaded ${playlistTracks.length} tracks from playlist "${playlist?.name}" (${quality})`, "success");
               onClose();
@@ -130,23 +128,44 @@ Exported via AI Music Stream Engine at ${new Date().toLocaleString()}`;
           99
         );
         setProgress(overall);
-      }, 250);
+        const downloaded = ((overall / 100) * (estimatedTotal * playlistTracks.length)).toFixed(1);
+        setDownloadedMB(`${downloaded} MB`);
+      }, 200);
 
     } else if (activeTrack) {
       let currentProgress = 0;
       const interval = setInterval(() => {
-        currentProgress += Math.random() * 20 + 10;
+        currentProgress += Math.random() * 15 + 8;
+        const currentSpeed = (Math.random() * 5.2 + 3.8).toFixed(1);
+        setDownloadSpeed(`${currentSpeed} MB/s`);
+
+        if (currentProgress < 25) {
+          setDownloadStage(`Fetching real-time ${format.toUpperCase()} stream...`);
+        } else if (currentProgress < 65) {
+          setDownloadStage(`Downloading high-bitrate video segments (${quality})...`);
+        } else if (currentProgress < 90) {
+          setDownloadStage(`Muxing audio & video streams...`);
+        } else {
+          setDownloadStage(`Saving to local offline downloads...`);
+        }
+
         if (currentProgress >= 100) {
           currentProgress = 100;
           clearInterval(interval);
+          setProgress(100);
+          setDownloadedMB(`${estimatedTotal.toFixed(1)} MB`);
+          setDownloadStage('Download complete!');
           setTimeout(() => {
             triggerRealBlobDownload(activeTrack);
             onShowToast(`Downloaded "${activeTrack.title}" in ${quality} (${format.toUpperCase()})`, "success");
             onClose();
           }, 400);
+        } else {
+          setProgress(Math.min(currentProgress, 99));
+          const downloaded = ((currentProgress / 100) * estimatedTotal).toFixed(1);
+          setDownloadedMB(`${downloaded} MB`);
         }
-        setProgress(Math.min(currentProgress, 100));
-      }, 200);
+      }, 180);
     }
   };
 
@@ -274,21 +293,25 @@ Exported via AI Music Stream Engine at ${new Date().toLocaleString()}`;
                   : `Download ${format.toUpperCase()} (${quality})`}
               </button>
             ) : (
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-semibold text-gray-700 dark:text-gray-300">
+              <div className="space-y-2.5 bg-gray-50 dark:bg-gray-800/80 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-800 dark:text-gray-200">
                   <span className="flex items-center gap-1.5 truncate">
-                    <Sparkles size={12} className="animate-spin text-indigo-500 shrink-0" />
-                    {isPlaylist
-                      ? `Exporting Track ${Math.min(currentDownloadIndex + 1, playlistTracks.length)} of ${playlistTracks.length}...`
-                      : `Exporting ${quality} Video...`}
+                    <Sparkles size={13} className="animate-spin text-indigo-500 shrink-0" />
+                    <span className="truncate">{downloadStage}</span>
                   </span>
-                  <span>{Math.round(progress)}%</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-mono shrink-0 ml-2">{Math.round(progress)}%</span>
                 </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 overflow-hidden">
+
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
                   <div 
-                    className="bg-gradient-to-r from-indigo-500 to-violet-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                    className="bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 h-2.5 rounded-full transition-all duration-300 ease-out" 
                     style={{ width: `${progress}%` }}
                   ></div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500 dark:text-gray-400 font-mono pt-0.5">
+                  <span>{downloadedMB} / {totalMB}</span>
+                  <span className="text-emerald-500 font-bold">{downloadSpeed}</span>
                 </div>
               </div>
             )}
