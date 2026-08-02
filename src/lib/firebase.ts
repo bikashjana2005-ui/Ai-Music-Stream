@@ -3,6 +3,10 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInAnonymously,
+  updateProfile,
   signOut, 
   onAuthStateChanged,
   User 
@@ -98,6 +102,42 @@ export async function loginWithGoogle() {
     } else {
       console.error('Google Auth Error:', error);
     }
+    throw error;
+  }
+}
+
+export async function loginWithEmail(email: string, pass: string) {
+  try {
+    const res = await signInWithEmailAndPassword(auth, email, pass);
+    return res.user;
+  } catch (error) {
+    console.error('Email sign in error:', error);
+    throw error;
+  }
+}
+
+export async function registerWithEmail(email: string, pass: string, name?: string) {
+  try {
+    const res = await createUserWithEmailAndPassword(auth, email, pass);
+    if (name && res.user) {
+      await updateProfile(res.user, { displayName: name });
+    }
+    return res.user;
+  } catch (error) {
+    console.error('Email registration error:', error);
+    throw error;
+  }
+}
+
+export async function loginAnonymously() {
+  try {
+    const res = await signInAnonymously(auth);
+    if (res.user && !res.user.displayName) {
+      await updateProfile(res.user, { displayName: 'Guest Music Listener' });
+    }
+    return res.user;
+  } catch (error) {
+    console.error('Anonymous auth error:', error);
     throw error;
   }
 }
