@@ -500,6 +500,47 @@ app.post("/api/youtube/sync-subscriptions", async (req, res) => {
   }
 });
 
+// Real-time Channel Subscriptions Uploads Feed Endpoint
+app.post("/api/channels/tracks", async (req, res) => {
+  try {
+    const { channelName, channelNames, feedFilter } = req.body;
+    let query = "";
+    if (channelName && typeof channelName === "string" && channelName.trim()) {
+      query = `${channelName.trim()} song music video`;
+    } else if (Array.isArray(channelNames) && channelNames.length > 0) {
+      query = `${channelNames.slice(0, 3).join(" ")} latest music songs`;
+    } else {
+      query = "T-Series latest song official audio";
+    }
+
+    if (feedFilter === 'official') query += " official audio";
+    else if (feedFilter === 'live') query += " live concert performance";
+    else if (feedFilter === 'remix') query += " remix bass boosted";
+
+    const cacheKey = `channel_tracks_${query.toLowerCase().trim()}`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    let scrapedTracks = await searchYouTubeScrape(query, true);
+    if (!scrapedTracks || scrapedTracks.length === 0) {
+      scrapedTracks = await searchYouTubeScrape(query);
+    }
+
+    if (scrapedTracks && scrapedTracks.length > 0) {
+      const result = { tracks: scrapedTracks, source: "YouTube Channel Feed" };
+      setCached(cacheKey, result, 5 * 60 * 1000);
+      return res.json(result);
+    }
+
+    res.json({ tracks: FALLBACK_TRACKS, source: "Fallback" });
+  } catch (e: any) {
+    console.error("Error in /api/channels/tracks:", e);
+    res.json({ tracks: FALLBACK_TRACKS, source: "Fallback" });
+  }
+});
+
 // Real-time YouTube Account Playlists Sync Endpoint
 app.post("/api/youtube/sync-playlists", async (req, res) => {
   try {

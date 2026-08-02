@@ -131,9 +131,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
       } else {
         // Fallback filter
         const filtered = DEFAULT_TRACKS.filter(t => 
-          t.title.toLowerCase().includes(catId) || 
+          (t.title || '').toLowerCase().includes(catId) || 
           t.genre?.toLowerCase().includes(catId) ||
-          t.channel.toLowerCase().includes(catId)
+          (t.channel || '').toLowerCase().includes(catId)
         );
         setTracks(filtered.length > 0 ? filtered : DEFAULT_TRACKS);
       }

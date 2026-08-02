@@ -92,7 +92,7 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
       } else {
         const targetStr = channelName || (subscriptions[0]?.name || '');
         const filtered = DEFAULT_TRACKS.filter(t => 
-          t.channel.toLowerCase().includes((targetStr).toLowerCase())
+          (t.channel || '').toLowerCase().includes((targetStr).toLowerCase())
         );
         setChannelTracks(filtered.length ? filtered : DEFAULT_TRACKS);
       }
@@ -123,8 +123,8 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
 
   const filteredTracks = channelTracks.filter(track => {
     return searchQuery.trim() === '' || 
-      track.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      track.channel.toLowerCase().includes(searchQuery.toLowerCase());
+      (track.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (track.channel || '').toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   return (
@@ -225,7 +225,7 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
 
           {/* Subscribed Creators Avatars List */}
           {subscriptions.map((ch) => {
-            const isSelected = selectedChannelFilter?.toLowerCase() === ch.name.toLowerCase();
+            const isSelected = selectedChannelFilter && (ch.name || '').toLowerCase() === selectedChannelFilter.toLowerCase();
             return (
               <button
                 key={`sub-creator-${ch.id}`}

@@ -50,8 +50,8 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
   const filteredDownloads = downloadedTracks.filter(track => {
     const matchesFormat = formatFilter === 'all' || track.format === formatFilter;
     const matchesQuery = !searchQuery.trim() || 
-      track.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      track.artist.toLowerCase().includes(searchQuery.toLowerCase());
+      (track.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (track.channel || (track as any).artist || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFormat && matchesQuery;
   });
 

@@ -134,7 +134,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
       let addedCount = 0;
       channels.forEach((ch) => {
         const alreadySubbed = subscriptions.some(
-          s => s.id === ch.id || s.name.toLowerCase() === ch.name.toLowerCase()
+          s => s.id === ch.id || (s.name || '').toLowerCase() === (ch.name || '').toLowerCase()
         );
         if (!alreadySubbed) {
           onToggleSubscribe(ch);
@@ -191,7 +191,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
 
   const isSubscribed = (channelId: string, channelName: string) => {
     return subscriptions.some(
-      s => s.id === channelId || s.name.toLowerCase() === channelName.toLowerCase()
+      s => s.id === channelId || (s.name || '').toLowerCase() === (channelName || '').toLowerCase()
     );
   };
 
@@ -203,7 +203,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
 
   const filteredSubscriptions = subscriptions.filter(ch => 
     filterActiveQuery.trim() === '' ||
-    ch.name.toLowerCase().includes(filterActiveQuery.toLowerCase()) ||
+    (ch.name || '').toLowerCase().includes(filterActiveQuery.toLowerCase()) ||
     (ch.handle && ch.handle.toLowerCase().includes(filterActiveQuery.toLowerCase()))
   );
 

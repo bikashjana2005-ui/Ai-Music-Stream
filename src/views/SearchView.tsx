@@ -111,7 +111,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
     const trimmed = term.trim();
     if (!trimmed) return;
     setSearchHistory((prev) => {
-      const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
+      const filtered = prev.filter((item) => (item || '').toLowerCase() !== trimmed.toLowerCase());
       const updated = [trimmed, ...filtered].slice(0, 10);
       localStorage.setItem('aura_search_history', JSON.stringify(updated));
       return updated;

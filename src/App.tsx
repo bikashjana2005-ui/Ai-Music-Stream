@@ -515,12 +515,14 @@ export default function App() {
   };
 
   const handleToggleSubscribe = async (channel: SubscribedChannel) => {
-    const exists = subscriptions.some(s => s.id === channel.id || s.name.toLowerCase() === channel.name.toLowerCase());
+    const channelName = channel?.name || '';
+    const channelId = channel?.id || '';
+    const exists = subscriptions.some(s => s.id === channelId || (s.name || '').toLowerCase() === channelName.toLowerCase());
     
     // Optimistic state update
     setSubscriptions((prev) => {
       if (exists) {
-        return prev.filter(s => s.id !== channel.id && s.name.toLowerCase() !== channel.name.toLowerCase());
+        return prev.filter(s => s.id !== channelId && (s.name || '').toLowerCase() !== channelName.toLowerCase());
       } else {
         return [...prev, channel];
       }
@@ -896,7 +898,7 @@ export default function App() {
           onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
           isFavorite={favorites.some(f => f.id === currentTrack.id)}
           onToggleFavorite={handleToggleFavorite}
-          isSubscribed={subscriptions.some(s => s.channelName.toLowerCase() === (currentTrack.channel || '').toLowerCase())}
+          isSubscribed={subscriptions.some(s => (s.name || '').toLowerCase() === (currentTrack.channel || '').toLowerCase())}
           onToggleSubscribe={handleToggleSubscribe}
           onShowToast={showToast}
         />

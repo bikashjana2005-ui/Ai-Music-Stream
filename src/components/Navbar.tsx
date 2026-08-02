@@ -373,11 +373,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 {/* Subscribed Channel Avatars Bar */}
                 {subscriptions.map((ch) => {
-                  const isSelected = activeTab === 'subscriptions' && selectedChannelFilter?.toLowerCase() === ch.name.toLowerCase();
+                  const isSelected = activeTab === 'subscriptions' && selectedChannelFilter && (ch.name || '').toLowerCase() === selectedChannelFilter.toLowerCase();
                   return (
                     <button
                       key={`nav-strip-${ch.id}`}
-                      data-channel={ch.name.toLowerCase()}
+                      data-channel={(ch.name || '').toLowerCase()}
                       onClick={() => {
                         if (setSelectedChannelFilter) setSelectedChannelFilter(ch.name);
                         setActiveTab('subscriptions');
