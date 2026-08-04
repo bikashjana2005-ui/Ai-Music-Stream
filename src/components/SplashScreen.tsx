@@ -35,7 +35,7 @@ export const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete 
           transition={{ duration: 0.4, delay: 0.2 }}
           className="text-3xl sm:text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-indigo-200 to-purple-400 tracking-tight"
         >
-          Aura Music
+          Ai Music Stream
         </motion.h1>
         <motion.p
           initial={{ y: 8, opacity: 0 }}

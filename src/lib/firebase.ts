@@ -60,8 +60,9 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -73,6 +74,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error:', JSON.stringify(errInfo));
+
+  // If error is related to network connectivity / offline / backend unavailable, do not throw fatal exception
+  if (
+    errorMessage.includes('unavailable') || 
+    errorMessage.includes('offline') || 
+    errorMessage.includes('Could not reach Cloud Firestore') ||
+    errorMessage.includes('Failed to get document')
+  ) {
+    console.warn('Firestore connectivity notification:', errorMessage);
+    return;
+  }
+
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -82,8 +95,9 @@ export async function testFirebaseConnection() {
     await getDocFromServer(doc(db, '_connection_test', 'ping'));
     console.log('Firebase Firestore connection active.');
   } catch (error) {
-    if (error instanceof Error && error.message.includes('offline')) {
-      console.warn('Firebase Firestore is offline. Check connection or project settings.');
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+      console.warn('Firebase Firestore is operating in offline mode.');
     }
   }
 }

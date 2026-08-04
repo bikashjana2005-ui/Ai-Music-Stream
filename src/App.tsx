@@ -31,7 +31,14 @@ export default function App() {
   const handleCompleteSplash = useCallback(() => {
     setShowSplash(false);
   }, []);
-  const [activeTab, setActiveTabState] = useState<TabType>('home');
+  const [activeTab, setActiveTabState] = useState<TabType>(() => {
+    try {
+      const saved = localStorage.getItem('aura_ai_last_active_tab');
+      return (saved as TabType) || 'home';
+    } catch {
+      return 'home';
+    }
+  });
   const [tabDirection, setTabDirection] = useState<number>(1);
 
   const handleTabChange = useCallback((newTab: TabType) => {
@@ -43,6 +50,11 @@ export default function App() {
       return newTab;
     });
   }, []);
+
+  // Save activeTab to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura_ai_last_active_tab', activeTab);
+  }, [activeTab]);
 
   // Toast notification state & callback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -169,16 +181,36 @@ export default function App() {
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<string | null>(null);
 
   // Track playback & audio stream state
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(DEFAULT_TRACKS[0]);
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
+    try {
+      const saved = localStorage.getItem('aura_ai_last_played_track');
+      return saved ? JSON.parse(saved) : DEFAULT_TRACKS[0];
+    } catch {
+      return DEFAULT_TRACKS[0];
+    }
+  });
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isOverlayOpen, setIsOverlayOpen] = useState<boolean>(false);
   const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState<boolean>(false);
-  const [volume, setVolume] = useState<number>(85);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [volume, setVolume] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('aura_ai_volume');
+      return saved ? parseInt(saved, 10) : 85;
+    } catch {
+      return 85;
+    }
+  });
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aura_ai_muted') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [showVideo, setShowVideo] = useState<boolean>(true);
   const [isFullScreenVideo, setIsFullScreenVideo] = useState<boolean>(false);
   const [playerEngine, setPlayerEngine] = useState<PlayerEngine>(() => {
-    return (localStorage.getItem('aura_player_engine') as PlayerEngine) || 'youtube';
+    return (localStorage.getItem('aura_player_engine') as PlayerEngine) || 'youtube-nocookie';
   });
 
   const handleChangePlayerEngine = (engine: PlayerEngine) => {
@@ -188,7 +220,14 @@ export default function App() {
   };
 
   // Real-time playback time & duration from YouTube video stream
-  const [playbackTime, setPlaybackTime] = useState<number>(0);
+  const [playbackTime, setPlaybackTime] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('aura_ai_last_playback_time');
+      return saved ? parseFloat(saved) : 0;
+    } catch {
+      return 0;
+    }
+  });
   const [realDuration, setRealDuration] = useState<number>(0);
   const [seekToSeconds, setSeekToSeconds] = useState<number | null>(null);
 
@@ -350,6 +389,18 @@ export default function App() {
         }
       }
 
+      // 5. Sync last application activity session
+      if (currentTrack) {
+        await setDoc(doc(db, 'users', activeUser.uid, 'activity', 'lastSession'), {
+          lastTrack: currentTrack,
+          playbackTime,
+          activeTab,
+          volume,
+          isMuted,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
       if (showNotification) {
         showToast(`Google account successfully synced (${activeUser.email || activeUser.displayName})`, 'success');
       }
@@ -423,10 +474,34 @@ export default function App() {
           }
         }, (err) => handleFirestoreError(err, OperationType.LIST, playPath));
 
+        // Last Activity listener
+        const actPath = `users/${currentUser.uid}/activity/lastSession`;
+        const unsubAct = onSnapshot(doc(db, 'users', currentUser.uid, 'activity', 'lastSession'), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.lastTrack) {
+              setCurrentTrack(data.lastTrack);
+            }
+            if (typeof data.playbackTime === 'number' && data.playbackTime > 0) {
+              setPlaybackTime(data.playbackTime);
+            }
+            if (data.activeTab) {
+              setActiveTabState(data.activeTab as TabType);
+            }
+            if (typeof data.volume === 'number') {
+              setVolume(data.volume);
+            }
+            if (typeof data.isMuted === 'boolean') {
+              setIsMuted(data.isMuted);
+            }
+          }
+        }, (err) => handleFirestoreError(err, OperationType.GET, actPath));
+
         return () => {
           unsubSubs();
           unsubFavs();
           unsubPlay();
+          unsubAct();
         };
       }
     });
@@ -473,14 +548,58 @@ export default function App() {
     localStorage.setItem('aura_ai_history', JSON.stringify(history));
   }, [history]);
 
+  // Sync last played track to localStorage
+  useEffect(() => {
+    if (currentTrack) {
+      localStorage.setItem('aura_ai_last_played_track', JSON.stringify(currentTrack));
+    }
+  }, [currentTrack]);
+
+  // Sync last playback time to localStorage
+  useEffect(() => {
+    if (playbackTime >= 0) {
+      localStorage.setItem('aura_ai_last_playback_time', String(playbackTime));
+    }
+  }, [playbackTime]);
+
+  // Sync volume and mute state to localStorage
+  useEffect(() => {
+    localStorage.setItem('aura_ai_volume', String(volume));
+    localStorage.setItem('aura_ai_muted', String(isMuted));
+  }, [volume, isMuted]);
+
+  // Auto-sync application's last activity to Cloud (Firebase Firestore)
+  useEffect(() => {
+    if (!user || !currentTrack) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'activity', 'lastSession'), {
+          lastTrack: currentTrack,
+          playbackTime,
+          activeTab,
+          volume,
+          isMuted,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Could not sync last activity to cloud:', err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [user, currentTrack, playbackTime, activeTab, volume, isMuted]);
+
   const handlePlayTrack = (track: Track) => {
     setIsMiniPlayerDismissed(false);
     setShowVideo(true);
+    setIsFullScreenVideo(true);
     if (currentTrack?.id === track.id) {
-      setIsPlaying(true);
+      // Toggle or keep paused as requested
+      setIsPlaying(false);
     } else {
       setCurrentTrack(track);
-      setIsPlaying(true);
+      setIsPlaying(false);
       setPlaybackTime(0);
       setRealDuration(0);
     }
