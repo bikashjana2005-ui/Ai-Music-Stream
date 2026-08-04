@@ -92,14 +92,15 @@ export const YouTubeMetadataModal: React.FC<YouTubeMetadataModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-          onClick={onClose}
-        />
+      {isOpen && track && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            onClick={onClose}
+          />
 
         <motion.div
           initial={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -337,6 +338,7 @@ export const YouTubeMetadataModal: React.FC<YouTubeMetadataModalProps> = ({
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

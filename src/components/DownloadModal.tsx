@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { X, Download, Music, Film, Sparkles, Check, ListPlus } from 'lucide-react';
+import { X, Download, Music, Film, Sparkles, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Track, Playlist } from '../types';
 
 interface DownloadModalProps {
+  isOpen?: boolean;
   track?: Track | null;
   playlist?: Playlist | null;
   onClose: () => void;
@@ -14,6 +16,7 @@ interface DownloadModalProps {
 }
 
 export const DownloadModal: React.FC<DownloadModalProps> = ({
+  isOpen = true,
   track,
   playlist,
   onClose,
@@ -170,17 +173,39 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fade-in">
-      <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 relative animate-slide-up">
-        
-        {/* Close Button */}
-        <button 
-          onClick={onClose}
-          disabled={isDownloading}
-          className="absolute top-4 right-4 z-10 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 backdrop-blur-md transition-colors disabled:opacity-50"
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4">
+        {/* Backdrop */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="absolute inset-0 bg-black/70 backdrop-blur-md"
+          onClick={() => {
+            if (!isDownloading) onClose();
+          }}
+        />
+
+        {/* Modal Window */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.94, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.94, y: 16 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-gray-100 dark:border-gray-800 relative z-10"
+          onClick={(e) => e.stopPropagation()}
         >
-          <X size={18} />
-        </button>
+          
+          {/* Close Button */}
+          <button 
+            onClick={onClose}
+            disabled={isDownloading}
+            className="absolute top-4 right-4 z-10 p-2 bg-black/40 text-white rounded-full hover:bg-black/60 backdrop-blur-md transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <X size={18} />
+          </button>
 
         {/* Thumbnail Header */}
         <div className="relative h-44 w-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
@@ -318,8 +343,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           </div>
 
         </div>
+        </motion.div>
       </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 };
 

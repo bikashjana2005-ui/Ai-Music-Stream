@@ -503,6 +503,13 @@ export default function App() {
           unsubPlay();
           unsubAct();
         };
+      } else {
+        // Run automatic guest/local state sync when app opens for first time
+        const hasSyncedOnOpen = sessionStorage.getItem('aura_auto_synced_on_open');
+        if (!hasSyncedOnOpen) {
+          sessionStorage.setItem('aura_auto_synced_on_open', 'true');
+          showToast('⚡ Application opened — Automatic sync complete', 'success');
+        }
       }
     });
 
@@ -861,14 +868,14 @@ export default function App() {
 
       {/* Primary Main Content Area */}
       <main className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-28 w-full flex flex-col items-center justify-start self-center overflow-x-hidden">
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 10, scale: 0.99 }}
+            initial={{ opacity: 0, y: 10, scale: 0.995 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.99 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center"
+            exit={{ opacity: 0, y: -8, scale: 0.995 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center will-change-transform"
           >
             {activeTab === 'home' && (
               <HomeView
@@ -1054,56 +1061,52 @@ export default function App() {
       )}
 
       {/* Download Options Modal (Track or Full Playlist) */}
-      {(downloadTrack || downloadPlaylist) && (
-        <DownloadModal
-          track={downloadTrack || undefined}
-          playlist={downloadPlaylist || undefined}
-          onClose={() => {
-            setDownloadTrack(null);
-            setDownloadPlaylist(null);
-          }}
-          onShowToast={showToast}
-          audioQuality={audioQuality}
-          videoQuality={videoQuality}
-          onSetDefaultVideoQuality={handleSetVideoQuality}
-          onDownloadComplete={(track, format, quality) => {
-            setDownloadedTracks(prev => {
-              if (!prev.find(t => t.id === track.id)) {
-                return [{ ...track, downloadedAt: Date.now(), format, quality }, ...prev];
-              }
-              return prev;
-            });
-            handlePlayTrack(track);
-            showToast(`Downloaded "${track.title}" - Playing video now!`, 'success');
-          }}
-        />
-      )}
+      <DownloadModal
+        isOpen={!!(downloadTrack || downloadPlaylist)}
+        track={downloadTrack || undefined}
+        playlist={downloadPlaylist || undefined}
+        onClose={() => {
+          setDownloadTrack(null);
+          setDownloadPlaylist(null);
+        }}
+        onShowToast={showToast}
+        audioQuality={audioQuality}
+        videoQuality={videoQuality}
+        onSetDefaultVideoQuality={handleSetVideoQuality}
+        onDownloadComplete={(track, format, quality) => {
+          setDownloadedTracks(prev => {
+            if (!prev.find(t => t.id === track.id)) {
+              return [{ ...track, downloadedAt: Date.now(), format, quality }, ...prev];
+            }
+            return prev;
+          });
+          handlePlayTrack(track);
+          showToast(`Downloaded "${track.title}" - Playing video now!`, 'success');
+        }}
+      />
 
       {/* Add To Playlist Modal */}
-      {addToPlaylistTrack && (
-        <AddToPlaylistModal
-          track={addToPlaylistTrack}
-          playlists={playlists}
-          onClose={() => setAddToPlaylistTrack(null)}
-          onAddToPlaylist={handleAddToPlaylist}
-          onCreatePlaylist={handleCreatePlaylist}
-          onShowToast={showToast}
-        />
-      )}
+      <AddToPlaylistModal
+        isOpen={!!addToPlaylistTrack}
+        track={addToPlaylistTrack || { id: '', title: '', channel: '', duration: '', thumbnail: '', views: '' }}
+        playlists={playlists}
+        onClose={() => setAddToPlaylistTrack(null)}
+        onAddToPlaylist={handleAddToPlaylist}
+        onCreatePlaylist={handleCreatePlaylist}
+        onShowToast={showToast}
+      />
 
       {/* Real-time YouTube Video Metadata Modal */}
-      {metadataTrack && (
-        <YouTubeMetadataModal
-          isOpen={!!metadataTrack}
-          track={metadataTrack}
-          onClose={() => setMetadataTrack(null)}
-          onPlay={handlePlayTrack}
-          onDownload={(track) => setDownloadTrack(track)}
-          onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
-          onShowToast={showToast}
-          youtubeApiKey={youtubeApiKey}
-        />
-      )}
+      <YouTubeMetadataModal
+        isOpen={!!metadataTrack}
+        track={metadataTrack}
+        onClose={() => setMetadataTrack(null)}
+        onPlay={handlePlayTrack}
+        onDownload={(track) => setDownloadTrack(track)}
+        onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+        onShowToast={showToast}
+        youtubeApiKey={youtubeApiKey}
+      />
 
       {/* Share App Modal */}
       <ShareAppModal

@@ -97,8 +97,10 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
         setChannelTracks(filtered.length ? filtered : DEFAULT_TRACKS);
       }
     } catch (e) {
-      console.error("Error fetching channel streams:", e);
-      setChannelTracks(DEFAULT_TRACKS);
+      console.warn("Notice fetching channel streams:", e);
+      if (channelTracks.length === 0) {
+        setChannelTracks(DEFAULT_TRACKS);
+      }
     } finally {
       if (!silent) setLoading(false);
       setIsRealtimeSyncing(false);
