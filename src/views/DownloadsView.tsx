@@ -69,7 +69,7 @@ export const DownloadsView: React.FC<DownloadsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto w-full animate-fade-in pb-24">
+    <div className="space-y-6 w-full max-w-full mx-auto animate-fade-in pb-24">
       {/* Offline Status Alert Banner */}
       {!isOnline && (
         <div className="p-4 bg-amber-500/15 border border-amber-500/30 rounded-3xl backdrop-blur-xl flex items-center justify-between gap-4">

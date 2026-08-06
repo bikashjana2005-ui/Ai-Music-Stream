@@ -13,6 +13,7 @@ import {
 import { Track, SubscribedChannel } from '../types';
 import { TrackCard } from '../components/TrackCard';
 import { DEFAULT_TRACKS } from '../data/fallbackTracks';
+import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
 
 interface SubscriptionsViewProps {
   onPlay: (track: Track) => void;
@@ -130,7 +131,7 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   });
 
   return (
-    <div className="space-y-5 animate-fade-in pb-28 max-w-6xl mx-auto w-full">
+    <div className="space-y-5 animate-fade-in pb-28 w-full max-w-full mx-auto">
       
       {/* 1. YOUTUBE-STYLE CREATOR CHANNELS ROW */}
       <div className="bg-white/80 dark:bg-slate-900/80 p-4 rounded-3xl border border-gray-200/80 dark:border-white/10 space-y-3.5 shadow-lg">
@@ -243,11 +244,11 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
                     : 'bg-rose-500/40 hover:bg-rose-500 hover:scale-105'
                 }`}>
                   <img
-                    src={ch.avatar}
+                    src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)}
                     alt={ch.name}
-                    className="w-full h-full object-cover rounded-full"
+                    className="w-full h-full object-cover rounded-full bg-slate-800"
                     onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
+                      (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
                     }}
                   />
                   

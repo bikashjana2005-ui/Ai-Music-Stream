@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { SubscribedChannel } from '../types';
 import { loginWithGoogle, fetchYouTubeUserSubscriptions } from '../lib/firebase';
+import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
 
 interface ChannelSubscriptionsModalProps {
   isOpen: boolean;
@@ -36,60 +37,81 @@ interface ChannelSubscriptionsModalProps {
 
 const POPULAR_RECOMMENDED_CHANNELS: SubscribedChannel[] = [
   {
-    id: 'rec-lofigirl',
-    name: 'Lofi Girl',
-    handle: '@LofiGirl',
-    avatar: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&auto=format&fit=crop',
-    subscribers: '14.2M subscribers'
+    id: 'rec-tseries',
+    name: 'T-Series',
+    handle: '@tseries',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/T-Series_logo.svg/512px-T-Series_logo.svg.png',
+    subscribers: '272M subscribers'
+  },
+  {
+    id: 'rec-sonymusic',
+    name: 'Sony Music India',
+    handle: '@SonyMusicIndia',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Sony_Music_logo.svg/512px-Sony_Music_logo.svg.png',
+    subscribers: '61M subscribers'
+  },
+  {
+    id: 'rec-starjalsha',
+    name: 'Star Jalsha',
+    handle: '@starjalsha',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Star_Jalsha_2019.png/512px-Star_Jalsha_2019.png',
+    subscribers: '18.5M subscribers'
+  },
+  {
+    id: 'rec-zeebangla',
+    name: 'Zee Bangla',
+    handle: '@zeebangla',
+    avatar: 'https://unavatar.io/youtube/zeebangla',
+    subscribers: '12.4M subscribers'
+  },
+  {
+    id: 'rec-techscrew',
+    name: 'TechScrew',
+    handle: '@TechScrew',
+    avatar: 'https://unavatar.io/youtube/TechScrew',
+    subscribers: '1.2M subscribers'
+  },
+  {
+    id: 'rec-starplus',
+    name: 'StarPlus',
+    handle: '@starplus',
+    avatar: 'https://unavatar.io/youtube/starplus',
+    subscribers: '35M subscribers'
+  },
+  {
+    id: 'rec-zeemusic',
+    name: 'Zee Music Company',
+    handle: '@zeemusiccompany',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Zee_Music_Company_logo.svg/512px-Zee_Music_Company_logo.svg.png',
+    subscribers: '108M subscribers'
   },
   {
     id: 'rec-cokestudio',
     name: 'Coke Studio Bangla',
     handle: '@CokeStudioBangla',
-    avatar: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Coke_Studio_logo.png/512px-Coke_Studio_logo.png',
     subscribers: '3.8M subscribers'
   },
   {
-    id: 'rec-tseries',
-    name: 'T-Series',
-    handle: '@tseries',
-    avatar: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&auto=format&fit=crop',
-    subscribers: '268M subscribers'
+    id: 'rec-yrf',
+    name: 'Yash Raj Films',
+    handle: '@yrf',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Yash_Raj_Films_Logo.png/512px-Yash_Raj_Films_Logo.png',
+    subscribers: '55M subscribers'
   },
   {
-    id: 'rec-monstercat',
-    name: 'Monstercat Uncaged',
-    handle: '@MonstercatUncaged',
-    avatar: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200&auto=format&fit=crop',
-    subscribers: '7.6M subscribers'
+    id: 'rec-saregama',
+    name: 'Saregama Music',
+    handle: '@saregamamusic',
+    avatar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Saregama_Logo.png/512px-Saregama_Logo.png',
+    subscribers: '38M subscribers'
   },
   {
-    id: 'rec-chillhop',
-    name: 'Chillhop Music',
-    handle: '@ChillhopMusic',
-    avatar: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=200&auto=format&fit=crop',
-    subscribers: '3.3M subscribers'
-  },
-  {
-    id: 'rec-colors',
-    name: 'COLORS',
-    handle: '@COLORSxSTUDIOS',
-    avatar: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=200&auto=format&fit=crop',
-    subscribers: '7.1M subscribers'
-  },
-  {
-    id: 'rec-spinnin',
-    name: 'Spinnin Records',
-    handle: '@SpinninRecords',
-    avatar: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=200&auto=format&fit=crop',
-    subscribers: '30.4M subscribers'
-  },
-  {
-    id: 'rec-nprmusic',
-    name: 'NPR Music',
-    handle: '@nprmusic',
-    avatar: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=200&auto=format&fit=crop',
-    subscribers: '7.9M subscribers'
+    id: 'rec-lofigirl',
+    name: 'Lofi Girl',
+    handle: '@LofiGirl',
+    avatar: 'https://unavatar.io/youtube/LofiGirl',
+    subscribers: '14.2M subscribers'
   }
 ];
 
@@ -175,7 +197,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
           id: `custom-${Date.now()}`,
           name: searchQuery.trim(),
           handle: searchQuery.trim().startsWith('@') ? searchQuery.trim() : `@${searchQuery.trim().replace(/\s+/g, '')}`,
-          avatar: `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop`,
+          avatar: getChannelAvatar(searchQuery.trim()),
           subscribers: 'Custom YouTube Channel',
           isCustom: true
         };
@@ -348,11 +370,11 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                             >
                               <div className="flex items-center gap-3 min-w-0">
                                 <img 
-                                  src={ch.avatar} 
+                                  src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)} 
                                   alt={ch.name}
-                                  className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-rose-500/40"
+                                  className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-rose-500/40 bg-slate-800"
                                   onError={(e) => {
-                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
+                                    (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
                                   }}
                                 />
                                 <div className="min-w-0">
@@ -417,9 +439,12 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <img
-                                src={ch.avatar}
+                                src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)}
                                 alt={ch.name}
-                                className="w-10 h-10 rounded-full object-cover shrink-0 ring-2 ring-rose-500/30"
+                                className="w-10 h-10 rounded-full object-cover shrink-0 ring-2 ring-rose-500/30 bg-slate-800"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
+                                }}
                               />
                               <div className="min-w-0">
                                 <h4 className="text-xs font-extrabold truncate text-white flex items-center gap-1">
@@ -508,11 +533,11 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                               title="Click to view stream feed on Home"
                             >
                               <img 
-                                src={ch.avatar} 
+                                src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)} 
                                 alt={ch.name}
-                                className="w-11 h-11 rounded-full object-cover shrink-0 ring-2 ring-rose-500/30 group-hover:scale-105 transition-transform"
+                                className="w-11 h-11 rounded-full object-cover shrink-0 ring-2 ring-rose-500/30 group-hover:scale-105 transition-transform bg-slate-800"
                                 onError={(e) => {
-                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
+                                  (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
                                 }}
                               />
                               <div className="min-w-0 flex-1">

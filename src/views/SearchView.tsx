@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
+  ArrowLeft,
   Sparkles, 
   Loader2, 
   Music2, 
@@ -31,7 +32,9 @@ import {
 } from 'lucide-react';
 import { Track } from '../types';
 import { TrackCard } from '../components/TrackCard';
+import { YouTubeFeedCard } from '../components/YouTubeFeedCard';
 import { DEFAULT_TRACKS } from '../data/fallbackTracks';
+import { YouTubeVoiceSearchModal } from '../components/YouTubeVoiceSearchModal';
 
 interface SearchViewProps {
   onPlay: (track: Track) => void;
@@ -108,92 +111,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const [focusedSuggestionIndex, setFocusedSuggestionIndex] = useState<number>(-1);
 
   // Voice Search / Voice Command State
-  const [isListening, setIsListening] = useState<boolean>(false);
-  const [voiceTranscript, setVoiceTranscript] = useState<string>('');
-  const [voiceLang, setVoiceLang] = useState<'en-US' | 'hi-IN' | 'bn-IN'>('en-US');
-  const recognitionRef = useRef<any>(null);
+  const [showVoiceModal, setShowVoiceModal] = useState<boolean>(false);
 
   const handleToggleVoiceSearch = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      onShowToast('Voice Search is not supported by your browser.', 'error');
-      return;
-    }
-
-    if (isListening) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) { /* ignore */ }
-      }
-      setIsListening(false);
-      onShowToast('Voice Search stopped', 'info');
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = voiceLang;
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setVoiceTranscript('');
-        onShowToast('🎙️ Voice Search active! Speak now...', 'info');
-      };
-
-      recognition.onresult = (event: any) => {
-        let interim = '';
-        let final = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-
-        const currentSpeech = final || interim;
-        setVoiceTranscript(currentSpeech);
-        setQuery(currentSpeech);
-        setShowDropdown(true);
-
-        if (final && final.trim()) {
-          const spokenQuery = final.trim();
-          onShowToast(`🎙️ Voice Command: "${spokenQuery}"`, 'success');
-          setShowDropdown(false);
-          executeSearch(spokenQuery, activeFilter, true);
-          setIsListening(false);
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-          onShowToast('Microphone access denied. Please allow microphone permissions.', 'error');
-        } else if (event.error === 'no-speech') {
-          onShowToast('No speech detected. Please speak louder.', 'info');
-        } else {
-          onShowToast(`Voice search issue: ${event.error}`, 'error');
-        }
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        if (query && query.trim() && searchResults.length === 0 && !loading) {
-          setShowDropdown(false);
-          executeSearch(query.trim(), activeFilter, true);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to start voice search:', err);
-      setIsListening(false);
-      onShowToast('Microphone initialization failed', 'error');
-    }
+    setShowVoiceModal(true);
   };
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -228,21 +149,51 @@ export const SearchView: React.FC<SearchViewProps> = ({
     onShowToast('Search history cleared', 'info');
   };
 
-  // On mount: Load initial video search results if query is empty
   useEffect(() => {
-    if (searchResults.length === 0 && !query.trim()) {
-      setSearchResults(DEFAULT_TRACKS);
-      setSearchSource('Featured YouTube Videos');
-    }
+    // Initial mount setup
+    setSearchResults([]);
   }, []);
 
-  // Filter Pill search terms for empty query fallback
-  const FILTER_FALLBACK_QUERIES: Record<string, string> = {
-    all: 'Popular YouTube Music Videos',
-    official: 'Official Music Video Hits',
-    live: 'Live Music Concert',
-    remix: 'Remix Bass Boosted',
-    indian: 'Bollywood Romantic Hits'
+  // Recent Video Searches state (store tracks recently searched or played)
+  const [recentVideoSearches, setRecentVideoSearches] = useState<Track[]>(() => {
+    try {
+      const saved = localStorage.getItem('aura_recent_video_searches');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_TRACKS.slice(0, 6);
+  });
+
+  const addTrackToRecentVideoSearches = (track: Track) => {
+    setRecentVideoSearches((prev) => {
+      const filtered = prev.filter((t) => t.id !== track.id);
+      const updated = [track, ...filtered].slice(0, 16);
+      localStorage.setItem('aura_recent_video_searches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const removeRecentVideoSearch = (trackId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRecentVideoSearches((prev) => {
+      const updated = prev.filter((t) => t.id !== trackId);
+      localStorage.setItem('aura_recent_video_searches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearRecentVideoSearches = () => {
+    setRecentVideoSearches([]);
+    localStorage.removeItem('aura_recent_video_searches');
+  };
+
+  const handlePlayTrack = (track: Track) => {
+    addTrackToRecentVideoSearches(track);
+    onPlay(track);
   };
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -327,15 +278,18 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
       if (tracks.length > 0) {
         setSearchResults(tracks);
+        if (tracks[0]) {
+          addTrackToRecentVideoSearches(tracks[0]);
+        }
         if (forceFresh) {
           onShowToast(`⚡ Fetched ${tracks.length} real-time official YouTube videos (${latency}ms)`, 'success');
         }
       } else {
-        setSearchResults(DEFAULT_TRACKS);
+        setSearchResults([]);
       }
     } catch (err) {
       console.error('Real-time YouTube search error:', err);
-      setSearchResults(DEFAULT_TRACKS);
+      setSearchResults([]);
     } finally {
       setLoading(false);
       setIsSyncing(false);
@@ -345,7 +299,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   // Fetch next page of results for unlimited search results
   const handleLoadMore = async () => {
     if (loadingMore) return;
-    const effectiveQuery = query.trim() || FILTER_FALLBACK_QUERIES[activeFilter] || 'Popular YouTube Music Videos';
+    const effectiveQuery = query.trim() || 'Popular YouTube Music Videos';
     const nextPage = currentPage + 1;
     setLoadingMore(true);
 
@@ -418,7 +372,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   };
 
   return (
-    <div className="space-y-5 animate-fade-in pb-28 max-w-6xl mx-auto w-full">
+    <div className="space-y-5 animate-fade-in pb-28 w-full max-w-full mx-auto">
       
       {/* YouTube-Style Single Search Bar with Standalone Mic and Option Controls */}
       <div ref={searchContainerRef} className="relative z-30">
@@ -437,13 +391,12 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 }}
                 onFocus={() => setShowDropdown(true)}
                 onKeyDown={handleKeyDown}
-                placeholder="Search YouTube songs, artists, or channels..."
-                className="w-full bg-slate-900 dark:bg-slate-950 text-white pl-11 pr-24 py-3 rounded-full border border-gray-700/60 dark:border-white/20 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-sm shadow-md transition-all"
+                placeholder="Search YouTube"
+                className="w-full bg-[#212121] dark:bg-[#1f1f1f] text-white pl-5 pr-20 py-2.5 sm:py-3 rounded-full border border-transparent focus:border-white/20 focus:outline-none font-medium text-sm sm:text-base shadow-sm placeholder:text-gray-400/90 transition-all"
               />
-              <Search size={18} className="absolute left-4 text-gray-400" />
 
               {/* Right side inner controls (Clear & Search Submit) */}
-              <div className="absolute right-1.5 flex items-center gap-1.5">
+              <div className="absolute right-2 flex items-center gap-1.5">
                 {query && (
                   <button
                     type="button"
@@ -452,54 +405,50 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       setSearchResults([]);
                       setShowDropdown(false);
                     }}
-                    className="p-1 text-gray-400 hover:text-white rounded-full transition-colors"
+                    className="p-1 text-gray-400 hover:text-white rounded-full transition-colors cursor-pointer"
                     title="Clear search"
                   >
-                    <X size={16} />
+                    <X size={18} />
                   </button>
                 )}
 
                 <button
                   type="submit"
                   disabled={loading || !query.trim()}
-                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-xs text-xs font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                  className="p-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full shadow-xs transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+                  title="Search"
                 >
-                  {loading || isSyncing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-                  <span className="hidden sm:inline">Search</span>
+                  {loading || isSyncing ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                 </button>
               </div>
             </div>
           </form>
 
-          {/* Standalone Voice Search Mic Button (OUTSIDE Search Bar - Compact) */}
+          {/* Standalone Circular Voice Search Mic Button */}
           <button
             type="button"
-            onClick={handleToggleVoiceSearch}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 border ${
-              isListening
-                ? 'bg-rose-600 text-white border-rose-500 shadow-md shadow-rose-600/50 animate-pulse ring-2 ring-rose-400'
-                : 'bg-slate-900 dark:bg-slate-950 text-slate-300 border-gray-700/60 dark:border-white/20 hover:text-white hover:bg-slate-800 hover:border-rose-500/50 shadow-xs'
-            }`}
-            title={isListening ? 'Stop Voice Command' : 'Search by Voice Command (Microphone)'}
+            onClick={() => setShowVoiceModal(true)}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-[#212121] dark:bg-[#1f1f1f] text-white hover:bg-zinc-700/80 transition-all shrink-0 cursor-pointer"
+            title="Search by Voice"
           >
-            <Mic size={15} className={isListening ? 'animate-bounce text-white' : 'text-rose-400'} />
+            <Mic size={20} className="text-white" />
           </button>
 
-          {/* Standalone Option Toggle Button (OUTSIDE Search Bar - Compact) */}
+          {/* Standalone Option Toggle Button */}
           <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowOptionPanel(!showOptionPanel)}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all border ${
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                 showOptionPanel || realtimeSyncEnabled || officialOnlyFilter
-                  ? 'bg-rose-600/30 text-rose-300 border-rose-500 shadow-xs'
-                  : 'bg-slate-900 dark:bg-slate-950 text-slate-300 border-gray-700/60 dark:border-white/20 hover:text-white hover:bg-slate-800 hover:border-rose-500/50 shadow-xs'
+                  ? 'bg-rose-600/30 text-rose-300 border border-rose-500 shadow-xs'
+                  : 'bg-[#212121] dark:bg-[#1f1f1f] text-slate-300 hover:text-white hover:bg-zinc-700/80'
               }`}
               title="Search Options & Filters"
             >
-              <Sliders size={15} className="text-rose-400" />
+              <Sliders size={18} className="text-gray-200" />
               {(realtimeSyncEnabled || officialOnlyFilter) && (
-                <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-slate-950 animate-pulse" />
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-slate-950 animate-pulse" />
               )}
             </button>
 
@@ -512,36 +461,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     Search Options & Filters
                   </span>
                   <span className="text-emerald-400 font-mono text-[9px]">{apiLatency}ms</span>
-                </div>
-
-                {/* Voice Language Option Selector */}
-                <div className="space-y-1 pt-1">
-                  <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1 flex items-center gap-1">
-                    <Mic size={11} className="text-rose-400" /> Voice Language
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    {[
-                      { id: 'en-US', label: 'English' },
-                      { id: 'hi-IN', label: 'Hindi' },
-                      { id: 'bn-IN', label: 'Bengali' }
-                    ].map((lang) => (
-                      <button
-                        key={lang.id}
-                        type="button"
-                        onClick={() => {
-                          setVoiceLang(lang.id as any);
-                          onShowToast(`Voice language set to ${lang.label}`, 'info');
-                        }}
-                        className={`px-1.5 py-1 rounded-lg text-[10px] font-bold text-center transition-all border ${
-                          voiceLang === lang.id
-                            ? 'bg-rose-600 text-white border-rose-500'
-                            : 'bg-slate-800/80 text-slate-400 border-white/5 hover:text-white'
-                        }`}
-                      >
-                        {lang.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Quick Toggles */}
@@ -641,40 +560,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
           </div>
 
         </div>
-
-        {/* Active Voice Search Listening Banner */}
-        {isListening && (
-          <div className="mt-3 p-4 bg-gradient-to-r from-rose-950/90 via-slate-900 to-indigo-950/90 border border-rose-500/40 rounded-2xl shadow-xl backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in">
-            <div className="flex items-center gap-3">
-              <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-rose-600 text-white shrink-0 shadow-lg shadow-rose-600/40">
-                <Mic size={20} className="animate-bounce" />
-                <span className="absolute inset-0 rounded-full bg-rose-500/40 animate-ping" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-black uppercase text-rose-300 tracking-wider flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                    Voice Search Active
-                  </span>
-                  <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full text-slate-300 font-mono">
-                    Speak Song, Artist, or Mood
-                  </span>
-                </div>
-                <p className="text-sm font-bold text-white mt-0.5">
-                  {voiceTranscript ? `"${voiceTranscript}"` : 'Listening for your voice command...'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleToggleVoiceSearch}
-              className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 border border-white/15 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
 
         {/* Quick Voice Search Command Presets Bar */}
         <div className="mt-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
@@ -861,155 +746,267 @@ export const SearchView: React.FC<SearchViewProps> = ({
         )}
       </div>
 
-      {/* YouTube Filter Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-        {YOUTUBE_FILTER_PILLS.map((pill) => (
-          <button
-            key={pill.id}
-            onClick={() => {
-              const filterId = pill.id as any;
-              setActiveFilter(filterId);
-              const targetTerm = query.trim() || FILTER_FALLBACK_QUERIES[pill.id] || 'YouTube Music Hits';
-              executeSearch(targetTerm, filterId, true);
-            }}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
-              activeFilter === pill.id
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-gray-200/80 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-slate-700'
-            }`}
-          >
-            {pill.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Results Header with View Format Toggle */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <div className="space-y-0.5">
-            <h2 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-              <Music2 size={16} className="text-rose-500" />
-              <span>YouTube Search Results</span>
-              <span className="text-xs font-black text-rose-500 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20">
-                {searchResults.length} {searchResults.length === 1 ? 'Result' : 'Results'}
-              </span>
-            </h2>
-            {query && (
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium pl-6">
+      {/* Main Content Area: Active Search Results vs Recent Video Searches */}
+      {query.trim() ? (
+        /* ACTIVE SEARCH RESULTS VIEW */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <div className="space-y-0.5">
+              <h2 className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                <Music2 size={16} className="text-rose-500" />
+                <span>YouTube Search Results</span>
+                <span className="text-xs font-black text-rose-500 bg-rose-500/10 px-2.5 py-0.5 rounded-full border border-rose-500/20">
+                  {searchResults.length} {searchResults.length === 1 ? 'Result' : 'Results'}
+                </span>
+              </h2>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
                 Found <span className="font-bold text-rose-500 dark:text-rose-400">{searchResults.length}</span> video streams for <span className="font-bold text-gray-800 dark:text-gray-200">"{query}"</span>
               </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* View Mode Toggle */}
+              <div className="bg-gray-100 dark:bg-slate-800 p-0.5 rounded-xl border border-gray-200/60 dark:border-white/10 flex items-center gap-0.5">
+                <button
+                  onClick={() => handleToggleViewMode('grid')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  }`}
+                  title="Grid View"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+                <button
+                  onClick={() => handleToggleViewMode('list')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  }`}
+                  title="List View"
+                >
+                  <List size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Results Stream Grid / List */}
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div 
+                  key={`skeleton-${i}`} 
+                  className="bg-gray-200/60 dark:bg-slate-800/60 animate-pulse rounded-2xl h-52 p-3 flex flex-col justify-between border border-gray-300/30 dark:border-white/5"
+                >
+                  <div className="w-full h-28 bg-gray-300 dark:bg-slate-700/60 rounded-xl mb-2" />
+                  <div className="space-y-1.5 flex-1">
+                    <div className="w-3/4 h-3.5 bg-gray-300 dark:bg-slate-700/60 rounded-md" />
+                    <div className="w-1/2 h-3 bg-gray-300 dark:bg-slate-700/60 rounded-md" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div className="space-y-6">
+              <div className={
+                viewMode === 'grid'
+                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
+                  : "grid grid-cols-1 md:grid-cols-2 gap-4"
+              }>
+                {searchResults.map((track) => (
+                  <YouTubeFeedCard
+                    key={`search-feed-${track.id}`}
+                    track={track}
+                    onPlay={handlePlayTrack}
+                    onDownload={onDownload}
+                    isPlayingCurrent={currentTrackId === track.id}
+                    isFavorite={favorites.some(f => f.id === track.id)}
+                    onToggleFavorite={onToggleFavorite}
+                    onOpenAddToPlaylist={onOpenAddToPlaylist}
+                    onOpenMetadata={onOpenMetadata}
+                    onShowToast={onShowToast}
+                  />
+                ))}
+              </div>
+
+              {/* Load More Results (Unlimited Search) Button */}
+              <div className="flex flex-col items-center justify-center pt-2 pb-6">
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="px-6 py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black rounded-full shadow-lg border border-rose-400/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin text-white" />
+                      <span>Loading More Results...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={15} className="text-yellow-300 animate-pulse" />
+                      <span>Load More Search Results</span>
+                      <span className="bg-black/20 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                        Page {currentPage}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-12 text-center text-gray-500 dark:text-gray-400 text-xs font-medium bg-gray-50 dark:bg-slate-900/30 rounded-2xl border border-gray-200 dark:border-white/10 p-8">
+              No tracks found matching "{query}". Try typing a different song or artist name.
+            </div>
+          )}
+        </div>
+      ) : (
+        /* RECENT VIDEO SEARCHES VIEW */
+        <div className="space-y-6">
+          {/* Recent Video Searches Section Header */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Clock size={18} className="text-rose-500" />
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                Recent Video Searches
+              </h2>
+            </div>
+            {(searchHistory.length > 0 || recentVideoSearches.length > 0) && (
+              <button
+                onClick={(e) => {
+                  clearSearchHistory(e);
+                  clearRecentVideoSearches();
+                }}
+                className="text-xs font-bold text-rose-500 hover:text-rose-400 flex items-center gap-1 cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Clear All History</span>
+              </button>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* View Mode Toggle */}
-            <div className="bg-gray-100 dark:bg-slate-800 p-0.5 rounded-xl border border-gray-200/60 dark:border-white/10 flex items-center gap-0.5">
-              <button
-                onClick={() => handleToggleViewMode('grid')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
-                  viewMode === 'grid'
-                    ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
-                    : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
-                }`}
-                title="Grid View"
-              >
-                <LayoutGrid size={14} />
-              </button>
-              <button
-                onClick={() => handleToggleViewMode('list')}
-                className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
-                  viewMode === 'list'
-                    ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
-                    : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
-                }`}
-                title="List View"
-              >
-                <List size={14} />
-              </button>
+          {/* Recent Search Keyword Query Pills */}
+          {searchHistory.length > 0 && (
+            <div className="bg-gray-100/80 dark:bg-slate-900/80 p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-white/10 space-y-2.5">
+              <div className="text-[11px] font-extrabold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <History size={13} className="text-rose-500" />
+                <span>Recent Keywords</span>
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                {searchHistory.map((item, idx) => (
+                  <div
+                    key={`recent-query-${idx}`}
+                    onClick={() => handleSelectTerm(item)}
+                    className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-full text-xs font-semibold flex items-center gap-2 shrink-0 cursor-pointer group transition-all"
+                  >
+                    <Search size={12} className="text-gray-400 group-hover:text-rose-500" />
+                    <span>{item}</span>
+                    <button
+                      onClick={(e) => removeSearchTerm(item, e)}
+                      className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full text-gray-400 hover:text-rose-500 transition-colors"
+                      title="Remove keyword"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Results Stream Grid / List */}
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
-              <div 
-                key={`skeleton-${i}`} 
-                className="bg-gray-200/60 dark:bg-slate-800/60 animate-pulse rounded-2xl h-52 p-3 flex flex-col justify-between border border-gray-300/30 dark:border-white/5"
-              >
-                <div className="w-full h-28 bg-gray-300 dark:bg-slate-700/60 rounded-xl mb-2" />
-                <div className="space-y-1.5 flex-1">
-                  <div className="w-3/4 h-3.5 bg-gray-300 dark:bg-slate-700/60 rounded-md" />
-                  <div className="w-1/2 h-3 bg-gray-300 dark:bg-slate-700/60 rounded-md" />
+          {/* Recently Searched Video Feed Cards */}
+          {recentVideoSearches.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <Video size={14} className="text-rose-500" />
+                  <span>Recently Searched & Played Videos</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                    {recentVideoSearches.length} videos
+                  </span>
+                  <div className="bg-gray-100 dark:bg-slate-800 p-0.5 rounded-xl border border-gray-200/60 dark:border-white/10 flex items-center gap-0.5">
+                    <button
+                      onClick={() => handleToggleViewMode('grid')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                        viewMode === 'grid'
+                          ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                      title="Grid View"
+                    >
+                      <LayoutGrid size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleToggleViewMode('list')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                        viewMode === 'list'
+                          ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
+                          : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                      }`}
+                      title="List View"
+                    >
+                      <List size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        ) : searchResults.length > 0 ? (
-          <div className="space-y-6">
-            <div className={
-              viewMode === 'grid'
-                ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
-                : "grid grid-cols-1 md:grid-cols-2 gap-3"
-            }>
-              {searchResults.map((track) => (
-                <TrackCard
-                  key={`search-track-${track.id}`}
-                  track={track}
-                  onPlay={onPlay}
-                  onDownload={onDownload}
-                  isPlayingCurrent={currentTrackId === track.id}
-                  isFavorite={favorites.some(f => f.id === track.id)}
-                  onToggleFavorite={onToggleFavorite}
-                  onOpenAddToPlaylist={onOpenAddToPlaylist}
-                  onOpenMetadata={onOpenMetadata}
-                  viewMode={viewMode}
-                />
-              ))}
-            </div>
 
-            {/* Load More Results (Unlimited Search) Button */}
-            <div className="flex flex-col items-center justify-center pt-2 pb-6">
-              <button
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className="px-6 py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black rounded-full shadow-lg border border-rose-400/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
-              >
-                {loadingMore ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin text-white" />
-                    <span>Loading More Results...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={15} className="text-yellow-300 animate-pulse" />
-                    <span>Load More Search Results</span>
-                    <span className="bg-black/20 px-2 py-0.5 rounded-full text-[10px] font-mono">
-                      Page {currentPage}
-                    </span>
-                  </>
-                )}
-              </button>
-              <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 mt-2">
-                Showing {searchResults.length} videos • Click to fetch more real-time YouTube results
+              <div className={
+                viewMode === 'grid'
+                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
+                  : "grid grid-cols-1 md:grid-cols-2 gap-4"
+              }>
+                {recentVideoSearches.map((track) => (
+                  <div key={`recent-video-${track.id}`} className="relative group">
+                    <YouTubeFeedCard
+                      track={track}
+                      onPlay={handlePlayTrack}
+                      onDownload={onDownload}
+                      isPlayingCurrent={currentTrackId === track.id}
+                      isFavorite={favorites.some(f => f.id === track.id)}
+                      onToggleFavorite={onToggleFavorite}
+                      onOpenAddToPlaylist={onOpenAddToPlaylist}
+                      onOpenMetadata={onOpenMetadata}
+                      onShowToast={onShowToast}
+                    />
+                    <button
+                      onClick={(e) => removeRecentVideoSearch(track.id, e)}
+                      className="absolute top-2 right-2 z-10 p-1.5 bg-black/80 hover:bg-rose-600 text-white rounded-full opacity-90 sm:opacity-0 group-hover:opacity-100 transition-all shadow-md cursor-pointer"
+                      title="Remove from recent searches"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="py-12 text-center space-y-2 bg-gray-50/50 dark:bg-slate-900/40 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-8">
+              <Clock size={32} className="text-rose-500/60 mx-auto" />
+              <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No Recent Video Searches</p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                Type any song or video title above to search YouTube and start building your search history.
               </p>
             </div>
-          </div>
-        ) : query ? (
-          <div className="py-12 text-center text-gray-500 dark:text-gray-400 text-xs font-medium bg-gray-50 dark:bg-slate-900/30 rounded-2xl border border-gray-200 dark:border-white/10 p-8">
-            No tracks found matching "{query}". Try typing a different song or artist name.
-          </div>
-        ) : (
-          <div className="py-16 text-center space-y-2 bg-white/50 dark:bg-slate-900/40 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-8">
-            <Compass size={32} className="text-rose-500 mx-auto" />
-            <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Search YouTube Music Streams</p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-              Type any song name or artist above to search live YouTube streams instantly.
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* YouTube Voice Search Modal */}
+      <YouTubeVoiceSearchModal
+        isOpen={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        onSearchSubmit={(voiceQuery) => {
+          setQuery(voiceQuery);
+          setShowDropdown(false);
+          executeSearch(voiceQuery, activeFilter, true);
+        }}
+        onShowToast={onShowToast}
+      />
 
     </div>
   );

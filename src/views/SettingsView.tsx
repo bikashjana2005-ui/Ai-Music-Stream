@@ -123,7 +123,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   ];
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto w-full animate-fade-in pb-28">
+    <div className="space-y-6 w-full max-w-full mx-auto animate-fade-in pb-28">
       
       {/* Category Navigation Pills */}
       <div className="flex items-center gap-1.5 p-1.5 bg-gray-100/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200/60 dark:border-gray-700/60 overflow-x-auto no-scrollbar scroll-smooth">

@@ -19,10 +19,13 @@ import {
   Download,
   Zap,
   Wifi,
-  WifiOff
+  WifiOff,
+  Star,
+  Tv
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
+import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
 
 interface NavbarProps {
   activeTab: TabType;
@@ -99,7 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* iOS Liquid Glass Top App Bar - Rendered only on Home tab */}
       {activeTab === 'home' && (
         <header className="sticky top-0 z-30 w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-200 border-b border-white/40 dark:border-white/10 transition-colors shadow-xs flex flex-col items-center">
-        <div className="max-w-6xl w-full mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 sm:gap-4">
+        <div className="max-w-full w-full mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 sm:gap-4">
           
           {/* Brand Logo */}
           <div 
@@ -126,6 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Center Top Nav Links (Desktop View) */}
           <nav ref={topNavRef} className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-gray-200/50 dark:border-white/10 backdrop-blur-md relative overflow-x-auto no-scrollbar scroll-smooth max-w-full">
+            {/* 1. Home */}
             <button
               data-tab="home"
               onClick={() => setActiveTab('home')}
@@ -147,6 +151,29 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
+            {/* 2. Search */}
+            <button
+              data-tab="search"
+              onClick={() => setActiveTab('search')}
+              className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+                activeTab === 'search'
+                  ? 'text-indigo-600 dark:text-indigo-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              {activeTab === 'search' && (
+                <motion.div
+                  layoutId="topNavPill"
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
+                  transition={{ type: "spring", stiffness: 350, damping: 28 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
+                <Search size={14} /> Search
+              </span>
+            </button>
+
+            {/* 3. Subscriptions */}
             <button
               data-tab="subscriptions"
               onClick={() => setActiveTab('subscriptions')}
@@ -181,16 +208,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
+            {/* 4. Downloads */}
             <button
-              data-tab="search"
-              onClick={() => setActiveTab('search')}
-              className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'search'
+              data-tab="downloads"
+              onClick={() => setActiveTab('downloads')}
+              className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+                activeTab === 'downloads'
                   ? 'text-indigo-600 dark:text-indigo-300'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              {activeTab === 'search' && (
+              {activeTab === 'downloads' && (
                 <motion.div
                   layoutId="topNavPill"
                   className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
@@ -198,10 +226,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 />
               )}
               <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
-                <Search size={14} /> Search
+                <Download size={14} /> Downloads
               </span>
             </button>
 
+            {/* 5. Library */}
             <button
               data-tab="library"
               onClick={() => setActiveTab('library')}
@@ -228,28 +257,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            <button
-              data-tab="downloads"
-              onClick={() => setActiveTab('downloads')}
-              className={`relative px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'downloads'
-                  ? 'text-indigo-600 dark:text-indigo-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              {activeTab === 'downloads' && (
-                <motion.div
-                  layoutId="topNavPill"
-                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
-                  transition={{ type: "spring", stiffness: 350, damping: 28 }}
-                />
-              )}
-              <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
-                <Download size={14} /> Downloads
-              </span>
-            </button>
-
-            {/* Settings Tab */}
+            {/* 6. Settings */}
             <button
               data-tab="settings"
               onClick={() => setActiveTab('settings')}
@@ -270,7 +278,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Settings size={14} /> Settings
               </span>
             </button>
-
 
           </nav>
 
@@ -401,11 +408,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                       title={`View ${ch.name} streams`}
                     >
                       <img 
-                        src={ch.avatar} 
+                        src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)} 
                         alt={ch.name}
                         className="w-4 h-4 rounded-full object-cover shrink-0 ring-1 ring-rose-500/30"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
+                          (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
                         }}
                       />
                       <span className="truncate max-w-[100px]">{ch.name}</span>
@@ -434,11 +441,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="fixed bottom-0 left-0 right-0 z-40 px-2 sm:px-4 pb-2.5 pt-1 pointer-events-none">
         <nav ref={bottomDockRef} className="max-w-lg mx-auto pointer-events-auto bg-white/80 dark:bg-slate-900/85 border border-white/60 dark:border-white/15 backdrop-blur-3xl backdrop-saturate-200 rounded-3xl p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex justify-between items-center transition-all ring-1 ring-black/5 dark:ring-white/10 overflow-x-auto no-scrollbar scroll-smooth">
           
-          {/* Home Tab */}
+          {/* 1. Home Tab */}
           <button
             data-tab="home"
             onClick={() => setActiveTab('home')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl transition-all duration-300 shrink-0 ${
+            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
               activeTab === 'home'
                 ? 'text-indigo-600 dark:text-indigo-300 font-black'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
@@ -457,11 +464,34 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Home</span>
           </button>
 
-          {/* Subscriptions Tab */}
+          {/* 2. Search Tab */}
+          <button
+            data-tab="search"
+            onClick={() => setActiveTab('search')}
+            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
+              activeTab === 'search'
+                ? 'text-indigo-600 dark:text-indigo-300 font-black'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
+            }`}
+          >
+            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
+              {activeTab === 'search' && (
+                <motion.div
+                  layoutId="dockActivePill"
+                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
+                  transition={{ type: "spring", stiffness: 350, damping: 28 }}
+                />
+              )}
+              <Search size={17} className={`relative z-10 ${activeTab === 'search' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+            </div>
+            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Search</span>
+          </button>
+
+          {/* 3. Subscriptions Tab */}
           <button
             data-tab="subscriptions"
             onClick={() => setActiveTab('subscriptions')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl transition-all duration-300 shrink-0 ${
+            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
               activeTab === 'subscriptions'
                 ? 'text-rose-600 dark:text-rose-300 font-black'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
@@ -484,37 +514,37 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="absolute -top-0.5 -right-0.5 z-20 w-2 h-2 bg-rose-500 rounded-full animate-pulse border-2 border-white dark:border-slate-900" />
               )}
             </div>
-            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Subs</span>
+            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Subscriptions</span>
           </button>
 
-          {/* Search Tab */}
+          {/* 4. Downloads Tab */}
           <button
-            data-tab="search"
-            onClick={() => setActiveTab('search')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl transition-all duration-300 shrink-0 ${
-              activeTab === 'search'
+            data-tab="downloads"
+            onClick={() => setActiveTab('downloads')}
+            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
+              activeTab === 'downloads'
                 ? 'text-indigo-600 dark:text-indigo-300 font-black'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
             }`}
           >
             <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
-              {activeTab === 'search' && (
+              {activeTab === 'downloads' && (
                 <motion.div
                   layoutId="dockActivePill"
                   className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
                   transition={{ type: "spring", stiffness: 350, damping: 28 }}
                 />
               )}
-              <Search size={17} className={`relative z-10 ${activeTab === 'search' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+              <Download size={17} className={`relative z-10 ${activeTab === 'downloads' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
             </div>
-            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Search</span>
+            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Downloads</span>
           </button>
 
-          {/* Library Tab */}
+          {/* 5. Library Tab */}
           <button
             data-tab="library"
             onClick={() => setActiveTab('library')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl transition-all duration-300 shrink-0 ${
+            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
               activeTab === 'library'
                 ? 'text-indigo-600 dark:text-indigo-300 font-black'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
@@ -538,34 +568,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Library</span>
           </button>
 
-          {/* Downloads Tab */}
-          <button
-            data-tab="downloads"
-            onClick={() => setActiveTab('downloads')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl transition-all duration-300 shrink-0 ${
-              activeTab === 'downloads'
-                ? 'text-indigo-600 dark:text-indigo-300 font-black'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
-            }`}
-          >
-            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
-              {activeTab === 'downloads' && (
-                <motion.div
-                  layoutId="dockActivePill"
-                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
-                  transition={{ type: "spring", stiffness: 350, damping: 28 }}
-                />
-              )}
-              <Download size={17} className={`relative z-10 ${activeTab === 'downloads' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-            </div>
-            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">DLs</span>
-          </button>
-
-          {/* Settings Tab */}
+          {/* 6. Settings Tab */}
           <button
             data-tab="settings"
             onClick={() => setActiveTab('settings')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2.5 rounded-2xl transition-all duration-300 shrink-0 ${
+            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
               activeTab === 'settings'
                 ? 'text-indigo-600 dark:text-indigo-300 font-black'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
@@ -583,8 +590,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Settings</span>
           </button>
-
-
 
         </nav>
       </div>

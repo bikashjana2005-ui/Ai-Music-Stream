@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ChevronDown, 
   ChevronUp,
@@ -57,6 +57,7 @@ import { db } from '../lib/firebase';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
+import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
 
 export type PlayerEngine = 'youtube' | 'youtube-nocookie' | 'invidious' | 'piped' | 'embed';
 
@@ -1133,6 +1134,14 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 <Tv size={14} />
                 <span className="hidden sm:inline">{isTheaterMode ? 'Default View' : 'Theater View'}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setShowActionMoreMenu(true)}
+                className="p-2 rounded-full bg-slate-900 border border-white/15 text-slate-300 hover:bg-slate-800 hover:text-white transition-all active:scale-95 cursor-pointer"
+                title="More Options"
+              >
+                <MoreHorizontal size={16} />
+              </button>
             </div>
           </div>
 
@@ -1167,237 +1176,259 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 </div>
               )}
 
-              {/* VIDEO TITLE */}
-              <div className="space-y-1 pt-1">
-                <div className="space-y-1">
-                  <h1 className="text-xl sm:text-2xl font-black text-white leading-snug tracking-tight">
-                    {decodeHtmlEntities(currentTrack?.title || '')}
-                  </h1>
+              {/* VIDEO TITLE & METADATA SECTION */}
+              <div className="space-y-1.5 pt-1">
+                <h1 className="text-base sm:text-xl font-extrabold text-white leading-snug tracking-tight line-clamp-2">
+                  {decodeHtmlEntities(currentTrack?.title || '')}
+                </h1>
 
-                  {/* Video Metadata & Inline ...more button & Chapters trigger directly under title */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-medium">
-                    <span className="font-bold text-white">{realViewCount || '1,428,910 views'}</span>
-                    <span>•</span>
-                    <span>Aug 2, 2026</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowFullDescription(!showFullDescription)}
-                      className="font-extrabold text-white hover:text-rose-400 bg-white/10 hover:bg-white/20 px-2.5 py-0.5 rounded-full text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 border border-white/15 ml-1 active:scale-95"
-                      title="Expand Video Description & Details"
-                    >
-                      <span>...more</span>
-                      {showFullDescription ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </button>
-
-                    {/* CHAPTERS BAR BUTTON */}
-                    <button
-                      type="button"
-                      onClick={() => setShowChaptersPanel(!showChaptersPanel)}
-                      className={`font-extrabold text-[11px] px-3 py-1 rounded-full transition-all cursor-pointer inline-flex items-center gap-1.5 border active:scale-95 shadow-xs ${
-                        showChaptersPanel
-                          ? 'bg-rose-600 text-white border-rose-500 shadow-rose-600/30 ring-2 ring-rose-500/40'
-                          : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30 hover:border-rose-500/50'
-                      }`}
-                      title="Open Video Chapters List"
-                    >
-                      <Layers size={13} className="text-rose-400" />
-                      <span>Chapters ({videoChapters.length})</span>
-                      {activeChapter && (
-                        <span className="hidden sm:inline-block max-w-[140px] truncate text-[10px] text-rose-200 font-semibold border-l border-rose-500/40 pl-1.5">
-                          {activeChapter.timeDisplay} {activeChapter.title}
-                        </span>
-                      )}
-                      {showChaptersPanel ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </button>
-                  </div>
+                {/* Sub Metadata line: @Channel views likes time ...more */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 font-medium">
+                  <span className="font-bold text-zinc-200">@{ (realChannelName || currentTrack?.channel || 'channel').toLowerCase().replace(/\s+/g, '') }</span>
+                  <span>{realLikeCountStr || '4.7K'} likes</span>
+                  <span>{realViewCount || '53K views'}</span>
+                  <span>3h ago</span>
+                  <span className="font-mono text-zinc-500">12</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullDescription(!showFullDescription)}
+                    className="font-extrabold text-white hover:text-rose-400 bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 active:scale-95"
+                    title="More details"
+                  >
+                    <span>...more</span>
+                    {showFullDescription ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 </div>
               </div>
 
-              {/* VIDEO CHAPTERS INTERACTIVE PANEL */}
+              {/* VIDEO CHAPTERS INTERACTIVE SHEET / PANEL */}
               {showChaptersPanel && (
                 <motion.div
-                  initial={{ opacity: 0, y: -8, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: 'auto' }}
-                  exit={{ opacity: 0, y: -8, height: 0 }}
-                  className="p-4 bg-slate-950/90 rounded-2xl border border-rose-500/30 space-y-3 shadow-2xl backdrop-blur-md"
+                  ref={chaptersSectionRef}
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                  className="-mx-3 sm:mx-0 w-[calc(100%+1.5rem)] sm:w-full bg-zinc-950/98 border-y sm:border border-white/20 sm:border-white/15 rounded-none sm:rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xl backdrop-blur-2xl transition-all"
                 >
-                  <div className="flex items-center justify-between pb-2.5 border-b border-white/10">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shrink-0 shadow-md flex items-center justify-center">
-                        <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-rose-400">
-                          <Layers size={16} />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-black text-sm text-white">Video Chapters</h3>
-                          <span className="px-2 py-0.5 bg-rose-600/30 text-rose-300 text-[10px] font-black uppercase rounded-full border border-rose-500/30">
-                            {videoChapters.length} Chapters
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-medium">
-                          Tap any chapter to jump directly to that part of the video
-                        </p>
-                      </div>
+                  {/* Top Drag Handle Bar */}
+                  <div className="w-12 h-1 bg-zinc-600/80 rounded-full mx-auto -mt-1 mb-1" />
+
+                  {/* Header Bar: "Chapters" + Close Button */}
+                  <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Chapters</h2>
+                      <span className="px-2.5 py-0.5 bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[10px] font-mono font-bold rounded-full">
+                        {videoChapters.length}
+                      </span>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => setShowChaptersPanel(false)}
-                      className="p-1.5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                      className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-colors cursor-pointer active:scale-90"
                       title="Close Chapters"
                     >
-                      <ChevronUp size={16} />
+                      <X size={20} />
                     </button>
                   </div>
 
-                  {/* CHAPTERS GRID / LIST */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
+                  {/* CHAPTERS VERTICAL LIST */}
+                  <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1 custom-scrollbar pt-1">
                     {videoChapters.map((ch, idx) => {
                       const isCurrentActive = activeChapter?.timeSeconds === ch.timeSeconds;
                       return (
-                        <button
+                        <div
                           key={`ch-${idx}-${ch.timeSeconds}`}
-                          type="button"
                           onClick={() => handleSeekToChapter(ch)}
-                          className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all active:scale-[0.98] cursor-pointer group ${
+                          className={`flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer group ${
                             isCurrentActive
-                              ? 'bg-rose-600/25 border-rose-500/80 ring-1 ring-rose-500/40 shadow-lg'
-                              : 'bg-slate-900/80 hover:bg-slate-800/90 border-white/10 hover:border-white/25'
+                              ? 'bg-zinc-900 border-blue-500/70 ring-1 ring-blue-500/40 shadow-xl'
+                              : 'bg-zinc-950/70 hover:bg-zinc-900 border-white/5 hover:border-white/15'
                           }`}
                         >
-                          {/* Timestamp Badge */}
-                          <div className={`px-2.5 py-1.5 rounded-lg font-mono text-xs font-black shrink-0 transition-colors ${
-                            isCurrentActive
-                              ? 'bg-rose-600 text-white shadow-md'
-                              : 'bg-white/10 text-rose-300 group-hover:bg-rose-600 group-hover:text-white'
-                          }`}>
-                            {ch.timeDisplay}
+                          {/* Thumbnail Preview Image */}
+                          <div className="relative w-32 sm:w-36 h-20 rounded-xl overflow-hidden bg-zinc-900 shrink-0 border border-white/10 shadow-md">
+                            <img
+                              src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                              alt={ch.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                            {isCurrentActive && (
+                              <div className="absolute top-1.5 left-1.5 px-2 py-0.5 bg-blue-600 text-white font-extrabold text-[9px] rounded-md shadow-md flex items-center gap-1 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                <span>Playing</span>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Chapter Info */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                Chapter {idx + 1}
-                              </span>
-                              {isCurrentActive && (
-                                <span className="text-[9px] bg-rose-500 text-white font-black px-1.5 py-0.5 rounded-full animate-pulse flex items-center gap-1 shadow-xs">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                  Now Playing
-                                </span>
-                              )}
-                            </div>
-                            <h4 className={`text-xs truncate ${
-                              isCurrentActive ? 'text-white font-extrabold' : 'text-slate-200 font-bold group-hover:text-white'
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <h3 className={`text-xs sm:text-sm md:text-base font-semibold line-clamp-2 leading-snug ${
+                              isCurrentActive ? 'text-white font-bold' : 'text-zinc-200 group-hover:text-white'
                             }`}>
                               {ch.title}
-                            </h4>
-                          </div>
+                            </h3>
 
-                          <Play size={14} className={`shrink-0 transition-transform group-hover:scale-110 ${
-                            isCurrentActive ? 'text-rose-400 fill-rose-400' : 'text-slate-400 group-hover:text-rose-300'
-                          }`} />
-                        </button>
+                            <div className="flex items-center gap-3 pt-0.5">
+                              <span className={`inline-flex items-center justify-center font-mono text-xs font-bold px-2.5 py-0.5 rounded-md border ${
+                                isCurrentActive 
+                                  ? 'bg-blue-600 text-white border-blue-400 shadow-sm' 
+                                  : 'bg-blue-950/80 text-blue-400 border-blue-500/30'
+                              }`}>
+                                {ch.timeDisplay}
+                              </span>
+
+                              <div className="flex items-center gap-2 text-zinc-400">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (navigator.share) {
+                                      navigator.share({ title: ch.title, url: `${window.location.href}&t=${ch.timeSeconds}s` }).catch(() => {});
+                                    } else if (onShowToast) {
+                                      onShowToast(`Copied chapter link (${ch.timeDisplay})`, 'info');
+                                    }
+                                  }}
+                                  className="p-1 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                  title="Share Chapter"
+                                >
+                                  <Share2 size={14} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSeekToChapter(ch);
+                                  }}
+                                  className="p-1 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                  title="Repeat / Replay Chapter"
+                                >
+                                  <RotateCcw size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
                 </motion.div>
               )}
 
-              {/* ACTION BAR & CHANNEL ROW - YOUTUBE SINGLE LINE LAYOUT */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-white/10">
+              {/* ACTION BAR & CHANNEL ROW - YOUTUBE MOBILE LAYOUT */}
+              <div className="flex items-center justify-between gap-3 overflow-x-auto custom-scrollbar py-2 border-y border-white/10">
                 {/* CHANNEL INFO & SUBSCRIBE BUTTON */}
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shadow-md shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shadow-md shrink-0">
                     <img
-                      src={realChannelAvatar || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                      src={realChannelAvatar || getChannelAvatar(realChannelName || currentTrack?.channel || '')}
                       alt={realChannelName || currentTrack?.channel}
                       className="w-full h-full rounded-full object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&auto=format&fit=crop';
+                        (e.target as HTMLImageElement).src = getFallbackChannelAvatar(realChannelName || currentTrack?.channel || '');
                       }}
                     />
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-1 font-bold text-sm text-white">
-                      <span>{decodeHtmlEntities(realChannelName || currentTrack?.channel || '')}</span>
-                      <CheckCircle2 size={14} className="text-rose-500 fill-rose-500/20 shrink-0" />
-                    </div>
-                    <p className="text-xs text-slate-400 font-medium">{realSubscriberCount || '2.48M subscribers'}</p>
-                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-xs sm:text-sm text-white truncate max-w-[120px] sm:max-w-none">
+                      {decodeHtmlEntities(realChannelName || currentTrack?.channel || '')}
+                    </span>
 
-                  {/* Subscribe / Subscribed Toggle Button */}
-                  <div className="flex items-center gap-1.5 ml-2">
+                    {/* Subscribe / Subscribed Bell Toggle Button */}
                     <button
+                      type="button"
                       onClick={() => {
                         const targetChan = realChannelName || currentTrack?.channel;
                         if (onToggleSubscribe && targetChan) {
                           onToggleSubscribe(targetChan);
                         }
                       }}
-                      className={`px-4 py-2 rounded-full font-extrabold text-xs transition-all active:scale-95 flex items-center gap-1.5 shadow-md cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-full font-bold text-xs transition-all active:scale-95 flex items-center gap-1 shrink-0 ${
                         isSubscribed
-                          ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-white/10'
-                          : 'bg-white text-slate-950 hover:bg-slate-200'
+                          ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-white/10'
+                          : 'bg-white text-zinc-950 hover:bg-zinc-200'
                       }`}
                     >
                       {isSubscribed ? (
                         <>
-                          <span>Subscribed</span>
-                          <CheckCircle2 size={14} className="text-emerald-500" />
+                          <Bell size={13} className="fill-zinc-200 text-zinc-200" />
+                          <ChevronDown size={12} />
                         </>
                       ) : (
                         <span>Subscribe</span>
                       )}
                     </button>
-
-                    {isSubscribed && (
-                      <button
-                        onClick={() => setSubBellActive(!subBellActive)}
-                        className={`p-2 rounded-full border transition-colors ${
-                          subBellActive ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-slate-800 text-slate-400 border-white/10'
-                        }`}
-                        title="Notification Bell"
-                      >
-                        <Bell size={14} className={subBellActive ? 'fill-rose-400' : ''} />
-                      </button>
-                    )}
                   </div>
                 </div>
 
-                {/* LIKE / DISLIKE / SHARE / DOWNLOAD / SAVE / CLIP IN SINGLE HORIZONTAL ROW */}
-                <div className="flex items-center gap-2 py-1 shrink-0 whitespace-nowrap max-w-full flex-wrap sm:flex-nowrap relative z-20">
-                  {/* Like / Dislike Pill */}
-                  <div className="flex items-center bg-slate-800/90 border border-white/10 rounded-full p-0.5 shadow-md shrink-0">
+                {/* LIKE / DISLIKE / SHARE / REMIX / MORE ACTIONS */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Like / Dislike Pill Group */}
+                  <div className="flex items-center bg-zinc-800/90 border border-white/10 rounded-full p-0.5 shadow-sm">
                     <button
                       type="button"
                       onClick={handleToggleLike}
-                      className={`px-3.5 py-1.5 rounded-l-full text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                        hasLiked ? 'text-rose-400 bg-rose-500/20' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      className={`px-3 py-1.5 rounded-l-full text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        hasLiked ? 'text-rose-400 bg-rose-500/20' : 'text-zinc-300 hover:text-white'
                       }`}
                       title="Like Video"
                     >
-                      <ThumbsUp size={15} className={hasLiked ? 'fill-rose-400' : ''} />
-                      <span>{realLikeCountStr || formattedLikeCount}</span>
+                      <ThumbsUp size={14} className={hasLiked ? 'fill-rose-400' : ''} />
+                      <span className="hidden sm:inline">{realLikeCountStr || '4.7K'}</span>
                     </button>
 
-                    <div className="w-px h-4 bg-white/15" />
+                    <div className="w-px h-3.5 bg-white/20" />
 
                     <button
                       type="button"
                       onClick={handleToggleDislike}
-                      className={`px-3 py-1.5 rounded-r-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
-                        hasDisliked ? 'text-rose-400 bg-rose-500/20' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                      className={`px-2.5 py-1.5 rounded-r-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                        hasDisliked ? 'text-rose-400 bg-rose-500/20' : 'text-zinc-300 hover:text-white'
                       }`}
                       title="Dislike Video"
                     >
-                      <ThumbsDown size={15} className={hasDisliked ? 'fill-rose-400' : ''} />
+                      <ThumbsDown size={14} className={hasDisliked ? 'fill-rose-400' : ''} />
                     </button>
                   </div>
 
-                  {/* 3 Dots Options Button & Toggle Dropdown Menu (Share, Download, Save, Details) */}
+                  {/* Share Pill */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.share) {
+                        navigator.share({ title: currentTrack?.title, url: window.location.href }).catch(() => {});
+                      } else if (onShowToast) {
+                        onShowToast('Video URL copied to clipboard!', 'info');
+                      }
+                    }}
+                    className="p-2 sm:px-3 sm:py-1.5 bg-zinc-800/90 hover:bg-zinc-700 border border-white/10 rounded-full text-xs font-bold text-zinc-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                    title="Share Video"
+                  >
+                    <Share2 size={14} />
+                    <span className="hidden sm:inline">Share</span>
+                  </button>
+
+                  {/* Remix / Sparkles Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setShowChaptersPanel(!showChaptersPanel)}
+                    className={`p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
+                      showChaptersPanel
+                        ? 'bg-rose-600 text-white border-rose-500'
+                        : 'bg-zinc-800/90 hover:bg-zinc-700 border-white/10 text-zinc-200'
+                    }`}
+                    title="Chapters & Remix"
+                  >
+                    <Sparkles size={14} className="text-amber-400" />
+                    <span className="hidden sm:inline">Remix</span>
+                  </button>
+
+                  {/* More Options Button */}
                   <div className="relative shrink-0">
                     <button
                       type="button"
@@ -1405,156 +1436,233 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                         e.stopPropagation();
                         setShowActionMoreMenu(!showActionMoreMenu);
                       }}
-                      className={`p-2.5 rounded-full border shadow-md transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
+                      className={`p-2 rounded-full border shadow-md transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
                         showActionMoreMenu
-                          ? 'bg-rose-600 text-white border-rose-500 shadow-rose-600/30 ring-2 ring-rose-500/50'
-                          : 'bg-slate-800/90 hover:bg-slate-700/90 border-white/10 text-slate-200'
+                          ? 'bg-rose-600 text-white border-rose-500 shadow-rose-600/30'
+                          : 'bg-zinc-800/90 hover:bg-zinc-700/90 border-white/10 text-zinc-200'
                       }`}
-                      title="More Video Options (Share, Download, Save, Channel Info)"
+                      title="More Options"
                     >
-                      <MoreHorizontal size={16} />
+                      <MoreHorizontal size={15} />
                     </button>
-
-                    {showActionMoreMenu && (
-                      <>
-                        {/* Invisible Backdrop to close menu when clicking outside */}
-                        <div 
-                          className="fixed inset-0 z-40 bg-transparent" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowActionMoreMenu(false);
-                          }} 
-                        />
-
-                        {/* Dropdown Options Box */}
-                        <div 
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-full mt-2 w-56 bg-slate-900 border border-white/20 rounded-2xl shadow-2xl p-1.5 z-50 text-xs animate-fade-in divide-y divide-white/10"
-                        >
-                          <div className="py-1">
-                            {/* Video Chapters Option */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowActionMoreMenu(false);
-                                setShowChaptersPanel(true);
-                              }}
-                              className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer"
-                            >
-                              <Layers size={16} className="text-rose-400" />
-                              <div className="flex flex-col">
-                                <span>Video Chapters ({videoChapters.length})</span>
-                                <span className="text-[10px] text-slate-400 font-normal">Jump to timestamps & sections</span>
-                              </div>
-                            </button>
-
-                            {/* Video & Channel Details Option */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowActionMoreMenu(false);
-                                setShowFullDescription(true);
-                              }}
-                              className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer"
-                            >
-                              <Info size={16} className="text-rose-400" />
-                              <div className="flex flex-col">
-                                <span>Video & Channel Details</span>
-                                <span className="text-[10px] text-slate-400 font-normal">Thumbnail, description & channel</span>
-                              </div>
-                            </button>
-
-                            {/* Share Option */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowActionMoreMenu(false);
-                                if (navigator.share && currentTrack) {
-                                  navigator.share({
-                                    title: currentTrack.title,
-                                    text: `Watch official YouTube video "${currentTrack.title}"`,
-                                    url: `https://www.youtube.com/watch?v=${videoId}`
-                                  }).catch(() => {});
-                                } else {
-                                  navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
-                                  onShowToast?.('YouTube video link copied!', 'info');
-                                }
-                              }}
-                              className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer"
-                            >
-                              <Share2 size={16} className="text-sky-400" />
-                              <div className="flex flex-col">
-                                <span>Share Video</span>
-                                <span className="text-[10px] text-slate-400 font-normal">Copy link or share</span>
-                              </div>
-                            </button>
-
-                            {/* Download Option */}
-                            {onDownloadTrack && currentTrack && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowActionMoreMenu(false);
-                                  onDownloadTrack(currentTrack);
-                                }}
-                                className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer"
-                              >
-                                <Download size={16} className="text-indigo-400" />
-                                <div className="flex flex-col">
-                                  <span>Download Track</span>
-                                  <span className="text-[10px] text-slate-400 font-normal">Save for offline play</span>
-                                </div>
-                              </button>
-                            )}
-
-                            {/* Save to Playlist Option */}
-                            {onOpenAddToPlaylist && currentTrack && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowActionMoreMenu(false);
-                                  onOpenAddToPlaylist(currentTrack);
-                                }}
-                                className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer"
-                              >
-                                <ListPlus size={16} className="text-emerald-400" />
-                                <div className="flex flex-col">
-                                  <span>Save to Playlist</span>
-                                  <span className="text-[10px] text-slate-400 font-normal">Add to custom library</span>
-                                </div>
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="pt-1">
-                            {/* Clip Option */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowActionMoreMenu(false);
-                                onShowToast?.('Video clip created & saved to library!', 'info');
-                              }}
-                              className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-3 transition-colors cursor-pointer"
-                            >
-                              <Scissors size={16} className="text-amber-400" />
-                              <div className="flex flex-col">
-                                <span>Create Clip</span>
-                                <span className="text-[10px] text-slate-400 font-normal">Trim highlight segment</span>
-                              </div>
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
                   </div>
                 </div>
               </div>
+
+              {/* AUTHENTIC YOUTUBE OPTIONS & SETTINGS BOTTOM SHEET MODAL */}
+              <AnimatePresence>
+                {showActionMoreMenu && (
+                  <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    {/* Dark Backdrop */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowActionMoreMenu(false);
+                      }}
+                      className="absolute inset-0 bg-black/75 backdrop-blur-sm cursor-pointer"
+                    />
+
+                    {/* Bottom Sheet Box */}
+                    <motion.div
+                      initial={{ y: '100%', opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: '100%', opacity: 0 }}
+                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="relative w-full max-w-lg bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 max-h-[85vh] overflow-y-auto custom-scrollbar space-y-3 text-white"
+                    >
+                      {/* Drag Indicator Bar */}
+                      <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
+
+                      {/* Header */}
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <div className="flex items-center gap-2">
+                          <MoreHorizontal size={20} className="text-rose-500" />
+                          <span className="font-extrabold text-base text-white">More Options</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowActionMoreMenu(false)}
+                          className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* Action Buttons List */}
+                      <div className="space-y-1 divide-y divide-zinc-900 text-xs">
+                        <div className="space-y-1 pb-2">
+                          {/* Playback Speed */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowActionMoreMenu(false);
+                              setShowSpeedMenu(true);
+                            }}
+                            className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+                                <Zap size={18} />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-white">Playback Speed</span>
+                                <span className="text-xs text-zinc-400 font-normal">{playbackSpeed === 1.0 ? 'Normal (1.0x)' : `${playbackSpeed}x`}</span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">Change ›</span>
+                          </button>
+
+                          {/* Share Video */}
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setShowActionMoreMenu(false);
+                              const shareUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                              if (navigator.share && currentTrack) {
+                                try {
+                                  await navigator.share({
+                                    title: currentTrack.title,
+                                    text: `Watch official YouTube video "${currentTrack.title}"`,
+                                    url: shareUrl
+                                  });
+                                  onShowToast?.('Shared successfully!', 'info');
+                                } catch {
+                                  await navigator.clipboard.writeText(shareUrl);
+                                  onShowToast?.('Video link copied to clipboard!', 'info');
+                                }
+                              } else {
+                                await navigator.clipboard.writeText(shareUrl);
+                                onShowToast?.('Video link copied to clipboard!', 'info');
+                              }
+                            }}
+                            className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400">
+                                <Share2 size={18} />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-white">Share Video</span>
+                                <span className="text-xs text-zinc-400 font-normal">Copy link or share to social apps</span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-sky-400 font-bold bg-sky-500/10 px-2.5 py-1 rounded-full border border-sky-500/20">Share ›</span>
+                          </button>
+
+                          {/* Download Option */}
+                          {currentTrack && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowActionMoreMenu(false);
+                                if (onDownloadTrack) {
+                                  onDownloadTrack(currentTrack);
+                                }
+                                onShowToast?.(`Downloading "${currentTrack.title}" to offline library...`, 'info');
+                              }}
+                              className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400">
+                                  <Download size={18} />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-white">Download Track</span>
+                                  <span className="text-xs text-zinc-400 font-normal">Save to offline library</span>
+                                </div>
+                              </div>
+                              <span className="text-xs text-purple-400 font-bold bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">Download ›</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* PLAYBACK SPEED SELECTION SHEET */}
+              <AnimatePresence>
+                {showSpeedMenu && (
+                  <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowSpeedMenu(false);
+                      }}
+                      className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
+                    />
+
+                    <motion.div
+                      initial={{ y: '100%', opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: '100%', opacity: 0 }}
+                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="relative w-full max-w-sm bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 text-white space-y-3"
+                    >
+                      <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
+
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <div className="flex items-center gap-2">
+                          <Zap size={20} className="text-amber-400" />
+                          <span className="font-extrabold text-base text-white">Playback Speed</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowSpeedMenu(false)}
+                          className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((speed) => {
+                          const isSelected = playbackSpeed === speed;
+                          const speedLabel = speed === 1.0 ? 'Normal (1.0x)' : `${speed}x`;
+                          return (
+                            <button
+                              key={speed}
+                              type="button"
+                              onClick={() => {
+                                setPlaybackSpeed(speed);
+                                setShowSpeedMenu(false);
+                                if (playerRef.current) {
+                                  try {
+                                    const internal = playerRef.current.getInternalPlayer();
+                                    if (internal && typeof internal.setPlaybackRate === 'function') {
+                                      internal.setPlaybackRate(speed);
+                                    }
+                                  } catch {
+                                    // ignore
+                                  }
+                                }
+                                onShowToast?.(`Playback speed set to ${speedLabel}`, 'info');
+                              }}
+                              className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between text-sm font-bold transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/40 text-amber-300'
+                                  : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 border border-transparent'
+                              }`}
+                            >
+                              <span>{speedLabel}</span>
+                              {isSelected && <CheckCircle2 size={18} className="text-amber-400" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
 
               {/* AUTHENTIC YOUTUBE EXPANDABLE VIDEO & CHANNEL DETAILS PANEL */}
               {showFullDescription && (
@@ -1605,11 +1713,11 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shrink-0 shadow-md">
                           <img
-                            src={realChannelAvatar || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+                            src={realChannelAvatar || getChannelAvatar(realChannelName || currentTrack?.channel || '')}
                             alt={realChannelName || currentTrack?.channel}
                             className="w-full h-full rounded-full object-cover"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&auto=format&fit=crop';
+                              (e.target as HTMLImageElement).src = getFallbackChannelAvatar(realChannelName || currentTrack?.channel || '');
                             }}
                           />
                         </div>
@@ -1852,31 +1960,29 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 {!isCommentsVisible ? (
                   <div 
                     onClick={() => setIsCommentsVisible(true)}
-                    className="p-3.5 bg-slate-900/90 hover:bg-slate-800 rounded-2xl border border-white/10 space-y-2 cursor-pointer transition-all group shadow-md"
+                    className="p-3.5 bg-zinc-900/95 hover:bg-zinc-850 rounded-2xl border border-white/10 space-y-2 cursor-pointer transition-all group shadow-xl active:scale-[0.99]"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-black text-xs sm:text-sm text-white">Comments</span>
-                        <span className="text-xs text-slate-400 font-bold">• {comments.length + 1840}</span>
+                        <span className="font-bold text-xs sm:text-sm text-white">Comments</span>
+                        <span className="text-xs text-zinc-400 font-semibold">191</span>
                       </div>
-                      <span className="text-xs text-rose-400 font-bold group-hover:underline flex items-center gap-1">
-                        <span>Tap to view</span>
-                        <ChevronDown size={14} />
-                      </span>
+                      {/* Pagination Indicator Dots */}
+                      <div className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                      </div>
                     </div>
 
-                    {comments[0] && (
-                      <div className="flex items-center gap-2.5 pt-1 text-xs">
-                        <img
-                          src={comments[0].avatar}
-                          alt={comments[0].author}
-                          className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-white/20"
-                        />
-                        <p className="text-slate-300 truncate font-normal text-xs min-w-0">
-                          <strong className="text-slate-100 font-bold">@{comments[0].author}:</strong> {comments[0].text}
-                        </p>
+                    <div className="flex items-start gap-2.5 pt-0.5 text-xs">
+                      {/* Avatar Circle */}
+                      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] shadow-sm">
+                        {comments[0]?.author ? comments[0].author[0].toUpperCase() : 'e'}
                       </div>
-                    )}
+                      <p className="text-zinc-300 font-normal text-xs line-clamp-2 leading-tight min-w-0 flex-1">
+                        {comments[0]?.text || "Jio, Airtel and Vi planning 12-15% recharge price hike... Meanwhile users: 'Bhai ab 5G lene..."}
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   <>

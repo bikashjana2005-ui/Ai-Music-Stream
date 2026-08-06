@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, Download, Heart, Music, ListPlus, Trash2, Info } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
+import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
 
 interface TrackCardProps {
   track: Track;
@@ -212,11 +213,21 @@ export const TrackCard: React.FC<TrackCardProps> = ({
         </div>
         
         {/* Metadata */}
-        <div className="pt-3 px-1">
-          <h4 className={`text-xs sm:text-sm font-black line-clamp-2 leading-snug ${isPlayingCurrent ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
-            {title}
-          </h4>
-          <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1 font-semibold">{channel}</p>
+        <div className="pt-3 px-1 flex items-start gap-2.5">
+          <img 
+            src={getChannelAvatar(channel)} 
+            alt={channel}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = getFallbackChannelAvatar(channel);
+            }}
+            className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 p-0.5 shadow-sm"
+          />
+          <div className="min-w-0 flex-1">
+            <h4 className={`text-xs sm:text-sm font-bold line-clamp-2 leading-snug ${isPlayingCurrent ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
+              {title}
+            </h4>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5 font-normal">{channel}</p>
+          </div>
         </div>
       </div>
 

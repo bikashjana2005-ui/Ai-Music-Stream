@@ -67,7 +67,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const selectedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-20 max-w-6xl mx-auto w-full">
+    <div className="space-y-6 animate-fade-in pb-20 w-full max-w-full mx-auto">
       
       {/* Sub Tabs & Format Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

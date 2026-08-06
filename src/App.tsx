@@ -34,7 +34,7 @@ export default function App() {
   const [activeTab, setActiveTabState] = useState<TabType>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_last_active_tab');
-      return (saved as TabType) || 'home';
+      return (saved as string) === 'facebook' ? 'home' : (saved as TabType) || 'home';
     } catch {
       return 'home';
     }
@@ -374,6 +374,17 @@ export default function App() {
         }
       }
 
+      // 4. Sync local history to Firestore
+      const savedHistory = localStorage.getItem('aura_ai_history');
+      if (savedHistory) {
+        const localHistory: Track[] = JSON.parse(savedHistory);
+        for (const track of localHistory.slice(0, 30)) {
+          await setDoc(doc(db, 'users', activeUser.uid, 'history', track.id), {
+            ...track, userId: activeUser.uid, listenedAt: track.addedAt || new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+
       // 4. Auto-sync YouTube subscriptions if access token is available
       const ytToken = sessionStorage.getItem('aura_yt_access_token');
       if (ytToken) {
@@ -474,6 +485,18 @@ export default function App() {
           }
         }, (err) => handleFirestoreError(err, OperationType.LIST, playPath));
 
+        // History listener
+        const histPath = `users/${currentUser.uid}/history`;
+        const unsubHist = onSnapshot(collection(db, histPath), (snapshot) => {
+          const cloudHistory: Track[] = [];
+          snapshot.forEach((docSnap) => {
+            cloudHistory.push(docSnap.data() as Track);
+          });
+          if (cloudHistory.length > 0) {
+            setHistory(cloudHistory);
+          }
+        }, (err) => handleFirestoreError(err, OperationType.LIST, histPath));
+
         // Last Activity listener
         const actPath = `users/${currentUser.uid}/activity/lastSession`;
         const unsubAct = onSnapshot(doc(db, 'users', currentUser.uid, 'activity', 'lastSession'), (docSnap) => {
@@ -501,6 +524,7 @@ export default function App() {
           unsubSubs();
           unsubFavs();
           unsubPlay();
+          unsubHist();
           unsubAct();
         };
       } else {
@@ -516,24 +540,82 @@ export default function App() {
     return () => unsubscribeAuth();
   }, [handleSyncGoogleAccount]);
 
-  // Listen for OAuth success messages from popup auth window
+  // Auto-sync saved subscriptions, library, and last played state when application is opened or resumed
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
-        return;
-      }
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        showToast('Google Account authenticated! Syncing YouTube account...', 'success');
-        if (event.data.code) {
-          sessionStorage.setItem('aura_yt_oauth_code', event.data.code);
+    const syncLatestDataOnOpen = () => {
+      try {
+        // 1. Sync Subscriptions from localStorage
+        const savedSubs = localStorage.getItem('aura_ai_subscriptions');
+        if (savedSubs) {
+          const parsedSubs: SubscribedChannel[] = JSON.parse(savedSubs);
+          if (parsedSubs.length > 0) {
+            setSubscriptions(parsedSubs);
+          }
         }
-        handleSyncGoogleAccount(null, true);
+
+        // 2. Sync Favorites (Library) from localStorage
+        const savedFavs = localStorage.getItem('aura_ai_favorites');
+        if (savedFavs) {
+          const parsedFavs: Track[] = JSON.parse(savedFavs);
+          if (parsedFavs.length > 0) {
+            setFavorites(parsedFavs);
+          }
+        }
+
+        // 3. Sync Playlists (Library) from localStorage
+        const savedPlaylists = localStorage.getItem('aura_ai_playlists');
+        if (savedPlaylists) {
+          const parsedPlay: Playlist[] = JSON.parse(savedPlaylists);
+          if (parsedPlay.length > 0) {
+            setPlaylists(parsedPlay);
+          }
+        }
+
+        // 4. Sync History (Library) from localStorage
+        const savedHist = localStorage.getItem('aura_ai_history');
+        if (savedHist) {
+          const parsedHist: Track[] = JSON.parse(savedHist);
+          if (parsedHist.length > 0) {
+            setHistory(parsedHist);
+          }
+        }
+
+        // 5. Sync Last Played Track from localStorage
+        const savedTrack = localStorage.getItem('aura_ai_last_played_track');
+        if (savedTrack) {
+          const parsedTrack: Track = JSON.parse(savedTrack);
+          if (parsedTrack && parsedTrack.id) {
+            setCurrentTrack(parsedTrack);
+          }
+        }
+
+        // If user logged in, perform cloud sync
+        if (user) {
+          handleSyncGoogleAccount(user, false);
+        }
+      } catch (err) {
+        console.warn('Auto-sync on app open error:', err);
       }
     };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [handleSyncGoogleAccount]);
+
+    // Run immediately when mounted
+    syncLatestDataOnOpen();
+
+    // Re-sync whenever tab becomes visible after backgrounding or long time
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncLatestDataOnOpen();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', syncLatestDataOnOpen);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', syncLatestDataOnOpen);
+    };
+  }, [user, handleSyncGoogleAccount]);
 
   // Sync subscriptions to localStorage
   useEffect(() => {
@@ -867,14 +949,14 @@ export default function App() {
       />
 
       {/* Primary Main Content Area */}
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 pt-6 pb-28 w-full flex flex-col items-center justify-start self-center overflow-x-hidden">
-        <AnimatePresence mode="popLayout" initial={false}>
+      <main className="mx-auto pt-2 sm:pt-4 pb-28 w-full flex flex-col items-center justify-start self-center overflow-x-hidden max-w-full min-h-screen px-0 sm:px-4 lg:px-6">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 10, scale: 0.995 }}
+            initial={{ opacity: 0, y: 12, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.995 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            exit={{ opacity: 0, y: -10, scale: 0.99 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center will-change-transform"
           >
             {activeTab === 'home' && (
@@ -891,6 +973,7 @@ export default function App() {
                 onShowToast={showToast}
               />
             )}
+
 
             {activeTab === 'subscriptions' && (
               <SubscriptionsView

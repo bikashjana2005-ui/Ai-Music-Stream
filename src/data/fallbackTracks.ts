@@ -5,42 +5,63 @@ export const DEFAULT_CHANNELS: SubscribedChannel[] = [
     id: "UCq-Fj5jknLsUf-MWSy4_brA",
     name: "T-Series",
     handle: "@TSeries",
-    avatar: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/T-Series_logo.svg/512px-T-Series_logo.svg.png",
     subscribers: "272M subscribers"
   },
   {
     id: "UCJ93-4jO6834R_U2xM6wIew",
     name: "Sony Music India",
     handle: "@SonyMusicIndia",
-    avatar: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200&auto=format&fit=crop",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Sony_Music_logo.svg/512px-Sony_Music_logo.svg.png",
     subscribers: "61M subscribers"
+  },
+  {
+    id: "UCstarjalsha_123",
+    name: "Star Jalsha",
+    handle: "@starjalsha",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Star_Jalsha_2019.png/512px-Star_Jalsha_2019.png",
+    subscribers: "18.5M subscribers"
+  },
+  {
+    id: "UCzeebangla_456",
+    name: "Zee Bangla",
+    handle: "@zeebangla",
+    avatar: "https://unavatar.io/youtube/zeebangla",
+    subscribers: "12.4M subscribers"
+  },
+  {
+    id: "UCtechscrew_789",
+    name: "TechScrew",
+    handle: "@TechScrew",
+    avatar: "https://unavatar.io/youtube/TechScrew",
+    subscribers: "1.2M subscribers"
   },
   {
     id: "UC82T_D4Mrm2C_c47-kUe2vA",
     name: "SVF",
     handle: "@SVFBangla",
-    avatar: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200&auto=format&fit=crop",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/SVF_Entertainment_Logo.jpg/512px-SVF_Entertainment_Logo.jpg",
     subscribers: "11M subscribers"
-  },
-  {
-    id: "UCsJ8lToR0nQ6G9T1gR-6k4A",
-    name: "Coke Studio Bangla",
-    handle: "@CokeStudioBangla",
-    avatar: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=200&auto=format&fit=crop",
-    subscribers: "2.8M subscribers"
   },
   {
     id: "UCFFbwnve3yF6KulMgV0P57A",
     name: "Zee Music Company",
     handle: "@zeemusiccompany",
-    avatar: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=200&auto=format&fit=crop",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Zee_Music_Company_logo.svg/512px-Zee_Music_Company_logo.svg.png",
     subscribers: "108M subscribers"
+  },
+  {
+    id: "UCsJ8lToR0nQ6G9T1gR-6k4A",
+    name: "Coke Studio Bangla",
+    handle: "@CokeStudioBangla",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Coke_Studio_logo.png/512px-Coke_Studio_logo.png",
+    subscribers: "2.8M subscribers"
   },
   {
     id: "UCSJ4gkVC6NrvII8umztf0OW",
     name: "Lofi Girl",
     handle: "@LofiGirl",
-    avatar: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=200&auto=format&fit=crop",
+    avatar: "https://unavatar.io/youtube/LofiGirl",
     subscribers: "14M subscribers"
   }
 ];
@@ -48,120 +69,102 @@ export const DEFAULT_CHANNELS: SubscribedChannel[] = [
 export const DEFAULT_TRACKS: Track[] = [
   {
     id: "BddP6PYo2gs",
-    title: "Kesariya - Brahmāstra",
-    channel: "Sony Music India • Arijit Singh, Pritam",
-    views: "520M",
-    duration: "4:28",
-    aiMoodTags: "Hindi • Romantic • Melody",
-    genre: "Hindi"
+    title: "Census | जनगणनाय उत्तर दिते हवे 33टि प्रश्नेर? कौन कौन প্রশ্ন? कौन कौन নথি?",
+    channel: "Kolkata TV",
+    views: "32K views",
+    duration: "3:05",
+    publishedTime: "5 minutes ago",
+    aiMoodTags: "News • Live • Info",
+    genre: "News"
   },
   {
     id: "fG246bTq7pM",
-    title: "Mon Majhi Re - Boss",
-    channel: "Grassroot Entertainment • Arijit Singh",
-    views: "85M",
-    duration: "4:15",
-    aiMoodTags: "Bengali • Romantic • Soulful",
-    genre: "Bengali"
+    title: "Who's More Self-Obsessed? | Ft. Nancy & Dev | Interview Part 01",
+    channel: "Directors Kut Productions",
+    views: "96K views",
+    duration: "20:33",
+    publishedTime: "2 days ago",
+    aiMoodTags: "Interview • Talk Show",
+    genre: "Podcasts"
   },
   {
     id: "ElZfdU54Cp8",
-    title: "Apna Bana Le - Bhediya",
-    channel: "Zee Music Company • Arijit Singh, Sachin-Jigar",
-    views: "430M",
-    duration: "4:21",
-    aiMoodTags: "Hindi • Heartfelt • Acoustic",
+    title: "'Dola Re' पर Shreya और Kavita Ji का Iconic Duet | Indian Idol S14 Grand Finale",
+    channel: "SET India",
+    views: "803K views",
+    duration: "12:12",
+    publishedTime: "8 months ago",
+    aiMoodTags: "Music • Duet • Idol",
     genre: "Hindi"
   },
   {
     id: "H7Z-64y9418",
-    title: "Tomake Chai - Gangster",
-    channel: "SVF • Arijit Singh",
-    views: "62M",
-    duration: "4:02",
-    aiMoodTags: "Bengali • Love • Melodious",
-    genre: "Bengali"
+    title: "Man Sundar || 6 August || Badi Nani Poonam ka asli chahera aagaya samne",
+    channel: "Khtti Mithi Takraar",
+    views: "74K views",
+    duration: "1:56",
+    publishedTime: "5 hours ago",
+    aiMoodTags: "Promo • Drama",
+    genre: "News"
   },
   {
     id: "VAdGW7QDJiU",
-    title: "Chaleya - Jawan",
-    channel: "T-Series • Arijit Singh, Shilpa Rao",
-    views: "380M",
-    duration: "3:20",
-    aiMoodTags: "Hindi • Groovy • Romantic",
+    title: "Kesariya - Brahmāstra | Arijit Singh, Pritam | Ranbir Kapoor, Alia Bhatt",
+    channel: "Sony Music India",
+    views: "520M views",
+    duration: "4:28",
+    publishedTime: "1 year ago",
+    aiMoodTags: "Hindi • Romantic • Melody",
     genre: "Hindi"
   },
   {
     id: "22Rk5t5oQ1g",
-    title: "Egiye De - Shudhu Tomari Jonyo",
-    channel: "SVF • Arijit Singh, Madhubanti Bagchi",
-    views: "48M",
-    duration: "4:35",
-    aiMoodTags: "Bengali • Sweet • Acoustic",
+    title: "Mon Majhi Re - Boss | Jeet, Subhashree | Arijit Singh Hits",
+    channel: "SVF Bangla",
+    views: "85M views",
+    duration: "4:15",
+    publishedTime: "2 years ago",
+    aiMoodTags: "Bengali • Romantic • Soulful",
     genre: "Bengali"
   },
   {
     id: "g6fnFALEseE",
-    title: "Raataan Lambiyan - Shershaah",
-    channel: "Sony Music India • Jubin Nautiyal, Asees Kaur",
-    views: "890M",
-    duration: "3:50",
-    aiMoodTags: "Hindi • Soulful • Love",
+    title: "Apna Bana Le - Bhediya | Varun Dhawan, Kriti Sanon | Arijit Singh, Sachin-Jigar",
+    channel: "Zee Music Company",
+    views: "430M views",
+    duration: "4:21",
+    publishedTime: "1 year ago",
+    aiMoodTags: "Hindi • Heartfelt • Acoustic",
     genre: "Hindi"
   },
   {
     id: "WcOqJtWfW9I",
-    title: "Tumi Jake Bhalobasho - Praktan",
-    channel: "Windows Music • Iman Chakraborty",
-    views: "35M",
-    duration: "4:50",
-    aiMoodTags: "Bengali • Classic • Emotional",
-    genre: "Bengali"
+    title: "Chaleya - Jawan | Shah Rukh Khan, Nayanthara | Arijit Singh, Shilpa Rao",
+    channel: "T-Series",
+    views: "380M views",
+    duration: "3:20",
+    publishedTime: "6 months ago",
+    aiMoodTags: "Hindi • Groovy • Romantic",
+    genre: "Hindi"
   },
   {
     id: "RLzC55ai0eo",
-    title: "Heeriye - Jasleen Royal ft. Arijit Singh",
-    channel: "Jasleen Royal • Arijit Singh",
-    views: "310M",
-    duration: "3:14",
-    aiMoodTags: "Hindi • Indie • Vibe",
-    genre: "Hindi"
-  },
-  {
-    id: "X808pS_t2A4",
-    title: "Bhalobashar Morshum - X=Prem",
-    channel: "SVF • Shreya Ghoshal, Arijit Singh",
-    views: "28M",
-    duration: "3:42",
-    aiMoodTags: "Bengali • Rain Vibe • Melody",
-    genre: "Bengali"
-  },
-  {
-    id: "UNq8K87_E3Q",
-    title: "Tum Hi Ho - Aashiqui 2",
-    channel: "T-Series • Arijit Singh",
-    views: "780M",
-    duration: "4:22",
-    aiMoodTags: "Hindi • Evergreen • Passionate",
-    genre: "Hindi"
-  },
-  {
-    id: "Q9T3zP92k8k",
-    title: "Bojhena Shey Bojhena Title Track",
-    channel: "SVF • Arijit Singh",
-    views: "92M",
-    duration: "4:40",
-    aiMoodTags: "Bengali • Nostalgia • Hits",
-    genre: "Bengali"
+    title: "FINALLY MY LAST DAY VLOG is here 🥳🥳🥳 #main #vlog",
+    channel: "Nancy Roy",
+    views: "48K views",
+    duration: "8:45",
+    publishedTime: "7 hours ago",
+    aiMoodTags: "Vlog • Daily",
+    genre: "Podcasts"
   }
 ];
 
 export const MOOD_CATEGORIES = [
-  { id: 'all', name: '✨ All Trending', moodPrompt: 'Top Trending Hindi and Bengali Hits' },
+  { id: 'all', name: '✨ All Indian Languages', moodPrompt: 'Top Trending Songs Hindi Bengali Punjabi Tamil Telugu Hits' },
   { id: 'hindi-hits', name: '🇮🇳 Hindi Chartbusters', moodPrompt: 'Top Trending Hindi Bollywood Romantic Hits Arijit Singh' },
   { id: 'bengali-hits', name: '🇧🇩/🇮🇳 Bengali Hits', moodPrompt: 'Popular Bengali Hits Romantic Songs and Rabindra Sangeet Arijit Singh Anupam Roy' },
-  { id: 'romantic', name: '💖 Hindi & Bengali Love', moodPrompt: 'Top Romantic Hindi and Bengali Love Melodies' },
-  { id: 'lofi-desi', name: '☕ Desi Lofi Chill', moodPrompt: 'Hindi and Bengali Lofi Chill Beats Slowed Reverb' },
-  { id: 'workout', name: '⚡ High Energy Hits', moodPrompt: 'Energetic Hindi and Bengali Dance Beats Gym Hits' },
-  { id: 'classical', name: '🎹 Rabindra Sangeet & Classical', moodPrompt: 'Peaceful Rabindra Sangeet Classical Flute Sitar Acoustic' }
+  { id: 'punjabi-hits', name: '🌾 Punjabi Beats', moodPrompt: 'Top Punjabi Songs Bhangra Beats Karan Aujla Diljit' },
+  { id: 'south-hits', name: '🎸 Tamil & Telugu Hits', moodPrompt: 'Top Tamil Telugu Songs Anirudh AR Rahman Sid Sriram' },
+  { id: 'lofi-desi', name: '☕ Desi Lofi Chill', moodPrompt: 'Hindi Bengali Lofi Chill Beats Slowed Reverb' },
+  { id: 'workout', name: '⚡ High Energy Hits', moodPrompt: 'Energetic Indian Dance Beats Gym Hits Punjabi Bollywood' }
 ];
