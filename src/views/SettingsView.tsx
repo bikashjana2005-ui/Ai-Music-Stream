@@ -26,7 +26,9 @@ import {
   HardDrive,
   Zap,
   Wifi,
-  WifiOff
+  WifiOff,
+  Smartphone,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
@@ -612,7 +614,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           )}
 
-          {/* 5. SYSTEM, STORAGE & CACHE SECTION */}
+          {/* 5. ANDROID APK & APP INSTALLATION SECTION */}
+          {(activeTab === 'all' || activeTab === 'share' || activeTab === 'system') && (
+            <div className="p-6 bg-gradient-to-br from-indigo-900/90 via-purple-950/80 to-slate-900 border border-indigo-500/30 rounded-3xl text-white shadow-xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-indigo-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <Smartphone size={22} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-extrabold text-white tracking-wide">
+                      Android APK & Direct App Install
+                    </h2>
+                    <p className="text-xs text-indigo-200/80 font-medium">Install as direct WebAPK or download .APK package</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <p className="text-indigo-100/90 leading-relaxed">
+                  Install <strong>Ai Music Stream</strong> directly onto your phone without requiring Google Play Store!
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <a
+                    href={`https://www.pwabuilder.com/?url=${encodeURIComponent(appUrl)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-3.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/30 rounded-2xl flex items-center justify-between gap-2 transition-all group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Download size={18} className="text-indigo-300 group-hover:scale-110 transition-transform" />
+                      <div className="text-left">
+                        <span className="block font-bold text-white text-xs">Download .APK Package</span>
+                        <span className="block text-[10px] text-indigo-200/70">1-Click APK on PWABuilder</span>
+                      </div>
+                    </div>
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      if ('serviceWorker' in navigator) {
+                        onShowToast('To install direct WebAPK: Open Chrome menu (3 dots) -> tap "Install App"', 'info');
+                      } else {
+                        onShowToast('Open this page in Android Chrome to install direct WebAPK', 'info');
+                      }
+                    }}
+                    className="p-3.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/30 rounded-2xl flex items-center justify-between gap-2 transition-all group text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Smartphone size={18} className="text-purple-300 group-hover:scale-110 transition-transform" />
+                      <div>
+                        <span className="block font-bold text-white text-xs">Direct WebAPK Install</span>
+                        <span className="block text-[10px] text-purple-200/70">Via Chrome "Add to Home Screen"</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. SYSTEM, STORAGE & CACHE SECTION */}
           {(activeTab === 'all' || activeTab === 'system') && (
             <div className="p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">

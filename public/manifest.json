@@ -1,0 +1,21 @@
+{
+  "short_name": "Ai Music Stream",
+  "name": "Ai Music Stream - YouTube Video & Audio Player",
+  "icons": [
+    {
+      "src": "https://unavatar.io/youtube/tseries",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://unavatar.io/youtube/tseries",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "display": "standalone",
+  "orientation": "portrait"
+}

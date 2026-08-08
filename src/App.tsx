@@ -22,6 +22,7 @@ import { LibraryView } from './views/LibraryView';
 import { SettingsView } from './views/SettingsView';
 import { DownloadsView } from './views/DownloadsView';
 import { SplashScreen } from './components/SplashScreen';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { applyAccentTheme } from './utils/accentTheme';
 
 const TAB_ORDER: TabType[] = ['home', 'search', 'subscriptions', 'library', 'downloads', 'settings'];
@@ -927,6 +928,9 @@ export default function App() {
           onClose={() => setToast(null)} 
         />
       )}
+
+      {/* Direct APK & WebAPK Installer Prompt */}
+      <PWAInstallBanner showToast={showToast} />
 
       {/* Main Header & Shifted Bottom Dock Navbar */}
       <Navbar
