@@ -11,6 +11,7 @@ import {
   User as UserIcon, 
   Cloud, 
   LogIn, 
+  LogOut,
   Sparkles, 
   CheckCircle2, 
   Share2, 
@@ -28,12 +29,16 @@ import {
   Wifi,
   WifiOff,
   Smartphone,
-  Download
+  Download,
+  Heart,
+  Tv,
+  ListMusic
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
 import { ACCENT_PRESETS } from '../utils/accentTheme';
 import { PlayerEngine } from '../components/GlobalYouTubePlayer';
+import { logoutUser, loginWithGoogle } from '../lib/firebase';
 
 interface SettingsViewProps {
   darkMode: boolean;
@@ -54,6 +59,8 @@ interface SettingsViewProps {
   user?: User | null;
   onOpenAuthModal?: () => void;
   onOpenShareModal?: () => void;
+  onOpenWebView?: (url?: string, title?: string) => void;
+  onOpenAndroidModal?: () => void;
   onSyncGoogleAccount?: () => void;
   favoritesCount?: number;
   subscriptionsCount?: number;
@@ -85,6 +92,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   user,
   onOpenAuthModal,
   onOpenShareModal,
+  onOpenWebView,
+  onOpenAndroidModal,
   onSyncGoogleAccount,
   favoritesCount = 0,
   subscriptionsCount = 0,
@@ -118,6 +127,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const tabs: { id: SettingTab; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: 'Overview', icon: <SlidersHorizontal size={15} /> },
+    { id: 'account', label: 'Profile & Sign-In', icon: <UserIcon size={15} /> },
     { id: 'playback', label: 'Playback & Player', icon: <Volume2 size={15} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={15} /> },
     { id: 'share', label: 'App Link', icon: <Share2 size={15} /> },
@@ -158,6 +168,185 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           transition={{ duration: 0.15 }}
           className="space-y-6"
         >
+
+          {/* PROFILE & SIGN-IN ACCOUNT SECTION */}
+          {(activeTab === 'all' || activeTab === 'account') && (
+            <div className="p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white rounded-3xl border border-indigo-500/30 shadow-xl space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center border border-indigo-500/40">
+                    <UserIcon size={22} />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black uppercase tracking-wider text-white">
+                      Profile & Cloud Account
+                    </h2>
+                    <p className="text-xs text-indigo-200/80 font-medium">
+                      Firebase Authentication & Real-Time Sync
+                    </p>
+                  </div>
+                </div>
+
+                {user ? (
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Signed In
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-black uppercase tracking-wider">
+                    Guest Mode
+                  </span>
+                )}
+              </div>
+
+              {user ? (
+                <div className="space-y-5">
+                  {/* Signed-in User Info Card */}
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                      {user.photoURL ? (
+                        <img 
+                          src={user.photoURL} 
+                          alt={user.displayName || 'User'} 
+                          className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-500/50 shadow-md"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-black text-xl flex items-center justify-center shadow-md ring-2 ring-indigo-500/50">
+                          {(user.displayName || user.email || 'A').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-extrabold text-white">
+                            {user.displayName || 'Music Lover'}
+                          </h3>
+                          <CheckCircle2 size={16} className="text-emerald-400 fill-emerald-400/20" />
+                        </div>
+                        <p className="text-xs text-slate-300 font-mono">{user.email}</p>
+                        <p className="text-[10px] text-indigo-300/80 flex items-center gap-1">
+                          <Cloud size={12} /> Syncing live with Firestore
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      {onSyncGoogleAccount && (
+                        <button
+                          onClick={() => {
+                            setIsSyncing(true);
+                            onSyncGoogleAccount();
+                            setTimeout(() => setIsSyncing(false), 1500);
+                          }}
+                          disabled={isSyncing}
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+                        >
+                          <RefreshCw size={14} className={isSyncing ? "animate-spin text-amber-300" : ""} />
+                          <span>Sync Account</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={async () => {
+                          try {
+                            await logoutUser();
+                            onShowToast("Successfully signed out", "info");
+                          } catch (e) {
+                            onShowToast("Sign out failed", "error");
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/30 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
+                      >
+                        <LogOut size={14} />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cloud Statistics Badges */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-center">
+                      <Heart size={16} className="text-rose-400 mx-auto mb-1" />
+                      <span className="block text-lg font-black text-white">{favoritesCount}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Liked Songs</span>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-center">
+                      <Tv size={16} className="text-indigo-400 mx-auto mb-1" />
+                      <span className="block text-lg font-black text-white">{subscriptionsCount}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Subscribed Channels</span>
+                    </div>
+
+                    <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-center">
+                      <ListMusic size={16} className="text-emerald-400 mx-auto mb-1" />
+                      <span className="block text-lg font-black text-white">{playlistsCount}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">Playlists</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Signed out / Guest Mode Banner */
+                <div className="p-5 bg-gradient-to-r from-indigo-900/40 via-purple-900/30 to-slate-900 rounded-2xl border border-indigo-500/30 space-y-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      <Sparkles size={16} className="text-amber-400 animate-pulse" />
+                      Sign In to Unlock Cloud Sync
+                    </h3>
+                    <p className="text-xs text-slate-300">
+                      Sync your favorites, playlists, and YouTube channel subscriptions in real-time across all your phones & devices.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs pt-1">
+                    <div className="flex items-center gap-2 p-2 bg-white/5 rounded-xl border border-white/5">
+                      <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                      <span className="text-slate-200">Real-Time Cloud Storage</span>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 bg-white/5 rounded-xl border border-white/5">
+                      <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                      <span className="text-slate-200">YouTube Channel Feeds</span>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 bg-white/5 rounded-xl border border-white/5">
+                      <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                      <span className="text-slate-200">Multi-Device Access</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                    {onOpenAuthModal && (
+                      <button
+                        onClick={onOpenAuthModal}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all active:scale-95"
+                      >
+                        <LogIn size={16} />
+                        <span>Sign In / Create Account</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          await loginWithGoogle();
+                          onShowToast("Signed in with Google successfully!", "success");
+                        } catch (e: any) {
+                          if (onOpenAuthModal) onOpenAuthModal();
+                        }
+                      }}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-white text-slate-950 hover:bg-slate-200 font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                      </svg>
+                      <span>Continue with Google</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 1. PLAYBACK & PLAYER ENGINE SECTION */}
           {(activeTab === 'all' || activeTab === 'playback') && (
@@ -636,7 +825,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   Install <strong>Ai Music Stream</strong> directly onto your phone without requiring Google Play Store!
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                  {onOpenAndroidModal && (
+                    <button
+                      onClick={onOpenAndroidModal}
+                      className="p-3.5 bg-gradient-to-r from-emerald-600/40 to-teal-600/40 hover:from-emerald-600/60 hover:to-teal-600/60 border border-emerald-400/40 rounded-2xl flex items-center justify-between gap-2 transition-all group text-left shadow-md"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Smartphone size={18} className="text-emerald-300 group-hover:scale-110 transition-transform" />
+                        <div>
+                          <span className="block font-bold text-white text-xs">Android & Flutter Studio</span>
+                          <span className="block text-[10px] text-emerald-200/80">Copy Flutter / Kotlin Source</span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+
                   <a
                     href={`https://www.pwabuilder.com/?url=${encodeURIComponent(appUrl)}`}
                     target="_blank"
@@ -670,6 +874,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </div>
                     </div>
                   </button>
+
+                  {onOpenWebView && (
+                    <button
+                      onClick={() => onOpenWebView('https://m.youtube.com', 'In-App WebView Browser')}
+                      className="p-3.5 bg-slate-800/60 hover:bg-slate-800/90 border border-slate-700/60 rounded-2xl flex items-center justify-between gap-2 transition-all group text-left"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Globe size={18} className="text-indigo-300 group-hover:scale-110 transition-transform animate-pulse" />
+                        <div>
+                          <span className="block font-bold text-white text-xs">Launch WebView</span>
+                          <span className="block text-[10px] text-slate-300/80">In-App Embedded Browser</span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

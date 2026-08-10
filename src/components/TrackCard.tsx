@@ -13,6 +13,7 @@ interface TrackCardProps {
   onOpenAddToPlaylist?: (track: Track) => void;
   onRemoveFromPlaylist?: (track: Track) => void;
   onOpenMetadata?: (track: Track) => void;
+  onOpenChannelDetails?: (channelName: string) => void;
   isPlayingCurrent?: boolean;
   viewMode?: 'grid' | 'list';
 }
@@ -26,6 +27,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   onOpenAddToPlaylist,
   onRemoveFromPlaylist,
   onOpenMetadata,
+  onOpenChannelDetails,
   isPlayingCurrent = false,
   viewMode = 'grid'
 }) => {
@@ -94,7 +96,18 @@ export const TrackCard: React.FC<TrackCardProps> = ({
           <h4 className={`text-xs sm:text-sm font-black truncate ${isPlayingCurrent ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
             {title}
           </h4>
-          <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5 font-semibold">{channel}</p>
+          <p 
+            onClick={(e) => {
+              if (onOpenChannelDetails) {
+                e.stopPropagation();
+                onOpenChannelDetails(channel);
+              }
+            }}
+            className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5 font-semibold hover:text-rose-500 hover:underline cursor-pointer transition-colors"
+            title={`View ${channel} Channel`}
+          >
+            {channel}
+          </p>
           
           <div className="flex items-center gap-1.5 mt-1">
             {track.publishedTime ? (
@@ -220,13 +233,31 @@ export const TrackCard: React.FC<TrackCardProps> = ({
             onError={(e) => {
               (e.target as HTMLImageElement).src = getFallbackChannelAvatar(channel);
             }}
-            className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 p-0.5 shadow-sm"
+            onClick={(e) => {
+              if (onOpenChannelDetails) {
+                e.stopPropagation();
+                onOpenChannelDetails(channel);
+              }
+            }}
+            className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-white/10 p-0.5 shadow-sm hover:ring-2 hover:ring-rose-500 transition-all cursor-pointer"
+            title={`View ${channel} Channel`}
           />
           <div className="min-w-0 flex-1">
             <h4 className={`text-xs sm:text-sm font-bold line-clamp-2 leading-snug ${isPlayingCurrent ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
               {title}
             </h4>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5 font-normal">{channel}</p>
+            <p 
+              onClick={(e) => {
+                if (onOpenChannelDetails) {
+                  e.stopPropagation();
+                  onOpenChannelDetails(channel);
+                }
+              }}
+              className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5 font-normal hover:text-rose-500 hover:underline cursor-pointer transition-colors"
+              title={`View ${channel} Channel`}
+            >
+              {channel}
+            </p>
           </div>
         </div>
       </div>

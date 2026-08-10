@@ -44,6 +44,7 @@ interface SearchViewProps {
   onToggleFavorite: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
   onOpenMetadata?: (track: Track) => void;
+  onOpenChannelDetails?: (channelName: string) => void;
   youtubeApiKey?: string;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -64,6 +65,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
   onToggleFavorite,
   onOpenAddToPlaylist,
   onOpenMetadata,
+  onOpenChannelDetails,
   youtubeApiKey,
   onShowToast
 }) => {
@@ -827,6 +829,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     onToggleFavorite={onToggleFavorite}
                     onOpenAddToPlaylist={onOpenAddToPlaylist}
                     onOpenMetadata={onOpenMetadata}
+                    onOpenChannelDetails={onOpenChannelDetails}
                     onShowToast={onShowToast}
                   />
                 ))}
@@ -971,6 +974,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       onToggleFavorite={onToggleFavorite}
                       onOpenAddToPlaylist={onOpenAddToPlaylist}
                       onOpenMetadata={onOpenMetadata}
+                      onOpenChannelDetails={onOpenChannelDetails}
                       onShowToast={onShowToast}
                     />
                     <button

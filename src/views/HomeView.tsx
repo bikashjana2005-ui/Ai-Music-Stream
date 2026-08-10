@@ -28,6 +28,7 @@ interface HomeViewProps {
   onToggleFavorite: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
   onOpenMetadata?: (track: Track) => void;
+  onOpenChannelDetails?: (channelName: string) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -107,6 +108,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onToggleFavorite,
   onOpenAddToPlaylist,
   onOpenMetadata,
+  onOpenChannelDetails,
   onShowToast
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -354,6 +356,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 onToggleFavorite={onToggleFavorite}
                 onOpenAddToPlaylist={onOpenAddToPlaylist}
                 onOpenMetadata={onOpenMetadata}
+                onOpenChannelDetails={onOpenChannelDetails}
                 onShowToast={onShowToast}
               />
             ))}

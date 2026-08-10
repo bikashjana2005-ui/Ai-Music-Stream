@@ -4,6 +4,10 @@
 
 const KNOWN_OFFICIAL_LOGOS: Record<string, string> = {
   // Major Indian Record Labels & TV Networks
+  'crazy xyz': 'https://unavatar.io/youtube/CrazyXYZ',
+  'dangal': 'https://unavatar.io/youtube/DangalTVChannel',
+  'trakin tech': 'https://unavatar.io/youtube/trakintech',
+  'techno ruhez': 'https://unavatar.io/youtube/technoruhez',
   'sony music': 'https://unavatar.io/youtube/sonymusicindia',
   'sonymusic': 'https://unavatar.io/youtube/sonymusicindia',
   't-series': 'https://unavatar.io/youtube/tseries',

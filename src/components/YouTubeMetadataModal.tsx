@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Play, ExternalLink, ThumbsUp, Eye, Calendar, Clock, Sparkles, 
-  Tag, RefreshCw, CheckCircle2, Share2, Plus, Download, Film, Radio, Info
+  Tag, RefreshCw, CheckCircle2, Share2, Plus, Download, Film, Radio, Info, Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Track, YouTubeVideoMetadata } from '../types';
@@ -15,6 +15,7 @@ interface YouTubeMetadataModalProps {
   onOpenAddToPlaylist?: (track: Track) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   youtubeApiKey?: string;
+  onOpenWebView?: (url: string, title: string) => void;
 }
 
 export const YouTubeMetadataModal: React.FC<YouTubeMetadataModalProps> = ({
@@ -25,7 +26,8 @@ export const YouTubeMetadataModal: React.FC<YouTubeMetadataModalProps> = ({
   onDownload,
   onOpenAddToPlaylist,
   onShowToast,
-  youtubeApiKey
+  youtubeApiKey,
+  onOpenWebView
 }) => {
   const [metadata, setMetadata] = useState<YouTubeVideoMetadata | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -325,16 +327,31 @@ export const YouTubeMetadataModal: React.FC<YouTubeMetadataModalProps> = ({
               )}
             </div>
 
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(videoUrl);
-                onShowToast('YouTube video link copied to clipboard!', 'success');
-              }}
-              className="px-3.5 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
-            >
-              <Share2 size={14} />
-              <span>Copy Link</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenWebView && (
+                <button
+                  onClick={() => {
+                    onOpenWebView(videoUrl, displayTitle);
+                    onClose();
+                  }}
+                  className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all shadow-md"
+                >
+                  <Globe size={14} />
+                  <span>Open WebView</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(videoUrl);
+                  onShowToast('YouTube video link copied to clipboard!', 'success');
+                }}
+                className="px-3.5 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
+              >
+                <Share2 size={14} />
+                <span>Copy Link</span>
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>

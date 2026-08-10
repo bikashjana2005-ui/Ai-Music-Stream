@@ -21,7 +21,9 @@ import {
   Wifi,
   WifiOff,
   Star,
-  Tv
+  Tv,
+  Globe,
+  Smartphone
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
@@ -42,6 +44,8 @@ interface NavbarProps {
   user?: FirebaseUser | null;
   onOpenAuthModal?: () => void;
   onOpenShareModal?: () => void;
+  onOpenWebView?: (url?: string, title?: string) => void;
+  onOpenAndroidModal?: () => void;
   isDataSaverMode?: boolean;
   onToggleDataSaverMode?: (enabled: boolean) => void;
   isOnline?: boolean;
@@ -62,6 +66,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   user,
   onOpenAuthModal,
   onOpenShareModal,
+  onOpenWebView,
+  onOpenAndroidModal,
   isDataSaverMode = false,
   onToggleDataSaverMode,
   isOnline = true
@@ -335,6 +341,30 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
 
+
+            {/* In-App WebView Browser Trigger */}
+            {onOpenWebView && (
+              <button
+                onClick={() => onOpenWebView('https://m.youtube.com', 'In-App YouTube WebView')}
+                className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-2xl border border-indigo-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0"
+                title="Open In-App WebView Browser"
+              >
+                <Globe size={15} className="text-indigo-500 animate-pulse" />
+                <span className="hidden sm:inline">WebView</span>
+              </button>
+            )}
+
+            {/* Native Android APK & Exporter Hub Button */}
+            {onOpenAndroidModal && (
+              <button
+                onClick={onOpenAndroidModal}
+                className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0"
+                title="Native Android APK & Flutter Code Exporter"
+              >
+                <Smartphone size={15} className="text-emerald-500" />
+                <span className="hidden md:inline">Android APK</span>
+              </button>
+            )}
 
             {/* Share App Link Button */}
             {onOpenShareModal && (

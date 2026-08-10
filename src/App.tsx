@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult } from './lib/firebase';
+import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult, loginAnonymously } from './lib/firebase';
 import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack } from './types';
 import { DEFAULT_TRACKS, DEFAULT_CHANNELS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
@@ -12,6 +12,7 @@ import { DownloadModal } from './components/DownloadModal';
 import { AddToPlaylistModal } from './components/AddToPlaylistModal';
 import { ShareAppModal } from './components/ShareAppModal';
 import { ChannelSubscriptionsModal } from './components/ChannelSubscriptionsModal';
+import { ChannelDetailsModal } from './components/ChannelDetailsModal';
 import { UserAuthModal } from './components/UserAuthModal';
 import { YouTubeMetadataModal } from './components/YouTubeMetadataModal';
 import { Toast } from './components/Toast';
@@ -23,6 +24,8 @@ import { SettingsView } from './views/SettingsView';
 import { DownloadsView } from './views/DownloadsView';
 import { SplashScreen } from './components/SplashScreen';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { InAppWebViewModal } from './components/InAppWebViewModal';
+import { AndroidNativeExporterModal } from './components/AndroidNativeExporterModal';
 import { applyAccentTheme } from './utils/accentTheme';
 
 const TAB_ORDER: TabType[] = ['home', 'search', 'subscriptions', 'library', 'downloads', 'settings'];
@@ -180,6 +183,8 @@ export default function App() {
   // Subscriptions modal state
   const [isSubscriptionsModalOpen, setIsSubscriptionsModalOpen] = useState<boolean>(false);
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<string | null>(null);
+  const [selectedChannelDetailsName, setSelectedChannelDetailsName] = useState<string | null>(null);
+  const [selectedChannelForDetails, setSelectedChannelForDetails] = useState<string | null>(null);
 
   // Track playback & audio stream state
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
@@ -268,6 +273,24 @@ export default function App() {
 
   // Share Modal
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+
+  // In-App WebView Modal state
+  const [isWebViewOpen, setIsWebViewOpen] = useState<boolean>(false);
+  const [webViewUrl, setWebViewUrl] = useState<string>('https://m.youtube.com');
+  const [webViewTitle, setWebViewTitle] = useState<string>('In-App WebView');
+
+  // Native Android Exporter Modal state
+  const [isAndroidModalOpen, setIsAndroidModalOpen] = useState<boolean>(false);
+
+  const handleOpenWebView = useCallback((url?: string, title?: string) => {
+    if (url) setWebViewUrl(url);
+    if (title) setWebViewTitle(title);
+    setIsWebViewOpen(true);
+  }, []);
+
+  const handleOpenAndroidModal = useCallback(() => {
+    setIsAndroidModalOpen(true);
+  }, []);
 
   // Favorites state from localStorage
   const [favorites, setFavorites] = useState<Track[]>(() => {
@@ -529,11 +552,18 @@ export default function App() {
           unsubAct();
         };
       } else {
-        // Run automatic guest/local state sync when app opens for first time
-        const hasSyncedOnOpen = sessionStorage.getItem('aura_auto_synced_on_open');
-        if (!hasSyncedOnOpen) {
-          sessionStorage.setItem('aura_auto_synced_on_open', 'true');
-          showToast('⚡ Application opened — Automatic sync complete', 'success');
+        // Automatically perform quick automatic sign-in on app open if no active user session exists
+        const hasAutoSignedIn = sessionStorage.getItem('aura_auto_signin_attempted');
+        if (!hasAutoSignedIn) {
+          sessionStorage.setItem('aura_auto_signin_attempted', 'true');
+          loginAnonymously().then((autoUser) => {
+            if (autoUser) {
+              console.log('⚡ Instant automatic sign-in complete on app open:', autoUser.uid);
+              showToast(`⚡ Automatically signed in as ${autoUser.displayName || 'Guest Listener'}`, 'success');
+            }
+          }).catch((err) => {
+            console.warn('Auto sign-in on app open:', err);
+          });
         }
       }
     });
@@ -948,6 +978,8 @@ export default function App() {
         user={user}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenShareModal={() => setIsShareModalOpen(true)}
+        onOpenWebView={handleOpenWebView}
+        onOpenAndroidModal={handleOpenAndroidModal}
         isDataSaverMode={isDataSaverMode}
         onToggleDataSaverMode={handleToggleDataSaverMode}
       />
@@ -974,6 +1006,7 @@ export default function App() {
                 onToggleFavorite={handleToggleFavorite}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
                 onOpenMetadata={(track) => setMetadataTrack(track)}
+                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
                 onShowToast={showToast}
               />
             )}
@@ -991,6 +1024,7 @@ export default function App() {
                 onToggleSubscribe={handleToggleSubscribe}
                 selectedChannelFilter={selectedChannelFilter}
                 setSelectedChannelFilter={setSelectedChannelFilter}
+                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
                 onShowToast={showToast}
               />
             )}
@@ -1004,6 +1038,7 @@ export default function App() {
                 onToggleFavorite={handleToggleFavorite}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
                 onOpenMetadata={(track) => setMetadataTrack(track)}
+                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
                 youtubeApiKey={youtubeApiKey}
                 onShowToast={showToast}
               />
@@ -1061,6 +1096,8 @@ export default function App() {
                 user={user}
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}
                 onOpenShareModal={() => setIsShareModalOpen(true)}
+                onOpenWebView={handleOpenWebView}
+                onOpenAndroidModal={handleOpenAndroidModal}
                 onSyncGoogleAccount={handleSyncGoogleAccount}
                 favoritesCount={favorites.length}
                 subscriptionsCount={subscriptions.length}
@@ -1193,6 +1230,23 @@ export default function App() {
         onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
         onShowToast={showToast}
         youtubeApiKey={youtubeApiKey}
+        onOpenWebView={handleOpenWebView}
+      />
+
+      {/* In-App WebView Browser Sheet */}
+      <InAppWebViewModal
+        isOpen={isWebViewOpen}
+        onClose={() => setIsWebViewOpen(false)}
+        initialUrl={webViewUrl}
+        title={webViewTitle}
+        onShowToast={showToast}
+      />
+
+      {/* Native Android APK & Flutter Source Exporter Modal */}
+      <AndroidNativeExporterModal
+        isOpen={isAndroidModalOpen}
+        onClose={() => setIsAndroidModalOpen(false)}
+        onShowToast={showToast}
       />
 
       {/* Share App Modal */}
@@ -1209,6 +1263,21 @@ export default function App() {
         subscriptions={subscriptions}
         onToggleSubscribe={handleToggleSubscribe}
         onSelectChannelFilter={(channelName) => setSelectedChannelFilter(channelName)}
+        onShowToast={showToast}
+      />
+
+      {/* YouTube Channel Details Modal */}
+      <ChannelDetailsModal
+        isOpen={!!selectedChannelForDetails}
+        channelName={selectedChannelForDetails}
+        onClose={() => setSelectedChannelForDetails(null)}
+        subscriptions={subscriptions}
+        onToggleSubscribe={handleToggleSubscribe}
+        onPlay={handlePlayTrack}
+        onDownload={(track) => setDownloadTrack(track)}
+        currentTrackId={currentTrack?.id}
+        favorites={favorites}
+        onToggleFavorite={handleToggleFavorite}
         onShowToast={showToast}
       />
 

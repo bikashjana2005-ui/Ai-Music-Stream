@@ -127,6 +127,13 @@
         "$ref": "#/entities/Playlist"
       },
       "description": "User's custom music playlists"
+    },
+    "/users/{userId}/activity/{activityId}": {
+      "schema": {
+        "type": "object",
+        "description": "User session activity state"
+      },
+      "description": "User activity and last session state"
     }
   }
 }

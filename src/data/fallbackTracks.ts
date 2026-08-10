@@ -2,6 +2,41 @@ import { Track, SubscribedChannel } from '../types';
 
 export const DEFAULT_CHANNELS: SubscribedChannel[] = [
   {
+    id: "UCcrazyxyz_001",
+    name: "Crazy XYZ",
+    handle: "@CrazyXYZ",
+    avatar: "https://unavatar.io/youtube/CrazyXYZ",
+    subscribers: "28.5M subscribers"
+  },
+  {
+    id: "UCdangaltv_002",
+    name: "Dangal TV",
+    handle: "@DangalTVChannel",
+    avatar: "https://unavatar.io/youtube/DangalTVChannel",
+    subscribers: "22.1M subscribers"
+  },
+  {
+    id: "UCtrakintech_003",
+    name: "Trakin Tech",
+    handle: "@trakintech",
+    avatar: "https://unavatar.io/youtube/trakintech",
+    subscribers: "14.2M subscribers"
+  },
+  {
+    id: "UCtechnoruhez_004",
+    name: "Techno Ruhez",
+    handle: "@technoruhez",
+    avatar: "https://unavatar.io/youtube/technoruhez",
+    subscribers: "3.8M subscribers"
+  },
+  {
+    id: "UCstarjalsha_123",
+    name: "Star Jalsha",
+    handle: "@starjalsha",
+    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Star_Jalsha_2019.png/512px-Star_Jalsha_2019.png",
+    subscribers: "18.5M subscribers"
+  },
+  {
     id: "UCq-Fj5jknLsUf-MWSy4_brA",
     name: "T-Series",
     handle: "@TSeries",
@@ -16,53 +51,11 @@ export const DEFAULT_CHANNELS: SubscribedChannel[] = [
     subscribers: "61M subscribers"
   },
   {
-    id: "UCstarjalsha_123",
-    name: "Star Jalsha",
-    handle: "@starjalsha",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Star_Jalsha_2019.png/512px-Star_Jalsha_2019.png",
-    subscribers: "18.5M subscribers"
-  },
-  {
     id: "UCzeebangla_456",
     name: "Zee Bangla",
     handle: "@zeebangla",
     avatar: "https://unavatar.io/youtube/zeebangla",
     subscribers: "12.4M subscribers"
-  },
-  {
-    id: "UCtechscrew_789",
-    name: "TechScrew",
-    handle: "@TechScrew",
-    avatar: "https://unavatar.io/youtube/TechScrew",
-    subscribers: "1.2M subscribers"
-  },
-  {
-    id: "UC82T_D4Mrm2C_c47-kUe2vA",
-    name: "SVF",
-    handle: "@SVFBangla",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/SVF_Entertainment_Logo.jpg/512px-SVF_Entertainment_Logo.jpg",
-    subscribers: "11M subscribers"
-  },
-  {
-    id: "UCFFbwnve3yF6KulMgV0P57A",
-    name: "Zee Music Company",
-    handle: "@zeemusiccompany",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Zee_Music_Company_logo.svg/512px-Zee_Music_Company_logo.svg.png",
-    subscribers: "108M subscribers"
-  },
-  {
-    id: "UCsJ8lToR0nQ6G9T1gR-6k4A",
-    name: "Coke Studio Bangla",
-    handle: "@CokeStudioBangla",
-    avatar: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Coke_Studio_logo.png/512px-Coke_Studio_logo.png",
-    subscribers: "2.8M subscribers"
-  },
-  {
-    id: "UCSJ4gkVC6NrvII8umztf0OW",
-    name: "Lofi Girl",
-    handle: "@LofiGirl",
-    avatar: "https://unavatar.io/youtube/LofiGirl",
-    subscribers: "14M subscribers"
   }
 ];
 

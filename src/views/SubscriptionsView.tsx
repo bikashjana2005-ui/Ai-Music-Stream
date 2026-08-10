@@ -1,14 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Plus, 
-  RefreshCw, 
-  Play, 
   UserPlus,
   LayoutGrid,
   List,
   Search,
-  Bell,
-  CheckCircle2
+  ChevronRight
 } from 'lucide-react';
 import { Track, SubscribedChannel } from '../types';
 import { TrackCard } from '../components/TrackCard';
@@ -26,10 +22,22 @@ interface SubscriptionsViewProps {
   onToggleSubscribe: (channel: SubscribedChannel) => void;
   selectedChannelFilter: string | null;
   setSelectedChannelFilter: (channelName: string | null) => void;
+  onOpenChannelDetails?: (channelName: string) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 type ViewLayoutMode = 'grid' | 'list';
+type CategoryPillFilter = 'All' | 'Today' | 'Videos' | 'Shorts' | 'Live' | 'Unwatched' | 'Continue watching';
+
+const CATEGORY_PILLS: CategoryPillFilter[] = [
+  'All',
+  'Today',
+  'Videos',
+  'Shorts',
+  'Live',
+  'Unwatched',
+  'Continue watching'
+];
 
 export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   onPlay,
@@ -41,12 +49,14 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   onOpenSubscriptionsModal,
   selectedChannelFilter,
   setSelectedChannelFilter,
+  onOpenChannelDetails,
   onShowToast
 }) => {
   const [channelTracks, setChannelTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [feedFilter, setFeedFilter] = useState<'recent' | 'popular'>('recent');
+  const [feedSort, setFeedSort] = useState<'recent' | 'popular'>('recent');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activePill, setActivePill] = useState<CategoryPillFilter>('All');
 
   // View mode state
   const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>(() => {
@@ -60,13 +70,18 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
 
   const [isRealtimeSyncing, setIsRealtimeSyncing] = useState<boolean>(false);
 
+  // Channels with unread blue indicators (simulated native YouTube experience)
+  const [unreadChannels] = useState<Set<string>>(() => {
+    return new Set(['Dangal TV', 'Star Jalsha', 'Trakin Tech', 'Crazy XYZ']);
+  });
+
   // Fetch channel specific streams
   const fetchChannelStreams = async (channelName?: string | null, filterOverride?: 'recent' | 'popular', silent: boolean = false) => {
     if (!silent) setLoading(true);
     setIsRealtimeSyncing(true);
-    const activeFilter = filterOverride || feedFilter;
+    const activeSort = filterOverride || feedSort;
     try {
-      const payload: any = { sortBy: activeFilter, forceFresh: silent };
+      const payload: any = { sortBy: activeSort, forceFresh: silent };
       if (channelName) {
         payload.channelName = channelName;
       } else if (subscriptions.length > 0) {
@@ -109,13 +124,13 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   };
 
   useEffect(() => {
-    fetchChannelStreams(selectedChannelFilter, feedFilter);
+    fetchChannelStreams(selectedChannelFilter, feedSort);
     const syncInterval = setInterval(() => {
-      fetchChannelStreams(selectedChannelFilter, feedFilter, true);
+      fetchChannelStreams(selectedChannelFilter, feedSort, true);
     }, 25000);
 
     return () => clearInterval(syncInterval);
-  }, [selectedChannelFilter, feedFilter, subscriptions.length]);
+  }, [selectedChannelFilter, feedSort, subscriptions.length]);
 
   const handlePlayAllFeed = () => {
     if (channelTracks.length > 0) {
@@ -124,168 +139,201 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
     }
   };
 
+  // Filter tracks based on search, channel filter, and selected Category Pill
   const filteredTracks = channelTracks.filter(track => {
-    return searchQuery.trim() === '' || 
-      (track.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (track.channel || '').toLowerCase().includes(searchQuery.toLowerCase());
+    // Search Filter
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = (track.title || '').toLowerCase().includes(q);
+      const matchChannel = (track.channel || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchChannel) return false;
+    }
+
+    // Category Pill Filters
+    if (activePill === 'Today') {
+      const time = (track.publishedTime || '').toLowerCase();
+      return time.includes('second') || time.includes('minute') || time.includes('hour') || time.includes('today') || time.includes('1 day');
+    }
+
+    if (activePill === 'Videos') {
+      // Standard video format (duration >= 1:00 or standard video)
+      return !track.duration || !track.duration.startsWith('0:');
+    }
+
+    if (activePill === 'Shorts') {
+      // Shorts under 1 min or tagged
+      const isShortDuration = track.duration && (track.duration.startsWith('0:') || parseInt(track.duration.split(':')[0]) < 1);
+      const isShortTag = (track.aiMoodTags || '').toLowerCase().includes('short') || (track.title || '').toLowerCase().includes('#shorts');
+      return isShortDuration || isShortTag;
+    }
+
+    if (activePill === 'Live') {
+      const tags = (track.aiMoodTags || '').toLowerCase();
+      const title = (track.title || '').toLowerCase();
+      return tags.includes('live') || title.includes('live') || title.includes('stream');
+    }
+
+    if (activePill === 'Unwatched') {
+      return track.id !== currentTrackId;
+    }
+
+    if (activePill === 'Continue watching') {
+      return favorites.some(f => f.id === track.id) || track.id === currentTrackId;
+    }
+
+    return true;
   });
 
   return (
-    <div className="space-y-5 animate-fade-in pb-28 w-full max-w-full mx-auto">
+    <div className="space-y-4 animate-fade-in pb-28 w-full max-w-full mx-auto">
       
-      {/* 1. YOUTUBE-STYLE CREATOR CHANNELS ROW */}
-      <div className="bg-white/80 dark:bg-slate-900/80 p-4 rounded-3xl border border-gray-200/80 dark:border-white/10 space-y-3.5 shadow-lg">
+      {/* 1. YOUTUBE MOBILE SUBSCRIPTION HEADER & CHANNEL CAROUSEL */}
+      <div className="bg-slate-900/90 dark:bg-slate-950 p-3.5 sm:p-4 rounded-3xl border border-slate-800/80 space-y-3 shadow-xl">
         
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200/80 dark:border-white/10 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-rose-600/20 text-rose-500 dark:text-rose-400 flex items-center justify-center border border-rose-500/30">
-              <CheckCircle2 size={16} />
-            </div>
-            <div>
-              <h2 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                Subscribed Creators & Labels
-                <span className="text-[10px] font-extrabold bg-rose-500/20 text-rose-600 dark:text-rose-300 px-2 py-0.5 rounded-full border border-rose-500/30">
-                  {subscriptions.length}
-                </span>
-              </h2>
-              <p className="text-[11px] text-gray-500 dark:text-slate-400 font-medium">
-                {selectedChannelFilter ? `Filtering feed by ${selectedChannelFilter}` : 'Showing latest uploads from all your subscribed channels'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                fetchChannelStreams(selectedChannelFilter, feedFilter, false);
-                onShowToast("Syncing channel uploads...", "info");
-              }}
-              disabled={isRealtimeSyncing}
-              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all border border-gray-200 dark:border-white/10 active:scale-95"
-              title="Sync Subscriptions"
-            >
-              <RefreshCw size={13} className={isRealtimeSyncing ? "animate-spin text-rose-500 dark:text-rose-400" : "text-gray-500 dark:text-slate-400"} />
-              <span className="hidden sm:inline">Sync Feed</span>
-            </button>
-
-            {channelTracks.length > 0 && (
-              <button
-                onClick={handlePlayAllFeed}
-                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95"
-              >
-                <Play size={13} className="fill-white" />
-                <span>Play Feed</span>
-              </button>
-            )}
-
-            <button
-              onClick={onOpenSubscriptionsModal}
-              className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95"
-            >
-              <Plus size={15} />
-              <span>Add / Manage</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Horizontal Creator Avatar Carousel */}
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar scroll-smooth py-1">
+        {/* 2. CIRCULAR SUBSCRIBED CHANNEL AVATARS ROW */}
+        <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1">
           {/* Add Channel Button Avatar */}
           <button
             onClick={onOpenSubscriptionsModal}
-            className="flex flex-col items-center gap-1 shrink-0 group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
             title="Subscribe to YouTube Channel"
           >
-            <div className="w-13 h-13 rounded-full border-2 border-dashed border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 flex items-center justify-center transition-all group-hover:scale-105 shadow-sm">
+            <div className="w-14 h-14 rounded-full border-2 border-dashed border-rose-500/60 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center transition-all group-hover:scale-105 shadow-sm">
               <UserPlus size={20} />
             </div>
-            <span className="text-[10px] font-extrabold text-gray-700 dark:text-slate-300 group-hover:text-rose-500 dark:group-hover:text-rose-400 truncate max-w-[68px]">
+            <span className="text-[11px] font-extrabold text-slate-300 group-hover:text-rose-400 truncate max-w-[72px]">
               + Add
             </span>
           </button>
 
-          {/* ALL Feed Filter Button */}
+          {/* ALL Feed Filter Avatar */}
           <button
             onClick={() => {
               setSelectedChannelFilter(null);
               onShowToast('Showing feed from all subscribed channels', 'info');
             }}
-            className="flex flex-col items-center gap-1 shrink-0 group cursor-pointer"
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
           >
-            <div className={`w-13 h-13 rounded-full flex items-center justify-center transition-all p-0.5 ${
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all p-0.5 ${
               !selectedChannelFilter
-                ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 shadow-md scale-105'
-                : 'bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700'
+                ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 shadow-lg scale-105'
+                : 'bg-slate-800 hover:bg-slate-700'
             }`}>
-              <div className="w-full h-full rounded-full bg-gray-900 dark:bg-slate-950 text-white flex items-center justify-center font-black text-[10px] tracking-wider">
+              <div className="w-full h-full rounded-full bg-slate-950 text-white flex items-center justify-center font-black text-xs tracking-wider">
                 ALL
               </div>
             </div>
-            <span className={`text-[10px] font-bold truncate max-w-[68px] ${!selectedChannelFilter ? 'text-rose-600 dark:text-rose-400 font-extrabold' : 'text-gray-500 dark:text-slate-400'}`}>
+            <span className={`text-[11px] font-bold truncate max-w-[72px] ${!selectedChannelFilter ? 'text-rose-400 font-extrabold' : 'text-slate-400'}`}>
               All Feeds
             </span>
           </button>
 
-          {/* Subscribed Creators Avatars List */}
+          {/* Subscribed Channel Avatars List with Blue Unread Dot */}
           {subscriptions.map((ch) => {
             const isSelected = selectedChannelFilter && (ch.name || '').toLowerCase() === selectedChannelFilter.toLowerCase();
+            const hasUnread = unreadChannels.has(ch.name);
+
             return (
               <button
                 key={`sub-creator-${ch.id}`}
                 onClick={() => {
-                  setSelectedChannelFilter(isSelected ? null : ch.name);
-                  onShowToast(isSelected ? 'Showing all feeds' : `Filtered feed to ${ch.name}`, 'info');
+                  if (isSelected && onOpenChannelDetails) {
+                    onOpenChannelDetails(ch.name);
+                  } else {
+                    setSelectedChannelFilter(isSelected ? null : ch.name);
+                    onShowToast(isSelected ? 'Showing all feeds' : `Filtered feed to ${ch.name} (Tap again for channel page)`, 'info');
+                  }
                 }}
-                className="flex flex-col items-center gap-1 shrink-0 group cursor-pointer relative"
+                className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer relative"
+                title={isSelected ? `Tap again to open ${ch.name} Channel Page` : `Filter by ${ch.name}`}
               >
-                <div className={`w-13 h-13 rounded-full p-0.5 transition-all relative ${
+                <div className={`w-14 h-14 rounded-full p-0.5 transition-all relative ${
                   isSelected
-                    ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 scale-105 shadow-md'
-                    : 'bg-rose-500/40 hover:bg-rose-500 hover:scale-105'
+                    ? 'bg-gradient-to-tr from-rose-600 to-red-500 ring-2 ring-rose-500 scale-105 shadow-lg'
+                    : 'bg-slate-800 hover:bg-rose-500/80 hover:scale-105'
                 }`}>
                   <img
                     src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)}
                     alt={ch.name}
-                    className="w-full h-full object-cover rounded-full bg-slate-800"
+                    className="w-full h-full object-cover rounded-full bg-slate-900"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
                     }}
                   />
                   
-                  {/* YouTube Unread Live Badge */}
-                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-rose-600 border-2 border-white dark:border-slate-900 rounded-full" />
+                  {/* YouTube Unread Blue Notification Dot */}
+                  {hasUnread && !isSelected && (
+                    <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-sky-500 border-2 border-slate-950 rounded-full shadow-xs animate-pulse" />
+                  )}
                 </div>
 
-                <span className={`text-[10px] font-bold truncate max-w-[68px] ${
-                  isSelected ? 'text-rose-600 dark:text-rose-400 font-extrabold' : 'text-gray-500 dark:text-slate-400 group-hover:text-gray-900 dark:group-hover:text-white'
+                <span className={`text-[11px] font-semibold tracking-tight truncate max-w-[72px] ${
+                  isSelected ? 'text-rose-400 font-extrabold' : 'text-slate-300 group-hover:text-white'
                 }`}>
                   {ch.name}
                 </span>
               </button>
             );
           })}
+
+          {/* "All" button at the end of channel avatars row */}
+          <button
+            onClick={onOpenSubscriptionsModal}
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer pl-1"
+          >
+            <div className="w-14 h-14 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-all group-hover:scale-105 border border-slate-700/60">
+              <ChevronRight size={22} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-200">
+              All
+            </span>
+          </button>
         </div>
+
+        {/* 3. YOUTUBE PILL FILTER BAR (Highlighted in green in screenshot: [All] [Today] [Videos] [Shorts] [Live] ...) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth pt-2 border-t border-slate-800/80">
+          {CATEGORY_PILLS.map((pill) => {
+            const isActive = activePill === pill;
+            return (
+              <button
+                key={`sub-pill-${pill}`}
+                onClick={() => {
+                  setActivePill(pill);
+                  onShowToast(`Filtering feed: ${pill}`, 'info');
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all active:scale-95 ${
+                  isActive
+                    ? 'bg-slate-100 text-slate-950 dark:bg-white dark:text-slate-950 font-black shadow-md'
+                    : 'bg-slate-800/90 hover:bg-slate-800 text-slate-200 border border-slate-700/50'
+                }`}
+              >
+                {pill}
+              </button>
+            );
+          })}
+        </div>
+
       </div>
 
-      {/* 2. FEED FILTER BAR & SEARCH */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/70 dark:bg-slate-900/60 p-3 rounded-2xl border border-gray-200/60 dark:border-white/10 shadow-sm">
+      {/* 4. SEARCH & VIEW MODE TOOLBAR */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-2xl border border-slate-800/80 shadow-sm">
         <div className="flex items-center gap-1.5 w-full sm:w-auto">
           <button
-            onClick={() => setFeedFilter('recent')}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-              feedFilter === 'recent'
+            onClick={() => setFeedSort('recent')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+              feedSort === 'recent'
                 ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
-            Latest Videos
+            Latest Uploads
           </button>
           <button
-            onClick={() => setFeedFilter('popular')}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-              feedFilter === 'popular'
+            onClick={() => setFeedSort('popular')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+              feedSort === 'popular'
                 ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
             }`}
           >
             Most Popular
@@ -293,24 +341,24 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="relative w-full sm:w-52">
+          <div className="relative w-full sm:w-56">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search feed..."
-              className="w-full bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-white text-xs pl-8 pr-3 py-1.5 rounded-full border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-1 focus:ring-rose-500 font-semibold"
+              className="w-full bg-slate-950 text-white text-xs pl-8 pr-3 py-1.5 rounded-full border border-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-500 font-semibold placeholder:text-slate-500"
             />
-            <Search size={13} className="absolute left-2.5 top-2.5 text-gray-400" />
+            <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
           </div>
 
-          <div className="bg-gray-100 dark:bg-slate-800 p-0.5 rounded-xl border border-gray-200 dark:border-white/10 flex items-center gap-0.5 shrink-0">
+          <div className="bg-slate-950 p-0.5 rounded-xl border border-slate-800 flex items-center gap-0.5 shrink-0">
             <button
               onClick={() => handleSetLayoutMode('grid')}
               className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
                 layoutMode === 'grid'
-                  ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  ? 'bg-slate-800 text-rose-400 shadow-xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <LayoutGrid size={14} />
@@ -319,8 +367,8 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
               onClick={() => handleSetLayoutMode('list')}
               className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
                 layoutMode === 'list'
-                  ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
-                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  ? 'bg-slate-800 text-rose-400 shadow-xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <List size={14} />
@@ -329,11 +377,11 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
         </div>
       </div>
 
-      {/* 3. YOUTUBE SUBSCRIPTION STREAM GRID */}
+      {/* 5. YOUTUBE SUBSCRIPTION STREAM GRID */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={`sub-skel-${i}`} className="bg-gray-200/60 dark:bg-slate-800/60 animate-pulse rounded-2xl h-52 p-3 border border-gray-300/30 dark:border-white/5" />
+            <div key={`sub-skel-${i}`} className="bg-slate-900/80 animate-pulse rounded-2xl h-52 p-3 border border-slate-800" />
           ))}
         </div>
       ) : filteredTracks.length > 0 ? (
@@ -351,16 +399,23 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
               isPlayingCurrent={currentTrackId === track.id}
               isFavorite={favorites.some((f) => f.id === track.id)}
               onToggleFavorite={onToggleFavorite}
+              onOpenChannelDetails={onOpenChannelDetails}
               viewMode={layoutMode === 'list' ? 'list' : 'grid'}
             />
           ))}
         </div>
       ) : (
-        <div className="py-16 text-center space-y-2 bg-white/50 dark:bg-slate-900/40 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 p-8 w-full">
-          <p className="text-xs font-bold text-gray-700 dark:text-gray-300">No uploads in subscription feed</p>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400">
-            Click "Sync" or add more YouTube channels to your subscription list.
+        <div className="py-16 text-center space-y-2 bg-slate-900/60 rounded-3xl border border-dashed border-slate-800 p-8 w-full">
+          <p className="text-xs font-bold text-slate-200">No uploads found for filter "{activePill}"</p>
+          <p className="text-[11px] text-slate-400">
+            Try selecting "All" or sync your subscription feeds.
           </p>
+          <button
+            onClick={() => setActivePill('All')}
+            className="mt-2 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl"
+          >
+            Show All Feeds
+          </button>
         </div>
       )}
 

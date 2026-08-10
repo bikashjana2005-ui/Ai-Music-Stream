@@ -13,6 +13,7 @@ interface YouTubeFeedCardProps {
   onToggleFavorite?: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
   onOpenMetadata?: (track: Track) => void;
+  onOpenChannelDetails?: (channelName: string) => void;
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -27,6 +28,7 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
   onToggleFavorite,
   onOpenAddToPlaylist,
   onOpenMetadata,
+  onOpenChannelDetails,
   onShowToast
 }) => {
   const [imgStage, setImgStage] = useState<number>(0);
@@ -108,8 +110,16 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
           onError={(e) => {
             (e.target as HTMLImageElement).src = getFallbackChannelAvatar(channelName);
           }}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 cursor-pointer border border-gray-200 dark:border-white/10 hover:opacity-90 transition-opacity mt-0.5 bg-white dark:bg-zinc-800 p-0.5 shadow-sm"
-          onClick={() => onPlay(track)}
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 cursor-pointer border border-gray-200 dark:border-white/10 hover:ring-2 hover:ring-rose-500 transition-all mt-0.5 bg-white dark:bg-zinc-800 p-0.5 shadow-sm"
+          onClick={(e) => {
+            if (onOpenChannelDetails) {
+              e.stopPropagation();
+              onOpenChannelDetails(channelName);
+            } else {
+              onPlay(track);
+            }
+          }}
+          title={`View ${channelName} Channel`}
         />
 
         {/* Title & Metadata (Middle) */}
@@ -119,7 +129,16 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
           </h3>
 
           <div className="text-xs text-gray-500 dark:text-[#aaa] font-normal mt-0.5 flex items-center gap-1.5 flex-wrap truncate">
-            <span className="truncate max-w-[150px] sm:max-w-[200px]">
+            <span 
+              onClick={(e) => {
+                if (onOpenChannelDetails) {
+                  e.stopPropagation();
+                  onOpenChannelDetails(channelName);
+                }
+              }}
+              className="truncate max-w-[150px] sm:max-w-[200px] hover:text-rose-500 hover:underline cursor-pointer transition-colors"
+              title={`View ${channelName} Channel`}
+            >
               {channelName}
             </span>
             <span>•</span>

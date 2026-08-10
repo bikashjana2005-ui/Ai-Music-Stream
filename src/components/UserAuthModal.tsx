@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, LogIn, LogOut, ShieldCheck, Cloud, CloudOff, CheckCircle2, 
-  Sparkles, User as UserIcon, Loader2, RefreshCw, ExternalLink, Mail, Key, UserPlus, AlertCircle
+  Sparkles, User as UserIcon, Loader2, RefreshCw, ExternalLink, Mail, Key, UserPlus, AlertCircle,
+  Users, Trash2, Plus, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
@@ -13,6 +14,16 @@ import {
   loginAnonymously, 
   logoutUser 
 } from '../lib/firebase';
+
+export interface SavedAccount {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  isAnonymous: boolean;
+  provider: 'google' | 'email' | 'guest';
+  lastUsed: number;
+}
 
 interface UserAuthModalProps {
   isOpen: boolean;
@@ -38,6 +49,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [authTab, setAuthTab] = useState<'google' | 'email' | 'guest'>('google');
+  const [showAccountsList, setShowAccountsList] = useState(false);
   
   // Email form states
   const [isRegistering, setIsRegistering] = useState(false);
@@ -45,6 +57,93 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Saved accounts state from localStorage
+  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('aura_saved_accounts');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Keep savedAccounts synced with active user
+  useEffect(() => {
+    if (user) {
+      let provider: 'google' | 'email' | 'guest' = 'email';
+      if (user.isAnonymous) {
+        provider = 'guest';
+      } else if (user.providerData.some(p => p.providerId === 'google.com') || user.photoURL) {
+        provider = 'google';
+      }
+
+      const newAcc: SavedAccount = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        isAnonymous: user.isAnonymous,
+        provider,
+        lastUsed: Date.now()
+      };
+
+      setSavedAccounts((prev) => {
+        const filtered = prev.filter(a => a.uid !== user.uid);
+        const updated = [newAcc, ...filtered];
+        try {
+          localStorage.setItem('aura_saved_accounts', JSON.stringify(updated));
+        } catch (e) {
+          console.error('Error saving accounts:', e);
+        }
+        return updated;
+      });
+    }
+  }, [user]);
+
+  const handleRemoveSavedAccount = (e: React.MouseEvent, uid: string) => {
+    e.stopPropagation();
+    setSavedAccounts((prev) => {
+      const updated = prev.filter(a => a.uid !== uid);
+      try {
+        localStorage.setItem('aura_saved_accounts', JSON.stringify(updated));
+      } catch (err) {}
+      return updated;
+    });
+    onShowToast('Account profile removed from device.', 'info');
+  };
+
+  const handleSwitchToAccount = async (acc: SavedAccount) => {
+    if (user && user.uid === acc.uid) {
+      onShowToast(`Already active as ${acc.displayName || acc.email || 'this profile'}.`, 'info');
+      return;
+    }
+
+    setErrorMsg(null);
+
+    // If currently signed in as a different user, sign out first
+    if (user) {
+      try {
+        await logoutUser();
+      } catch (err) {}
+    }
+
+    if (acc.provider === 'guest' || acc.isAnonymous) {
+      // Instantly log into Guest mode
+      await handleGuestSignIn();
+    } else if (acc.provider === 'email' && acc.email) {
+      setAuthTab('email');
+      setIsRegistering(false);
+      setEmail(acc.email);
+      setPassword('');
+      setShowAccountsList(false);
+      onShowToast(`Switched profile target to ${acc.email}. Enter password to sign in!`, 'info');
+    } else {
+      setAuthTab('google');
+      setShowAccountsList(false);
+      onShowToast(`Click "Sign In with Google" to switch to ${acc.displayName || acc.email || 'Google Account'}`, 'info');
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -54,19 +153,24 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       onShowToast(`Welcome back, ${res.user.displayName || 'Music Enthusiast'}! Cloud synced.`, 'success');
       onClose();
     } catch (err: any) {
-      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
-        setErrorMsg('Google sign-in popup was closed. Click "Open in New Tab" or try Redirect Sign-In / 1-Click Guest Sync.');
-        onShowToast('Google sign-in popup was closed.', 'info');
-      } else if (err?.code === 'auth/popup-blocked') {
-        setErrorMsg('Popups are blocked inside iframe previews. Click "Open in New Tab" above or use Redirect Sign-In / 1-Click Guest Sync.');
-        onShowToast('Popup blocked by browser iframe. Try opening in a new tab.', 'error');
-      } else if (err?.code === 'auth/unauthorized-domain') {
-        setErrorMsg(`Domain (${window.location.host}) is not authorized in Firebase Console. Click "Open in New Tab" or use 1-Click Guest / Email auth.`);
+      console.error('Google sign in error:', err);
+      const errMsg = err?.message || '';
+      const errCode = err?.code || '';
+      if (errCode === 'auth/popup-closed-by-user' || errCode === 'auth/cancelled-popup-request') {
+        setErrorMsg('Google sign-in popup was closed before completion.');
+        onShowToast('Google sign-in popup closed.', 'info');
+      } else if (errCode === 'auth/popup-blocked') {
+        setErrorMsg('Browser popup was blocked by iframe. Use Email login or 1-Click Guest Sync below.');
+        onShowToast('Popup blocked by browser iframe.', 'error');
+      } else if (errCode === 'auth/unauthorized-domain') {
+        setErrorMsg(`Domain (${window.location.host}) is not in Firebase authorized domains. Switch to Email or 1-Click Guest Sync!`);
         onShowToast('Domain not authorized for Google OAuth.', 'error');
+      } else if (errMsg.includes('403') || errMsg.includes('access_denied') || errMsg.includes('verification') || errMsg.includes('unverified') || errCode === 'auth/access-denied') {
+        setErrorMsg('Google blocked OAuth (App Verification Pending for sandbox domain). Please use Email Sign-In or 1-Click Guest Cloud Sync below!');
+        onShowToast('Google OAuth verification restriction. Please use Email or Guest mode.', 'error');
       } else {
-        console.error('Google sign in error:', err);
-        setErrorMsg(err?.message || 'Google sign in failed. Try opening in a new tab, Redirect Sign-In, or Email Login.');
-        onShowToast('Google sign in error. See options below.', 'error');
+        setErrorMsg(err?.message || 'Google sign-in failed. Please use Email Login or 1-Click Guest Sync!');
+        onShowToast('Google sign in error. Try Email or Guest mode.', 'error');
       }
     } finally {
       setLoading(false);
@@ -206,7 +310,95 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             </div>
 
             {/* Body */}
-            <div className="py-5 space-y-4">
+            <div className="py-4 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              {/* Multi-Accounts Switcher Section */}
+              {savedAccounts.length > 0 && (
+                <div className="bg-gray-100/80 dark:bg-slate-800/80 p-3.5 rounded-2xl border border-gray-200/80 dark:border-white/10 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                      <Users size={14} className="text-indigo-500" />
+                      Saved Accounts ({savedAccounts.length})
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-semibold">Tap profile to switch</span>
+                  </div>
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                    {savedAccounts.map((acc) => {
+                      const isActive = user && user.uid === acc.uid;
+                      return (
+                        <div
+                          key={acc.uid}
+                          onClick={() => handleSwitchToAccount(acc)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                            isActive 
+                              ? 'bg-indigo-500/15 border-indigo-500/40 ring-1 ring-indigo-500/30' 
+                              : 'bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 border-gray-200/60 dark:border-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            {acc.photoURL ? (
+                              <img src={acc.photoURL} alt={acc.displayName || 'Account'} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-indigo-500" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                <UserIcon size={14} />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                                  {acc.displayName || (acc.isAnonymous ? 'Guest Listener' : 'User Account')}
+                                </span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                  acc.provider === 'google' 
+                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' 
+                                    : acc.provider === 'guest' 
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                    : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                                }`}>
+                                  {acc.provider.toUpperCase()}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                                {acc.email || `ID: ${acc.uid.slice(0, 10)}...`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            {isActive ? (
+                              <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2 py-1 rounded-lg">
+                                <Check size={12} /> Active
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSwitchToAccount(acc);
+                                }}
+                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] rounded-lg shadow transition-all active:scale-95"
+                              >
+                                Switch
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveSavedAccount(e, acc.uid)}
+                              className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                              title="Remove saved account"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {user ? (
                 /* Logged In View */
                 <div className="space-y-4">
@@ -324,11 +516,30 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                     <motion.div 
                       initial={{ opacity: 0, y: -6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2.5"
+                      className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-xs text-amber-700 dark:text-amber-300 space-y-2"
                     >
-                      <AlertCircle size={16} className="shrink-0 text-amber-500 mt-0.5" />
-                      <div className="leading-snug">
-                        <p>{errorMsg}</p>
+                      <div className="flex items-start gap-2.5">
+                        <AlertCircle size={16} className="shrink-0 text-amber-500 mt-0.5" />
+                        <div className="leading-snug flex-1">
+                          <p className="font-semibold">{errorMsg}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setAuthTab('email'); setErrorMsg(null); }}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-lg transition-all active:scale-95 shadow-sm flex items-center gap-1"
+                        >
+                          <Mail size={12} /> Use Email Login
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAuthTab('guest'); setErrorMsg(null); }}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-lg transition-all active:scale-95 shadow-sm flex items-center gap-1"
+                        >
+                          <UserIcon size={12} /> 1-Click Guest Sync
+                        </button>
                       </div>
                     </motion.div>
                   )}
