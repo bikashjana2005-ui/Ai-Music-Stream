@@ -19,7 +19,10 @@ import {
   AtSign,
   Radio,
   SlidersHorizontal,
-  ChevronRight
+  ChevronRight,
+  Upload,
+  Link as LinkIcon,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SubscribedChannel } from '../types';
@@ -130,6 +133,132 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
   const [isSyncingYouTube, setIsSyncingYouTube] = useState(false);
   const [filterActiveQuery, setFilterActiveQuery] = useState('');
   const [channelBellStates, setChannelBellStates] = useState<Record<string, boolean>>({});
+  const [directUrlInput, setDirectUrlInput] = useState('');
+  const [isResolvingUrl, setIsResolvingUrl] = useState(false);
+
+  // Import any YouTube channel via direct URL or @handle
+  const handleImportByUrlOrHandle = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const input = directUrlInput.trim();
+    if (!input) return;
+
+    setIsResolvingUrl(true);
+    try {
+      // Clean up YouTube URLs if passed
+      let query = input;
+      if (input.includes('youtube.com/')) {
+        const urlParts = input.split('youtube.com/')[1];
+        if (urlParts.startsWith('@')) {
+          query = urlParts.split('/')[0].split('?')[0];
+        } else if (urlParts.startsWith('c/') || urlParts.startsWith('user/') || urlParts.startsWith('channel/')) {
+          query = urlParts.split('/')[1].split('?')[0];
+        } else {
+          query = urlParts.split('?')[0];
+        }
+      }
+
+      const res = await fetch('/api/channels/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.replace(/^@/, '') })
+      });
+      const data = await res.json();
+      let matchedChannel: SubscribedChannel | null = null;
+      if (data.channels && data.channels.length > 0) {
+        matchedChannel = data.channels[0];
+      } else {
+        const cleanName = query.replace(/^@/, '').replace(/[-_]/g, ' ');
+        matchedChannel = {
+          id: `custom-ch-${Date.now()}`,
+          name: cleanName,
+          handle: query.startsWith('@') ? query : `@${query.replace(/\s+/g, '')}`,
+          avatar: getChannelAvatar(cleanName),
+          subscribers: 'Custom Added Channel',
+          isCustom: true
+        };
+      }
+
+      if (matchedChannel) {
+        onToggleSubscribe(matchedChannel);
+        onShowToast(`Subscribed to ${matchedChannel.name}!`, 'success');
+        setDirectUrlInput('');
+        setActiveTab('manage');
+      }
+    } catch (err) {
+      console.error('Error importing channel URL:', err);
+      onShowToast('Could not import channel URL. Please verify format.', 'error');
+    } finally {
+      setIsResolvingUrl(false);
+    }
+  };
+
+  // Google Takeout CSV / OPML Subscriptions File Importer
+  const handleImportTakeoutFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) return;
+
+        let importedCount = 0;
+        // Parse CSV format (Channel Id,Channel Url,Channel Title)
+        if (file.name.endsWith('.csv') || text.includes('Channel Id') || text.includes('Channel Title')) {
+          const lines = text.split('\n');
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(',');
+            if (parts.length >= 3) {
+              const channelId = parts[0].trim();
+              const channelTitle = parts.slice(2).join(',').replace(/^"/, '').replace(/"$/, '').trim();
+              if (channelTitle && !subscriptions.some(s => s.id === channelId || s.name.toLowerCase() === channelTitle.toLowerCase())) {
+                onToggleSubscribe({
+                  id: channelId || `takeout-${Date.now()}-${i}`,
+                  name: channelTitle,
+                  handle: `@${channelTitle.replace(/\s+/g, '')}`,
+                  avatar: getChannelAvatar(channelTitle),
+                  subscribers: 'Imported from Google Takeout'
+                });
+                importedCount++;
+              }
+            }
+          }
+        } else if (file.name.endsWith('.json')) {
+          // JSON export
+          const data = JSON.parse(text);
+          const list = Array.isArray(data) ? data : data.subscriptions || [];
+          list.forEach((item: any) => {
+            const name = item.name || item.snippet?.title || item.title;
+            if (name && !subscriptions.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+              onToggleSubscribe({
+                id: item.id || `json-${Date.now()}-${Math.random()}`,
+                name: name,
+                handle: item.handle || `@${name.replace(/\s+/g, '')}`,
+                avatar: item.avatar || getChannelAvatar(name),
+                subscribers: item.subscribers || 'Imported via Backup'
+              });
+              importedCount++;
+            }
+          });
+        }
+
+        if (importedCount > 0) {
+          onShowToast(`🎉 Successfully imported ${importedCount} channels from file!`, 'success');
+          setActiveTab('manage');
+        } else {
+          onShowToast('No new channels found in the imported file.', 'info');
+        }
+      } catch (err) {
+        console.error('Failed to parse subscriptions file:', err);
+        onShowToast('Could not parse subscriptions file.', 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // reset
+  };
 
   // Sync real-time original YouTube account subscriptions via Google OAuth
   const handleSyncYouTubeAccountSubscriptions = async () => {
@@ -171,8 +300,12 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
         onShowToast(`All ${channels.length} YouTube channels are already synced.`, 'info');
       }
     } catch (err: any) {
-      console.error('YouTube Subscriptions sync error:', err);
-      onShowToast('Failed to sync YouTube subscriptions. Please try signing in again.', 'error');
+      console.warn('YouTube Subscriptions sync notice:', err?.message || err);
+      if (err?.message === 'YOUTUBE_API_UNCONFIGURED') {
+        onShowToast('YouTube API access is being verified. You can search and add channels directly in the Discover tab.', 'info');
+      } else {
+        onShowToast('Could not fetch YouTube subscriptions. Please verify Google sign-in.', 'info');
+      }
     } finally {
       setIsSyncingYouTube(false);
     }
@@ -584,10 +717,11 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                 </div>
               )}
 
-              {/* TAB 3: GOOGLE YOUTUBE ACCOUNT OAUTH SYNC */}
+              {/* TAB 3: GOOGLE YOUTUBE ACCOUNT OAUTH SYNC & IMPORTER */}
               {activeTab === 'sync' && (
                 <div className="space-y-5 animate-fade-in">
                   
+                  {/* Section 1: Google OAuth Direct Sync */}
                   <div className="bg-gradient-to-r from-red-600/20 via-rose-600/20 to-indigo-600/20 border border-red-500/30 rounded-3xl p-5 space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-red-600/30">
@@ -595,13 +729,13 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                       </div>
                       <div>
                         <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-                          Sync Official Google YouTube Account
+                          Sync Google YouTube Account
                           <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded-full uppercase">
                             OAuth Live
                           </span>
                         </h3>
                         <p className="text-xs text-slate-300 font-medium">
-                          Import all your original YouTube account subscriptions directly with 1-click.
+                          Import all subscribed creators from your connected Google account in one tap.
                         </p>
                       </div>
                     </div>
@@ -609,10 +743,10 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                     <div className="bg-slate-950/80 rounded-2xl p-4 border border-white/10 space-y-2 text-xs text-slate-300">
                       <div className="flex items-center gap-2 font-bold text-white">
                         <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                        <span>Direct Google OAuth Integration</span>
+                        <span>Direct Google Account Integration</span>
                       </div>
                       <p className="text-slate-400 pl-6">
-                        Clicking sync connects your Google Account and retrieves your subscribed YouTube creators. No manual entry needed.
+                        Seamlessly connects to your signed-in Google account to synchronize your live YouTube subscriptions library.
                       </p>
                     </div>
 
@@ -633,6 +767,63 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                         </>
                       )}
                     </button>
+                  </div>
+
+                  {/* Section 2: Import by YouTube Channel URL or @Handle */}
+                  <div className="bg-slate-800/80 border border-white/10 rounded-3xl p-5 space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                        <LinkIcon size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-extrabold text-white">Add Channel via URL or @Handle</h4>
+                        <p className="text-[11px] text-slate-400">Paste any YouTube channel link, @handle, or creator name to subscribe</p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleImportByUrlOrHandle} className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={directUrlInput}
+                          onChange={(e) => setDirectUrlInput(e.target.value)}
+                          placeholder="e.g. https://youtube.com/@LofiGirl or @NoCopyrightSounds"
+                          className="w-full pl-3 pr-3 py-2.5 bg-slate-900 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isResolvingUrl || !directUrlInput.trim()}
+                        className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
+                      >
+                        {isResolvingUrl ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        <span>Add Channel</span>
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Section 3: Google Takeout / Subscriptions File Importer */}
+                  <div className="bg-slate-800/80 border border-white/10 rounded-3xl p-5 space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-extrabold text-white">Import from Google Takeout (.csv / .json)</h4>
+                        <p className="text-[11px] text-slate-400">Upload your exported YouTube subscriptions backup file</p>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center justify-center gap-2 w-full p-4 border border-dashed border-white/20 hover:border-indigo-400/60 rounded-2xl bg-slate-900/60 hover:bg-slate-900 text-xs font-bold text-slate-300 hover:text-white cursor-pointer transition-all">
+                      <Upload size={16} className="text-indigo-400" />
+                      <span>Choose subscriptions.csv or .json file</span>
+                      <input
+                        type="file"
+                        accept=".csv,.json,.xml"
+                        onChange={handleImportTakeoutFile}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
 
                 </div>

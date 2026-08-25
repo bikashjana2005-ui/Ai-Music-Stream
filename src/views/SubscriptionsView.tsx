@@ -4,7 +4,11 @@ import {
   LayoutGrid,
   List,
   Search,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  Youtube,
+  Zap,
+  Sparkles
 } from 'lucide-react';
 import { Track, SubscribedChannel } from '../types';
 import { TrackCard } from '../components/TrackCard';
@@ -24,6 +28,8 @@ interface SubscriptionsViewProps {
   setSelectedChannelFilter: (channelName: string | null) => void;
   onOpenChannelDetails?: (channelName: string) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onSyncYouTubeSubscriptions?: () => Promise<void>;
+  isSyncingSubscriptions?: boolean;
 }
 
 type ViewLayoutMode = 'grid' | 'list';
@@ -50,13 +56,16 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   selectedChannelFilter,
   setSelectedChannelFilter,
   onOpenChannelDetails,
-  onShowToast
+  onShowToast,
+  onSyncYouTubeSubscriptions,
+  isSyncingSubscriptions = false
 }) => {
   const [channelTracks, setChannelTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [feedSort, setFeedSort] = useState<'recent' | 'popular'>('recent');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activePill, setActivePill] = useState<CategoryPillFilter>('All');
+  const [internalSyncing, setInternalSyncing] = useState<boolean>(false);
 
   // View mode state
   const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>(() => {
@@ -190,6 +199,50 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
       {/* 1. YOUTUBE MOBILE SUBSCRIPTION HEADER & CHANNEL CAROUSEL */}
       <div className="bg-slate-900/90 dark:bg-slate-950 p-3.5 sm:p-4 rounded-3xl border border-slate-800/80 space-y-3 shadow-xl">
         
+        {/* Top Sync & Status Bar */}
+        <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-red-600/20 text-red-500 border border-red-500/30 flex items-center justify-center">
+              <Youtube size={15} />
+            </div>
+            <div>
+              <span className="text-xs font-black text-white uppercase tracking-wider">
+                Subscriptions
+              </span>
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-800 text-[10px] font-bold text-slate-300">
+                {subscriptions.length} channels
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+              <Zap size={11} /> Cloudflare Edge
+            </span>
+
+            <button
+              onClick={async () => {
+                setInternalSyncing(true);
+                try {
+                  if (onSyncYouTubeSubscriptions) {
+                    await onSyncYouTubeSubscriptions();
+                  } else {
+                    onOpenSubscriptionsModal();
+                  }
+                } finally {
+                  setTimeout(() => setInternalSyncing(false), 800);
+                }
+              }}
+              disabled={internalSyncing || isSyncingSubscriptions}
+              className="px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-[11px] font-extrabold rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+              title="Sync your YouTube Subscriptions from Google Account"
+            >
+              <RefreshCw size={12} className={internalSyncing || isSyncingSubscriptions ? "animate-spin" : ""} />
+              <span>{internalSyncing || isSyncingSubscriptions ? "Syncing..." : "Sync Channels"}</span>
+            </button>
+          </div>
+        </div>
+
         {/* 2. CIRCULAR SUBSCRIBED CHANNEL AVATARS ROW */}
         <div className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1">
           {/* Add Channel Button Avatar */}

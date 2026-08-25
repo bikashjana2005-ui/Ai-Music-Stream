@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, LogIn, LogOut, ShieldCheck, Cloud, CloudOff, CheckCircle2, 
   Sparkles, User as UserIcon, Loader2, RefreshCw, ExternalLink, Mail, Key, UserPlus, AlertCircle,
-  Users, Trash2, Plus, Check
+  Users, Trash2, Plus, Check, Eye, EyeOff, Music2, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
 import { 
   loginWithGoogle, 
-  loginWithGoogleRedirect,
+  loginWithGoogleRedirect, 
   loginWithEmail, 
   registerWithEmail, 
   loginAnonymously, 
@@ -31,6 +31,7 @@ interface UserAuthModalProps {
   user: User | null;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onSyncGoogleAccount?: () => void;
+  onSyncYouTubeSubscriptions?: (token?: string) => Promise<void>;
   favoritesCount: number;
   subscriptionsCount: number;
   playlistsCount: number;
@@ -42,19 +43,21 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   user,
   onShowToast,
   onSyncGoogleAccount,
+  onSyncYouTubeSubscriptions,
   favoritesCount,
   subscriptionsCount,
   playlistsCount
 }) => {
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [authTab, setAuthTab] = useState<'google' | 'email' | 'guest'>('google');
-  const [showAccountsList, setShowAccountsList] = useState(false);
+  const [isSyncingYouTube, setIsSyncingYouTube] = useState(false);
+  const [authTab, setAuthTab] = useState<'google' | 'email' | 'guest' | 'accounts'>('google');
   
   // Email form states
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -129,18 +132,15 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
     }
 
     if (acc.provider === 'guest' || acc.isAnonymous) {
-      // Instantly log into Guest mode
       await handleGuestSignIn();
     } else if (acc.provider === 'email' && acc.email) {
       setAuthTab('email');
       setIsRegistering(false);
       setEmail(acc.email);
       setPassword('');
-      setShowAccountsList(false);
-      onShowToast(`Switched profile target to ${acc.email}. Enter password to sign in!`, 'info');
+      onShowToast(`Switched target to ${acc.email}. Enter password to log in!`, 'info');
     } else {
       setAuthTab('google');
-      setShowAccountsList(false);
       onShowToast(`Click "Sign In with Google" to switch to ${acc.displayName || acc.email || 'Google Account'}`, 'info');
     }
   };
@@ -151,6 +151,16 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
     try {
       const res = await loginWithGoogle();
       onShowToast(`Welcome back, ${res.user.displayName || 'Music Enthusiast'}! Cloud synced.`, 'success');
+      
+      // Auto-sync YouTube subscriptions if granted
+      if (res.accessToken && onSyncYouTubeSubscriptions) {
+        onShowToast('Syncing YouTube channels from your Google Account...', 'info');
+        try {
+          await onSyncYouTubeSubscriptions(res.accessToken);
+        } catch (ytErr) {
+          console.warn('YouTube auto sync after login notice:', ytErr);
+        }
+      }
       onClose();
     } catch (err: any) {
       console.error('Google sign in error:', err);
@@ -240,9 +250,14 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
       onShowToast(`Signed in as Guest! Cloud Firestore sync activated.`, 'success');
       onClose();
     } catch (err: any) {
-      console.error('Guest Auth Error:', err);
-      setErrorMsg('Guest sign in failed: ' + (err?.message || 'Unknown error'));
-      onShowToast('Guest sign-in failed.', 'error');
+      if (err?.code === 'auth/admin-restricted-operation' || err?.code === 'auth/operation-not-allowed' || err?.message?.includes('admin-restricted-operation')) {
+        setErrorMsg('Anonymous guest sign-in is disabled in Firebase. Please sign in with Google or Email to sync your library.');
+        onShowToast('Please sign in with Google or Email to sync.', 'info');
+        setAuthTab('google');
+      } else {
+        setErrorMsg('Guest sign in: ' + (err?.message || 'Please use Google or Email login.'));
+        onShowToast('Guest sign-in unavailable.', 'info');
+      }
     } finally {
       setLoading(false);
     }
@@ -253,7 +268,6 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
     try {
       await logoutUser();
       onShowToast('Signed out successfully.', 'info');
-      onClose();
     } catch (err: any) {
       onShowToast('Error signing out.', 'error');
     } finally {
@@ -268,461 +282,600 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+        <div id="auth-modal-overlay" className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          {/* Backdrop with blur & ambient gradient */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-950/70 backdrop-blur-md"
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl"
             onClick={onClose}
           />
 
+          {/* Modal Container */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 16 }}
+            id="auth-modal-card"
+            initial={{ opacity: 0, scale: 0.94, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 16 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-md bg-white/90 dark:bg-slate-900/95 backdrop-blur-3xl border border-white/60 dark:border-white/15 rounded-3xl p-6 sm:p-7 shadow-[0_20px_60px_rgba(0,0,0,0.5)] relative text-gray-900 dark:text-white z-10 overflow-hidden"
+            exit={{ opacity: 0, scale: 0.94, y: 20 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl relative text-slate-900 dark:text-white z-10 overflow-hidden flex flex-col my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-gray-200/60 dark:border-white/10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 text-white flex items-center justify-center shadow-md">
-                  <Cloud size={20} />
-                </div>
-                <div>
-                  <h3 className="font-black text-base text-gray-900 dark:text-white flex items-center gap-1.5">
-                    Firebase Cloud Account
-                  </h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
-                    Cloud Database & Multi-Device Sync
-                  </p>
-                </div>
-              </div>
+            {/* Ambient visual banner */}
+            <div className="relative px-6 pt-6 pb-5 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white overflow-hidden">
+              {/* Decorative background glow circles */}
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-pink-500/20 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-indigo-400/20 rounded-full blur-xl pointer-events-none" />
 
-              <button
-                onClick={onClose}
-                className="p-2 rounded-xl text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="py-4 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
-              {/* Multi-Accounts Switcher Section */}
-              {savedAccounts.length > 0 && (
-                <div className="bg-gray-100/80 dark:bg-slate-800/80 p-3.5 rounded-2xl border border-gray-200/80 dark:border-white/10 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                      <Users size={14} className="text-indigo-500" />
-                      Saved Accounts ({savedAccounts.length})
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-semibold">Tap profile to switch</span>
+              <div className="relative z-10 flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-inner">
+                    <Music2 size={24} className="text-white drop-shadow" />
                   </div>
-
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                    {savedAccounts.map((acc) => {
-                      const isActive = user && user.uid === acc.uid;
-                      return (
-                        <div
-                          key={acc.uid}
-                          onClick={() => handleSwitchToAccount(acc)}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                            isActive 
-                              ? 'bg-indigo-500/15 border-indigo-500/40 ring-1 ring-indigo-500/30' 
-                              : 'bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 border-gray-200/60 dark:border-white/10'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            {acc.photoURL ? (
-                              <img src={acc.photoURL} alt={acc.displayName || 'Account'} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-indigo-500" />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                                <UserIcon size={14} />
-                              </div>
-                            )}
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
-                                  {acc.displayName || (acc.isAnonymous ? 'Guest Listener' : 'User Account')}
-                                </span>
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                                  acc.provider === 'google' 
-                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' 
-                                    : acc.provider === 'guest' 
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                    : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
-                                }`}>
-                                  {acc.provider.toUpperCase()}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-                                {acc.email || `ID: ${acc.uid.slice(0, 10)}...`}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                            {isActive ? (
-                              <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2 py-1 rounded-lg">
-                                <Check size={12} /> Active
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSwitchToAccount(acc);
-                                }}
-                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] rounded-lg shadow transition-all active:scale-95"
-                              >
-                                Switch
-                              </button>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={(e) => handleRemoveSavedAccount(e, acc.uid)}
-                              className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                              title="Remove saved account"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {user ? (
-                /* Logged In View */
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3.5 p-4 bg-indigo-500/10 dark:bg-indigo-400/15 rounded-2xl border border-indigo-500/20">
-                    {user.photoURL ? (
-                      <img 
-                        src={user.photoURL} 
-                        alt={user.displayName || 'User'} 
-                        className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500 shadow-md"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-lg shadow-md">
-                        <UserIcon size={22} />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-black text-sm text-gray-900 dark:text-white truncate flex items-center gap-1.5">
-                        {user.displayName || (user.isAnonymous ? 'Guest Music Listener' : 'Authenticated User')}
-                        {user.isAnonymous && (
-                          <span className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-                            Guest
-                          </span>
-                        )}
-                      </h4>
-                      <p className="text-xs text-indigo-600 dark:text-indigo-300 font-semibold truncate">
-                        {user.email || `ID: ${user.uid.slice(0, 12)}...`}
-                      </p>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        <CheckCircle2 size={12} /> Syncing with Firestore Cloud
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-xl text-white tracking-tight">
+                        {user ? 'Account Hub' : 'Welcome to Aura'}
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10px] font-bold tracking-wide uppercase text-white/90">
+                        Cloud Sync
                       </span>
                     </div>
+                    <p className="text-xs text-indigo-100/90 font-medium mt-0.5">
+                      {user 
+                        ? 'Manage your cloud profile and synchronized library' 
+                        : 'Sign in to access synchronized playlists, favorites & channels'}
+                    </p>
                   </div>
+                </div>
 
-                  {/* Cloud Sync Stats */}
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    <div className="bg-gray-100 dark:bg-slate-800/80 p-3 rounded-2xl text-center border border-gray-200/60 dark:border-white/10">
-                      <span className="block text-lg font-black text-rose-500">{subscriptionsCount}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Channels</span>
-                    </div>
-                    <div className="bg-gray-100 dark:bg-slate-800/80 p-3 rounded-2xl text-center border border-gray-200/60 dark:border-white/10">
-                      <span className="block text-lg font-black text-indigo-500">{favoritesCount}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Favorites</span>
-                    </div>
-                    <div className="bg-gray-100 dark:bg-slate-800/80 p-3 rounded-2xl text-center border border-gray-200/60 dark:border-white/10">
-                      <span className="block text-lg font-black text-purple-500">{playlistsCount}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Playlists</span>
-                    </div>
-                  </div>
+                <button
+                  id="auth-modal-close-btn"
+                  onClick={onClose}
+                  className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/15 backdrop-blur-sm transition-colors shrink-0"
+                  aria-label="Close modal"
+                >
+                  <X size={18} />
+                </button>
+              </div>
 
-                  <div className="flex flex-col gap-2 pt-1">
-                    {onSyncGoogleAccount && (
-                      <button
-                        onClick={async () => {
-                          setIsSyncing(true);
-                          await onSyncGoogleAccount();
-                          setTimeout(() => setIsSyncing(false), 800);
-                        }}
-                        disabled={isSyncing || loading}
-                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-2xl flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 active:scale-98"
-                      >
-                        <RefreshCw size={15} className={isSyncing ? 'animate-spin' : ''} />
-                        <span>{isSyncing ? 'Syncing Google Account...' : 'Sync Google YouTube Account'}</span>
-                      </button>
+              {/* Active User Quick Ribbon (if logged in) */}
+              {user && (
+                <div className="mt-4 pt-3 border-t border-white/15 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt="Avatar" className="w-7 h-7 rounded-full object-cover ring-2 ring-white/50" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">
+                        <UserIcon size={14} />
+                      </div>
                     )}
+                    <span className="text-xs font-semibold text-white truncate">
+                      {user.displayName || user.email || 'Guest Listener'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/30 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Synced
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="px-6 pt-4 pb-1">
+              <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/60 text-xs font-bold">
+                <button
+                  id="tab-google"
+                  onClick={() => { setAuthTab('google'); setErrorMsg(null); }}
+                  className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authTab === 'google'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Sparkles size={13} />
+                  <span className="truncate">Google</span>
+                </button>
+
+                <button
+                  id="tab-email"
+                  onClick={() => { setAuthTab('email'); setErrorMsg(null); }}
+                  className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authTab === 'email'
+                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Mail size={13} />
+                  <span className="truncate">Email</span>
+                </button>
+
+                <button
+                  id="tab-guest"
+                  onClick={() => { setAuthTab('guest'); setErrorMsg(null); }}
+                  className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    authTab === 'guest'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <UserIcon size={13} />
+                  <span className="truncate">1-Click</span>
+                </button>
+
+                <button
+                  id="tab-accounts"
+                  onClick={() => { setAuthTab('accounts'); setErrorMsg(null); }}
+                  className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 relative ${
+                    authTab === 'accounts'
+                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Users size={13} />
+                  <span className="truncate">Profiles</span>
+                  {savedAccounts.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow">
+                      {savedAccounts.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Body content */}
+            <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {/* Error Message Box */}
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-xs text-rose-700 dark:text-rose-300 space-y-2"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle size={16} className="shrink-0 text-rose-500 mt-0.5" />
+                    <p className="font-medium leading-relaxed flex-1">{errorMsg}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('email'); setErrorMsg(null); }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-xl transition-all shadow-sm flex items-center gap-1 active:scale-95"
+                    >
+                      <Mail size={12} /> Email Sign In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('guest'); setErrorMsg(null); }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-xl transition-all shadow-sm flex items-center gap-1 active:scale-95"
+                    >
+                      <UserIcon size={12} /> 1-Click Guest Sync
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB 1: GOOGLE AUTH */}
+              {authTab === 'google' && (
+                <motion.div
+                  key="google-tab"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="space-y-4"
+                >
+                  <div className="text-center space-y-1.5 py-1">
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                      Sign in with your Google Account
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                      Instant synchronization for your liked tracks, custom playlists, and subscribed YouTube music channels.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {/* Official Google Button */}
+                    <button
+                      id="google-signin-primary-btn"
+                      onClick={handleGoogleSignIn}
+                      disabled={loading}
+                      className="w-full py-3.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow flex items-center justify-center gap-3 transition-all active:scale-98 disabled:opacity-50"
+                    >
+                      {loading ? (
+                        <Loader2 size={18} className="animate-spin text-indigo-600" />
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                          </svg>
+                          <span>Continue with Google</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Secondary Redirect Option */}
+                    <button
+                      onClick={handleGoogleRedirectSignIn}
+                      disabled={loading}
+                      className="w-full py-2.5 px-3 bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition-all border border-slate-200/80 dark:border-slate-700/60"
+                    >
+                      <LogIn size={14} className="text-indigo-500" />
+                      <span>Use Full-Page Redirect Sign-In</span>
+                    </button>
+                  </div>
+
+                  {/* Browser Sandbox Helper Box */}
+                  <div className="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-800/40 rounded-2xl text-left space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                      <span className="flex items-center gap-1.5">
+                        <ExternalLink size={14} className="text-indigo-600 dark:text-indigo-400" />
+                        Running in Preview Mode?
+                      </span>
+                      <button
+                        onClick={handleOpenNewTab}
+                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
+                      >
+                        Open New Tab <ArrowRight size={11} />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                      If your browser restricts popup windows inside iframes, opening in a standalone tab resolves Google OAuth verification smoothly.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB 2: EMAIL / PASSWORD */}
+              {authTab === 'email' && (
+                <motion.form
+                  key="email-tab"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  onSubmit={handleEmailAuth}
+                  className="space-y-3.5"
+                >
+                  <div className="text-center space-y-1">
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                      {isRegistering ? 'Create your Aura Account' : 'Sign in with Email'}
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {isRegistering 
+                        ? 'Set up a password-protected cloud profile' 
+                        : 'Enter your account credentials to access your library'}
+                    </p>
+                  </div>
+
+                  {isRegistering && (
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">Display Name</label>
+                      <div className="relative">
+                        <UserIcon size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                        <input
+                          id="input-display-name"
+                          type="text"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          placeholder="e.g. Alex Rivera"
+                          className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 dark:text-white transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">Email Address</label>
+                    <div className="relative">
+                      <Mail size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                      <input
+                        id="input-email"
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="your.email@example.com"
+                        className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 dark:text-white transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">Password</label>
+                    <div className="relative">
+                      <Key size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                      <input
+                        id="input-password"
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 dark:text-white transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        aria-label="Toggle password visibility"
+                      >
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    id="submit-email-auth-btn"
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50 mt-1"
+                  >
+                    {loading ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : isRegistering ? (
+                      <>
+                        <UserPlus size={16} /> Create Account
+                      </>
+                    ) : (
+                      <>
+                        <LogIn size={16} /> Sign In
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRegistering(!isRegistering);
+                        setErrorMsg(null);
+                      }}
+                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      {isRegistering 
+                        ? 'Already registered? Switch to Sign In' 
+                        : "New to Aura? Create an Account"}
+                    </button>
+                  </div>
+                </motion.form>
+              )}
+
+              {/* TAB 3: 1-CLICK GUEST SYNC */}
+              {authTab === 'guest' && (
+                <motion.div
+                  key="guest-tab"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="space-y-4 text-center py-2"
+                >
+                  <div className="w-14 h-14 mx-auto rounded-3xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
+                    <ShieldCheck size={28} />
+                  </div>
+
+                  <div className="space-y-1 max-w-sm mx-auto">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      Instant 1-Click Cloud Access
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Start playing and saving tracks instantly. No forms, no popups, and no passwords required. Your data is automatically backed up to Cloud Firestore.
+                    </p>
+                  </div>
+
+                  <button
+                    id="guest-signin-btn"
+                    onClick={handleGuestSignIn}
+                    disabled={loading}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2.5 transition-all active:scale-98 disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <>
+                        <Sparkles size={18} />
+                        <span>Activate 1-Click Cloud Sync</span>
+                      </>
+                    )}
+                  </button>
+                </motion.div>
+              )}
+
+              {/* TAB 4: MULTIPLE ACCOUNTS SWITCHER */}
+              {authTab === 'accounts' && (
+                <motion.div
+                  key="accounts-tab"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Users size={14} className="text-purple-500" />
+                        Saved User Profiles ({savedAccounts.length})
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        Switch between multiple Google, Email, or Guest profiles instantly.
+                      </p>
+                    </div>
 
                     <button
+                      onClick={() => setAuthTab('email')}
+                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] rounded-lg shadow-sm flex items-center gap-1 transition-all active:scale-95 shrink-0"
+                    >
+                      <Plus size={12} /> Add New
+                    </button>
+                  </div>
+
+                  {savedAccounts.length === 0 ? (
+                    <div className="p-6 text-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                      <UserIcon size={28} className="mx-auto text-slate-400" />
+                      <p className="text-xs text-slate-500 font-medium">No saved accounts found on this device.</p>
+                      <button
+                        onClick={() => setAuthTab('google')}
+                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl"
+                      >
+                        Sign in now
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                      {savedAccounts.map((acc) => {
+                        const isActive = user && user.uid === acc.uid;
+                        return (
+                          <div
+                            key={acc.uid}
+                            onClick={() => handleSwitchToAccount(acc)}
+                            className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
+                              isActive
+                                ? 'bg-indigo-500/10 dark:bg-indigo-500/20 border-indigo-500/40 ring-2 ring-indigo-500/30'
+                                : 'bg-slate-50 dark:bg-slate-800/70 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {acc.photoURL ? (
+                                <img src={acc.photoURL} alt={acc.displayName || 'Account'} className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-indigo-500/50" />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                                  <UserIcon size={16} />
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                    {acc.displayName || (acc.isAnonymous ? 'Guest Listener' : 'User Account')}
+                                  </span>
+                                  <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase border ${
+                                    acc.provider === 'google'
+                                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                                      : acc.provider === 'guest'
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                      : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                                  }`}>
+                                    {acc.provider}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                  {acc.email || `ID: ${acc.uid.slice(0, 12)}...`}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                              {isActive ? (
+                                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2.5 py-1 rounded-lg">
+                                  <Check size={12} /> Active
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSwitchToAccount(acc);
+                                  }}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] rounded-lg shadow transition-all active:scale-95"
+                                >
+                                  Switch
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={(e) => handleRemoveSavedAccount(e, acc.uid)}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                title="Remove profile from this device"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Cloud Sync Library Overview Cards (if user is signed in) */}
+              {user && (
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Cloud Synced Library
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 size={11} /> Up to date
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-2xl text-center border border-slate-200/80 dark:border-slate-700/60">
+                      <span className="block text-base font-black text-rose-500">{subscriptionsCount}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Channels</span>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-2xl text-center border border-slate-200/80 dark:border-slate-700/60">
+                      <span className="block text-base font-black text-indigo-500">{favoritesCount}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Favorites</span>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-2xl text-center border border-slate-200/80 dark:border-slate-700/60">
+                      <span className="block text-base font-black text-purple-500">{playlistsCount}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Playlists</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={async () => {
+                        setIsSyncing(true);
+                        try {
+                          if (onSyncYouTubeSubscriptions) {
+                            await onSyncYouTubeSubscriptions();
+                          } else if (onSyncGoogleAccount) {
+                            await onSyncGoogleAccount();
+                          }
+                        } finally {
+                          setTimeout(() => setIsSyncing(false), 800);
+                        }
+                      }}
+                      disabled={isSyncing || loading}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98"
+                    >
+                      <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+                      <span>{isSyncing ? 'Syncing Subscriptions...' : 'Sync YouTube & Google Library'}</span>
+                    </button>
+
+                    <button
+                      id="signout-current-user-btn"
                       onClick={handleSignOut}
                       disabled={loading || isSyncing}
-                      className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/25 text-xs font-black rounded-2xl flex items-center justify-center gap-2 transition-all"
+                      className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-98 shrink-0"
                     >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <LogOut size={14} />}
                       Sign Out
                     </button>
                   </div>
                 </div>
-              ) : (
-                /* Logged Out View - Multi Option */
-                <div className="space-y-4">
-                  {/* Method Switcher Tabs */}
-                  <div className="flex bg-gray-100 dark:bg-slate-800/80 p-1 rounded-2xl border border-gray-200/60 dark:border-white/10 text-xs font-bold">
-                    <button
-                      onClick={() => { setAuthTab('google'); setErrorMsg(null); }}
-                      className={`flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                        authTab === 'google' 
-                          ? 'bg-white dark:bg-indigo-600 text-gray-900 dark:text-white shadow-sm' 
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Sparkles size={13} /> Google
-                    </button>
-                    <button
-                      onClick={() => { setAuthTab('email'); setErrorMsg(null); }}
-                      className={`flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                        authTab === 'email' 
-                          ? 'bg-white dark:bg-indigo-600 text-gray-900 dark:text-white shadow-sm' 
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Mail size={13} /> Email
-                    </button>
-                    <button
-                      onClick={() => { setAuthTab('guest'); setErrorMsg(null); }}
-                      className={`flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                        authTab === 'guest' 
-                          ? 'bg-white dark:bg-indigo-600 text-gray-900 dark:text-white shadow-sm' 
-                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <UserIcon size={13} /> 1-Click Guest
-                    </button>
-                  </div>
-
-                  {/* Error / Alert Banner */}
-                  {errorMsg && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-xs text-amber-700 dark:text-amber-300 space-y-2"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <AlertCircle size={16} className="shrink-0 text-amber-500 mt-0.5" />
-                        <div className="leading-snug flex-1">
-                          <p className="font-semibold">{errorMsg}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => { setAuthTab('email'); setErrorMsg(null); }}
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-lg transition-all active:scale-95 shadow-sm flex items-center gap-1"
-                        >
-                          <Mail size={12} /> Use Email Login
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setAuthTab('guest'); setErrorMsg(null); }}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-lg transition-all active:scale-95 shadow-sm flex items-center gap-1"
-                        >
-                          <UserIcon size={12} /> 1-Click Guest Sync
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Google Auth Tab */}
-                  {authTab === 'google' && (
-                    <div className="space-y-3 pt-1 text-center">
-                      <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
-                        Connect with Google to auto-sync YouTube channels, playlists, and favorites to Firebase Cloud.
-                      </p>
-
-                      <div className="grid grid-cols-1 gap-2">
-                        <button
-                          onClick={handleGoogleSignIn}
-                          disabled={loading}
-                          className="w-full py-3.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2.5 transition-all active:scale-95 disabled:opacity-50"
-                        >
-                          {loading ? (
-                            <Loader2 size={18} className="animate-spin" />
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                              </svg>
-                              <span>Sign In with Google (Popup)</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={handleGoogleRedirectSignIn}
-                          disabled={loading}
-                          className="w-full py-2.5 px-3 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all border border-gray-200/80 dark:border-white/10"
-                        >
-                          <LogIn size={14} className="text-indigo-500" />
-                          <span>Try Google Redirect Sign-In Mode</span>
-                        </button>
-                      </div>
-
-                      <div className="p-3 bg-indigo-500/10 dark:bg-indigo-500/15 border border-indigo-500/20 rounded-2xl text-left space-y-2">
-                        <div className="flex items-center justify-between text-xs font-bold text-indigo-700 dark:text-indigo-300">
-                          <span className="flex items-center gap-1.5">
-                            <ExternalLink size={13} />
-                            Iframe Preview Solution
-                          </span>
-                          <button
-                            onClick={handleOpenNewTab}
-                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-lg shadow transition-all active:scale-95"
-                          >
-                            Open in New Tab
-                          </button>
-                        </div>
-                        <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
-                          Browsers often block OAuth popups inside embedded preview iframes. Click <strong>Open in New Tab</strong> to run Aura in a standalone window where Google OAuth popups work 100% seamlessly!
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Email / Password Tab */}
-                  {authTab === 'email' && (
-                    <form onSubmit={handleEmailAuth} className="space-y-3 pt-1">
-                      {isRegistering && (
-                        <div>
-                          <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-1">Your Name</label>
-                          <div className="relative">
-                            <UserIcon size={15} className="absolute left-3 top-3 text-gray-400" />
-                            <input
-                              type="text"
-                              value={displayName}
-                              onChange={(e) => setDisplayName(e.target.value)}
-                              placeholder="John Doe"
-                              className="w-full pl-9 pr-3 py-2.5 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-1">Email Address</label>
-                        <div className="relative">
-                          <Mail size={15} className="absolute left-3 top-3 text-gray-400" />
-                          <input
-                            type="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="user@example.com"
-                            className="w-full pl-9 pr-3 py-2.5 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-1">Password</label>
-                        <div className="relative">
-                          <Key size={15} className="absolute left-3 top-3 text-gray-400" />
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className="w-full pl-9 pr-3 py-2.5 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-2xl shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {loading ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : isRegistering ? (
-                          <>
-                            <UserPlus size={16} /> Create New Account
-                          </>
-                        ) : (
-                          <>
-                            <LogIn size={16} /> Sign In with Email
-                          </>
-                        )}
-                      </button>
-
-                      <div className="text-center pt-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsRegistering(!isRegistering);
-                            setErrorMsg(null);
-                          }}
-                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                        >
-                          {isRegistering 
-                            ? 'Already have an account? Sign In' 
-                            : "Don't have an account? Register here"}
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* 1-Click Guest Sync Tab */}
-                  {authTab === 'guest' && (
-                    <div className="space-y-3 pt-1 text-center">
-                      <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
-                        Instant 1-Click cloud sync. No password or Google popup required! Stores data in Firebase Firestore automatically.
-                      </p>
-
-                      <button
-                        onClick={handleGuestSignIn}
-                        disabled={loading}
-                        className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {loading ? (
-                          <Loader2 size={18} className="animate-spin" />
-                        ) : (
-                          <>
-                            <ShieldCheck size={18} />
-                            <span>Activate 1-Click Guest Cloud Sync</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 font-medium flex items-center justify-center gap-1 text-center pt-2">
-                    <CloudOff size={10} /> Local browser storage is active as an instant fallback.
-                  </p>
-                </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="pt-3 border-t border-gray-200/60 dark:border-white/10 flex justify-end">
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-900/90 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1 font-medium">
+                <Cloud size={12} className="text-indigo-500" /> Firebase Secured
+              </span>
+
               <button
+                id="auth-modal-done-btn"
                 onClick={onClose}
-                className="px-5 py-2 bg-gray-200 dark:bg-slate-800 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-xl hover:bg-gray-300 dark:hover:bg-slate-700 transition-colors"
+                className="px-4 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-colors"
               >
                 Close
               </button>

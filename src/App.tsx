@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult, loginAnonymously } from './lib/firebase';
+import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult, loginAnonymously, loginWithGoogle } from './lib/firebase';
 import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack } from './types';
 import { DEFAULT_TRACKS, DEFAULT_CHANNELS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
@@ -443,6 +443,66 @@ export default function App() {
       console.error('Google account sync error:', err);
       if (showNotification) {
         showToast('Failed to sync Google account data.', 'error');
+      }
+    }
+  }, [user]);
+
+  // Real-time YouTube Subscription Sync from Google Account
+  const handleSyncYouTubeSubscriptions = useCallback(async () => {
+    try {
+      showToast('Syncing YouTube channels from Google Account...', 'info');
+      let ytChannels: SubscribedChannel[] = [];
+      try {
+        ytChannels = await fetchYouTubeUserSubscriptions();
+      } catch (tokenErr: any) {
+        if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
+          showToast('Authenticating with Google to fetch YouTube subscriptions...', 'info');
+          const loginRes = await loginWithGoogle();
+          if (loginRes?.accessToken) {
+            ytChannels = await fetchYouTubeUserSubscriptions(loginRes.accessToken);
+          } else {
+            showToast('Google sign-in completed. Please tap Sync Channels again.', 'info');
+            return;
+          }
+        } else {
+          throw tokenErr;
+        }
+      }
+
+      if (!ytChannels || ytChannels.length === 0) {
+        showToast('No YouTube subscriptions found on this Google account.', 'info');
+        return;
+      }
+
+      setSubscriptions((prev) => {
+        const map = new Map<string, SubscribedChannel>();
+        prev.forEach(c => map.set(c.id, c));
+        ytChannels.forEach(c => map.set(c.id, c));
+        return Array.from(map.values());
+      });
+
+      if (user) {
+        for (const ch of ytChannels) {
+          try {
+            await setDoc(doc(db, 'users', user.uid, 'subscriptions', ch.id), {
+              ...ch,
+              userId: user.uid,
+              syncedFromYouTube: true,
+              syncedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (e) {
+            console.warn('Could not persist synced channel to Firestore:', ch.name, e);
+          }
+        }
+      }
+
+      showToast(`⚡ Successfully synced ${ytChannels.length} YouTube channels!`, 'success');
+    } catch (err: any) {
+      console.warn('YouTube sync notice:', err?.message || err);
+      if (err?.message === 'YOUTUBE_API_UNCONFIGURED') {
+        showToast('YouTube API sync is currently being verified on Google Cloud. You can browse and add channels directly.', 'info');
+      } else {
+        showToast('YouTube sync notice: please ensure you are signed in with your Google account.', 'info');
       }
     }
   }, [user]);
@@ -1026,6 +1086,7 @@ export default function App() {
                 setSelectedChannelFilter={setSelectedChannelFilter}
                 onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
                 onShowToast={showToast}
+                onSyncYouTubeSubscriptions={handleSyncYouTubeSubscriptions}
               />
             )}
 
@@ -1099,6 +1160,7 @@ export default function App() {
                 onOpenWebView={handleOpenWebView}
                 onOpenAndroidModal={handleOpenAndroidModal}
                 onSyncGoogleAccount={handleSyncGoogleAccount}
+                onSyncYouTubeSubscriptions={handleSyncYouTubeSubscriptions}
                 favoritesCount={favorites.length}
                 subscriptionsCount={subscriptions.length}
                 playlistsCount={playlists.length}
@@ -1279,6 +1341,19 @@ export default function App() {
         favorites={favorites}
         onToggleFavorite={handleToggleFavorite}
         onShowToast={showToast}
+      />
+
+      {/* Cloud Account & Sign-In Modal */}
+      <UserAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        user={user}
+        onShowToast={showToast}
+        onSyncGoogleAccount={() => handleSyncGoogleAccount(user, true)}
+        onSyncYouTubeSubscriptions={handleSyncYouTubeSubscriptions}
+        favoritesCount={favorites.length}
+        subscriptionsCount={subscriptions.length}
+        playlistsCount={playlists.length}
       />
 
 

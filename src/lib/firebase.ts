@@ -110,6 +110,9 @@ export async function loginWithGoogle() {
     const accessToken = credential?.accessToken || null;
     if (accessToken) {
       sessionStorage.setItem('aura_yt_access_token', accessToken);
+      try {
+        localStorage.setItem('aura_yt_access_token', accessToken);
+      } catch (e) {}
     }
     return { user: result.user, accessToken };
   } catch (error: any) {
@@ -139,6 +142,9 @@ export async function handleGoogleRedirectResult() {
       const accessToken = credential?.accessToken || null;
       if (accessToken) {
         sessionStorage.setItem('aura_yt_access_token', accessToken);
+        try {
+          localStorage.setItem('aura_yt_access_token', accessToken);
+        } catch (e) {}
       }
       return { user: result.user, accessToken };
     }
@@ -179,14 +185,18 @@ export async function loginAnonymously() {
       await updateProfile(res.user, { displayName: 'Guest Music Listener' });
     }
     return res.user;
-  } catch (error) {
-    console.error('Anonymous auth error:', error);
+  } catch (error: any) {
+    if (error?.code === 'auth/admin-restricted-operation' || error?.code === 'auth/operation-not-allowed') {
+      console.info('Firebase Anonymous Auth is restricted in project console. Directing user to Google/Email auth.');
+    } else {
+      console.error('Anonymous auth error:', error);
+    }
     throw error;
   }
 }
 
 export async function fetchYouTubeUserSubscriptions(token?: string) {
-  const accessToken = token || sessionStorage.getItem('aura_yt_access_token');
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
   if (!accessToken) {
     throw new Error('NO_ACCESS_TOKEN');
   }
@@ -198,10 +208,16 @@ export async function fetchYouTubeUserSubscriptions(token?: string) {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch YouTube subscriptions');
+    throw new Error('Failed to contact subscription sync server');
   }
 
   const data = await response.json();
+  if (data.status === 'notice' && data.reason === 'accessNotConfigured') {
+    throw new Error('YOUTUBE_API_UNCONFIGURED');
+  } else if (data.status === 'notice' && (data.reason === 'authError' || data.reason === 'invalidCredentials' || data.reason === 'forbidden')) {
+    throw new Error('YOUTUBE_TOKEN_EXPIRED');
+  }
+
   return data.channels || [];
 }
 

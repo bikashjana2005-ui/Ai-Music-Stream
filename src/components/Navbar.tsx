@@ -23,7 +23,8 @@ import {
   Star,
   Tv,
   Globe,
-  Smartphone
+  Smartphone,
+  LogIn
 } from 'lucide-react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
@@ -375,6 +376,36 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Share2 size={15} />
                 <span className="hidden sm:inline">Use App</span>
+              </button>
+            )}
+
+            {/* Cloud User Profile & Sign-In Quick Trigger */}
+            {onOpenAuthModal && (
+              <button
+                id="navbar-auth-profile-btn"
+                onClick={onOpenAuthModal}
+                className={`px-2.5 py-1.5 rounded-2xl border backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0 shadow-xs ${
+                  user
+                    ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white border-transparent shadow-indigo-500/20'
+                }`}
+                title={user ? `Signed in as ${user.displayName || user.email || 'Cloud User'}` : 'Sign in to sync library'}
+              >
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="Avatar" className="w-5 h-5 rounded-full object-cover ring-1 ring-indigo-500" />
+                ) : user ? (
+                  <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">
+                    <User size={12} />
+                  </div>
+                ) : (
+                  <LogIn size={14} className="text-white" />
+                )}
+                <span className="hidden sm:inline truncate max-w-[100px]">
+                  {user ? (user.displayName?.split(' ')[0] || 'Account') : 'Sign In'}
+                </span>
+                {user && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                )}
               </button>
             )}
 

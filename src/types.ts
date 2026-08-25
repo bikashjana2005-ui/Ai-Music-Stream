@@ -62,3 +62,14 @@ export interface DownloadConfig {
   format: 'mp3' | 'mp4';
   quality: string;
 }
+
+export interface CloudflareConfig {
+  enabled: boolean;
+  dohResolver: boolean;
+  edgeCaching: boolean;
+  ultraLowLatency: boolean;
+  edgeColo: string;
+  latencyMs: number;
+  cacheHitRate: number;
+  shieldActive: boolean;
+}
