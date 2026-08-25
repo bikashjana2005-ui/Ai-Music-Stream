@@ -43,6 +43,7 @@ import { PlayerEngine } from '../components/GlobalYouTubePlayer';
 import { logoutUser, loginWithGoogle } from '../lib/firebase';
 import { CloudflareConfig } from '../types';
 import { getSavedCloudflareConfig, saveCloudflareConfig, measureCloudflareLatency } from '../utils/cloudflare';
+import { AppLogo } from '../components/AppLogo';
 
 interface SettingsViewProps {
   darkMode: boolean;
@@ -1162,6 +1163,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {/* 6. SYSTEM, STORAGE & CACHE SECTION */}
           {(activeTab === 'all' || activeTab === 'system') && (
             <div className="p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
+              {/* App Brand Header */}
+              <div className="flex items-center gap-3.5 p-3.5 bg-gray-50 dark:bg-slate-900/60 rounded-2xl border border-gray-100 dark:border-white/5">
+                <AppLogo size={44} glow={true} />
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    Ai Music Stream
+                    <span className="text-[10px] font-black px-2 py-0.5 bg-indigo-500/20 text-indigo-500 dark:text-indigo-300 rounded-full">v1.2</span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                    YouTube Stream Engine & Cloudflare Edge CDN
+                  </p>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">

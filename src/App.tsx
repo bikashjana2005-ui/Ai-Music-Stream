@@ -16,7 +16,6 @@ import { ChannelDetailsModal } from './components/ChannelDetailsModal';
 import { UserAuthModal } from './components/UserAuthModal';
 import { YouTubeMetadataModal } from './components/YouTubeMetadataModal';
 import { Toast } from './components/Toast';
-import { HomeView } from './views/HomeView';
 import { SubscriptionsView } from './views/SubscriptionsView';
 import { SearchView } from './views/SearchView';
 import { LibraryView } from './views/LibraryView';
@@ -28,7 +27,7 @@ import { InAppWebViewModal } from './components/InAppWebViewModal';
 import { AndroidNativeExporterModal } from './components/AndroidNativeExporterModal';
 import { applyAccentTheme } from './utils/accentTheme';
 
-const TAB_ORDER: TabType[] = ['home', 'search', 'subscriptions', 'library', 'downloads', 'settings'];
+const TAB_ORDER: TabType[] = ['search', 'subscriptions', 'library', 'downloads', 'settings'];
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
@@ -38,9 +37,9 @@ export default function App() {
   const [activeTab, setActiveTabState] = useState<TabType>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_last_active_tab');
-      return (saved as string) === 'facebook' ? 'home' : (saved as TabType) || 'home';
+      return (saved as string) === 'home' || (saved as string) === 'facebook' ? 'search' : (saved as TabType) || 'search';
     } catch {
-      return 'home';
+      return 'search';
     }
   });
   const [tabDirection, setTabDirection] = useState<number>(1);
@@ -839,11 +838,11 @@ export default function App() {
   };
 
   const handleToggleSubscribe = async (channel: SubscribedChannel) => {
-    const channelName = channel?.name || '';
+    const channelName = channel?.name || 'Channel';
     const channelId = channel?.id || '';
     const exists = subscriptions.some(s => s.id === channelId || (s.name || '').toLowerCase() === channelName.toLowerCase());
     
-    // Optimistic state update
+    // Instant optimistic state update
     setSubscriptions((prev) => {
       if (exists) {
         return prev.filter(s => s.id !== channelId && (s.name || '').toLowerCase() !== channelName.toLowerCase());
@@ -852,7 +851,20 @@ export default function App() {
       }
     });
 
-    // Sync to Firestore if logged in
+    if (exists) {
+      showToast(`Unsubscribed from ${channelName}`, 'info');
+      // If currently filtering by this channel, reset
+      if (selectedChannelFilter && selectedChannelFilter.toLowerCase() === channelName.toLowerCase()) {
+        setSelectedChannelFilter(null);
+      }
+    } else {
+      showToast(`⚡ Subscribed to ${channelName}! Live updates active`, 'success');
+    }
+
+    // Broadcast instant local storage event for cross-tab real-time sync
+    window.dispatchEvent(new Event('storage'));
+
+    // Sync to Firestore in real time if logged in
     if (user) {
       const cleanId = channel.id || `ch-${Date.now()}`;
       const path = `users/${user.uid}/subscriptions/${cleanId}`;
@@ -1055,23 +1067,6 @@ export default function App() {
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center will-change-transform"
           >
-            {activeTab === 'home' && (
-              <HomeView
-                onPlay={handlePlayTrack}
-                onDownload={(track) => setDownloadTrack(track)}
-                currentTrackId={currentTrack?.id}
-                favorites={favorites}
-                history={history}
-                onClearHistory={handleClearHistory}
-                onToggleFavorite={handleToggleFavorite}
-                onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
-                onOpenMetadata={(track) => setMetadataTrack(track)}
-                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
-                onShowToast={showToast}
-              />
-            )}
-
-
             {activeTab === 'subscriptions' && (
               <SubscriptionsView
                 onPlay={handlePlayTrack}

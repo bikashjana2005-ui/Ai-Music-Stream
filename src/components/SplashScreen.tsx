@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Radio, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
+import { AppLogo } from './AppLogo';
 
 export const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const onCompleteRef = useRef(onComplete);
@@ -50,18 +51,18 @@ export const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete 
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         className="relative z-10 flex flex-col items-center px-6 text-center"
       >
-        {/* Animated Icon */}
+        {/* Animated App Logo */}
         <motion.div 
-          initial={{ scale: 0.7, rotate: -10, opacity: 0 }}
+          initial={{ scale: 0.7, rotate: -8, opacity: 0 }}
           animate={{ scale: 1, rotate: 0, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
           className="relative mb-6"
         >
           {/* Outer Pulse Glow */}
-          <div className="absolute -inset-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-3xl blur-xl opacity-50 animate-pulse" />
+          <div className="absolute -inset-3 bg-gradient-to-r from-rose-500/40 via-purple-600/40 to-indigo-500/40 rounded-full blur-2xl opacity-70 animate-pulse" />
           
-          <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-2xl shadow-indigo-500/50 border border-white/20">
-            <Radio size={44} className="animate-pulse text-white" />
+          <div className="relative p-1 rounded-full bg-slate-900 border border-white/20 shadow-2xl shadow-black/80">
+            <AppLogo size={88} className="sm:w-24 sm:h-24" />
           </div>
         </motion.div>
 

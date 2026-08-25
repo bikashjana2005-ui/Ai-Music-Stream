@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Home, 
   Search, 
   Library, 
   Settings, 
@@ -29,6 +28,7 @@ import {
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
 import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
+import { AppLogo } from './AppLogo';
 
 interface NavbarProps {
   activeTab: TabType;
@@ -106,18 +106,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      {/* iOS Liquid Glass Top App Bar - Rendered only on Home tab */}
-      {activeTab === 'home' && (
-        <header className="sticky top-0 z-30 w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-200 border-b border-white/40 dark:border-white/10 transition-colors shadow-xs flex flex-col items-center">
+      {/* iOS Liquid Glass Top App Bar */}
+      <header className="sticky top-0 z-30 w-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl backdrop-saturate-200 border-b border-white/40 dark:border-white/10 transition-colors shadow-xs flex flex-col items-center">
         <div className="max-w-full w-full mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3 sm:gap-4">
           
           {/* Brand Logo */}
           <div 
-            onClick={() => setActiveTab('home')}
+            onClick={() => setActiveTab('search')}
             className="flex items-center gap-3 cursor-pointer group select-none shrink-0"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 group-active:scale-95 transition-all ring-1 ring-white/30">
-              <Radio size={22} className="animate-pulse" />
+            <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center shadow-lg shadow-black/30 group-hover:scale-105 group-active:scale-95 transition-all ring-1 ring-white/20">
+              <AppLogo size={36} />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -136,29 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Center Top Nav Links (Desktop View) */}
           <nav ref={topNavRef} className="hidden md:flex items-center gap-1 bg-gray-100/80 dark:bg-slate-800/80 p-1 rounded-2xl border border-gray-200/50 dark:border-white/10 backdrop-blur-md relative overflow-x-auto no-scrollbar scroll-smooth max-w-full">
-            {/* 1. Home */}
-            <button
-              data-tab="home"
-              onClick={() => setActiveTab('home')}
-              className={`relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'home'
-                  ? 'text-indigo-600 dark:text-indigo-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              {activeTab === 'home' && (
-                <motion.div
-                  layoutId="topNavPill"
-                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-xl shadow-xs"
-                  transition={{ type: "spring", stiffness: 350, damping: 28 }}
-                />
-              )}
-              <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
-                <Home size={14} /> Home
-              </span>
-            </button>
-
-            {/* 2. Search */}
+            {/* 1. Search */}
             <button
               data-tab="search"
               onClick={() => setActiveTab('search')}
@@ -180,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* 3. Subscriptions */}
+            {/* 2. Subscriptions */}
             <button
               data-tab="subscriptions"
               onClick={() => setActiveTab('subscriptions')}
@@ -215,7 +192,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* 4. Downloads */}
+            {/* 3. Downloads */}
             <button
               data-tab="downloads"
               onClick={() => setActiveTab('downloads')}
@@ -237,7 +214,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* 5. Library */}
+            {/* 4. Library */}
             <button
               data-tab="library"
               onClick={() => setActiveTab('library')}
@@ -264,7 +241,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
 
-            {/* 6. Settings */}
+            {/* 5. Settings */}
             <button
               data-tab="settings"
               onClick={() => setActiveTab('settings')}
@@ -285,30 +262,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Settings size={14} /> Settings
               </span>
             </button>
-
           </nav>
 
           {/* Right Top Bar Actions */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Data Saver Mode Quick Toggle */}
-            {onToggleDataSaverMode && (
-              <button
-                onClick={() => onToggleDataSaverMode(!isDataSaverMode)}
-                className={`px-2.5 py-1.5 rounded-2xl border backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shadow-xs ${
-                  isDataSaverMode
-                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-300 border-amber-500/40 ring-2 ring-amber-500/30'
-                    : 'bg-gray-500/10 hover:bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/20'
-                }`}
-                title={isDataSaverMode ? "Data Saver Active (Low Bandwidth Audio + Video Stream)" : "Turn on Data Saver (Audio + 144p Video Stream)"}
-              >
-                <Zap size={14} className={isDataSaverMode ? "text-amber-500 fill-amber-500 animate-bounce" : "text-gray-400"} />
-                <span className="hidden sm:inline">{isDataSaverMode ? "Data Saver ON" : "Data Saver"}</span>
-                {isDataSaverMode && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                )}
-              </button>
-            )}
-
             {!isOnline && (
               <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-500/15 dark:bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30 backdrop-blur-md animate-pulse" title="You are currently offline. Local downloaded tracks will play seamlessly.">
                 <WifiOff size={13} className="text-amber-500" />
@@ -322,33 +279,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             )}
 
-            {/* YouTube Channel Subscriptions Manager Quick Trigger */}
-            {onOpenSubscriptionsModal && (
-              <button
-                onClick={onOpenSubscriptionsModal}
-                className="relative px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 rounded-2xl border border-rose-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold"
-                title="Manage Subscribed YouTube Channels"
-              >
-                <Youtube size={16} className="text-rose-500" />
-                <span className="hidden sm:inline">Channels</span>
-                {subscriptionsCount > 0 ? (
-                  <span className="w-4 h-4 bg-rose-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow-xs">
-                    {subscriptionsCount}
-                  </span>
-                ) : (
-                  <Plus size={12} className="text-rose-500" />
-                )}
-              </button>
-            )}
-
-
-
             {/* In-App WebView Browser Trigger */}
             {onOpenWebView && (
               <button
                 onClick={() => onOpenWebView('https://m.youtube.com', 'In-App YouTube WebView')}
                 className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-2xl border border-indigo-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0"
-                title="Open In-App WebView Browser"
+                title="Open In-App YouTube WebView Browser"
               >
                 <Globe size={15} className="text-indigo-500 animate-pulse" />
                 <span className="hidden sm:inline">WebView</span>
@@ -424,108 +360,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
         </div>
-
-        {/* Real-time Original YouTube Channels Navbar Strip */}
-        {subscriptions.length > 0 && (
-          <div className="w-full bg-rose-500/5 dark:bg-rose-500/10 border-t border-rose-500/15 py-1.5 px-4 overflow-x-auto no-scrollbar scroll-smooth flex justify-center">
-            <div className="max-w-6xl w-full mx-auto flex items-center gap-2.5">
-              <span className="text-[10px] font-black text-rose-600 dark:text-rose-300 uppercase tracking-wider flex items-center gap-1 shrink-0">
-                <Youtube size={14} className="text-rose-500" /> Subscriptions:
-              </span>
-
-              <div ref={channelStripRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
-                {/* All Feed reset chip */}
-                <button
-                  data-channel="all"
-                  onClick={() => {
-                    if (setSelectedChannelFilter) setSelectedChannelFilter(null);
-                    setActiveTab('subscriptions');
-                  }}
-                  className={`px-2.5 py-1 rounded-xl text-[11px] font-black transition-all flex items-center gap-1 shrink-0 ${
-                    activeTab === 'subscriptions' && !selectedChannelFilter
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'bg-white/80 dark:bg-slate-800/80 text-gray-700 dark:text-gray-300 hover:bg-rose-500/20'
-                  }`}
-                >
-                  <Radio size={12} /> All Streams
-                </button>
-
-                {/* Subscribed Channel Avatars Bar */}
-                {subscriptions.map((ch) => {
-                  const isSelected = activeTab === 'subscriptions' && selectedChannelFilter && (ch.name || '').toLowerCase() === selectedChannelFilter.toLowerCase();
-                  return (
-                    <button
-                      key={`nav-strip-${ch.id}`}
-                      data-channel={(ch.name || '').toLowerCase()}
-                      onClick={() => {
-                        if (setSelectedChannelFilter) setSelectedChannelFilter(ch.name);
-                        setActiveTab('subscriptions');
-                      }}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all shrink-0 border ${
-                        isSelected
-                          ? 'bg-rose-500/20 dark:bg-rose-400/25 text-rose-600 dark:text-rose-300 border-rose-500/30 shadow-xs'
-                          : 'bg-white/70 dark:bg-slate-800/70 text-gray-700 dark:text-gray-300 border-gray-200/50 dark:border-white/10 hover:border-rose-400/40'
-                      }`}
-                      title={`View ${ch.name} streams`}
-                    >
-                      <img 
-                        src={ch.avatar && !ch.avatar.includes('unsplash') ? ch.avatar : getChannelAvatar(ch.name)} 
-                        alt={ch.name}
-                        className="w-4 h-4 rounded-full object-cover shrink-0 ring-1 ring-rose-500/30"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = getFallbackChannelAvatar(ch.name);
-                        }}
-                      />
-                      <span className="truncate max-w-[100px]">{ch.name}</span>
-                    </button>
-                  );
-                })}
-
-                {/* Quick Add Channel (+) button */}
-                {onOpenSubscriptionsModal && (
-                  <button
-                    onClick={onOpenSubscriptionsModal}
-                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 rounded-xl border border-rose-500/20 transition-all shrink-0"
-                    title="Search & Subscribe to new channel"
-                  >
-                    <Plus size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </header>
-      )}
 
       {/* iOS Liquid Glass Floating Bottom Navigation Dock */}
       <div className="fixed bottom-0 left-0 right-0 z-40 px-2 sm:px-4 pb-2.5 pt-1 pointer-events-none">
         <nav ref={bottomDockRef} className="max-w-lg mx-auto pointer-events-auto bg-white/80 dark:bg-slate-900/85 border border-white/60 dark:border-white/15 backdrop-blur-3xl backdrop-saturate-200 rounded-3xl p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] flex justify-between items-center transition-all ring-1 ring-black/5 dark:ring-white/10 overflow-x-auto no-scrollbar scroll-smooth">
           
-          {/* 1. Home Tab */}
-          <button
-            data-tab="home"
-            onClick={() => setActiveTab('home')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1.5 sm:px-2 rounded-2xl transition-all duration-300 shrink-0 ${
-              activeTab === 'home'
-                ? 'text-indigo-600 dark:text-indigo-300 font-black'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-semibold'
-            }`}
-          >
-            <div className="px-2 py-0.5 rounded-full flex items-center justify-center relative">
-              {activeTab === 'home' && (
-                <motion.div
-                  layoutId="dockActivePill"
-                  className="absolute inset-0 bg-indigo-500/15 dark:bg-indigo-400/20 rounded-full border border-indigo-500/20 shadow-xs"
-                  transition={{ type: "spring", stiffness: 350, damping: 28 }}
-                />
-              )}
-              <Home size={17} className={`relative z-10 ${activeTab === 'home' ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-            </div>
-            <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Home</span>
-          </button>
-
-          {/* 2. Search Tab */}
+          {/* 1. Search Tab */}
           <button
             data-tab="search"
             onClick={() => setActiveTab('search')}
@@ -548,7 +389,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Search</span>
           </button>
 
-          {/* 3. Subscriptions Tab */}
+          {/* 2. Subscriptions Tab */}
           <button
             data-tab="subscriptions"
             onClick={() => setActiveTab('subscriptions')}
@@ -578,7 +419,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Subscriptions</span>
           </button>
 
-          {/* 4. Downloads Tab */}
+          {/* 3. Downloads Tab */}
           <button
             data-tab="downloads"
             onClick={() => setActiveTab('downloads')}
@@ -601,7 +442,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Downloads</span>
           </button>
 
-          {/* 5. Library Tab */}
+          {/* 4. Library Tab */}
           <button
             data-tab="library"
             onClick={() => setActiveTab('library')}
@@ -629,7 +470,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Library</span>
           </button>
 
-          {/* 6. Settings Tab */}
+          {/* 5. Settings Tab */}
           <button
             data-tab="settings"
             onClick={() => setActiveTab('settings')}
@@ -651,7 +492,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <span className="text-[9px] sm:text-[10px] tracking-tight mt-0.5 whitespace-nowrap">Settings</span>
           </button>
-
         </nav>
       </div>
     </>

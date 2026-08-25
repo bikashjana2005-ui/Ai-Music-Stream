@@ -56,7 +56,7 @@ export interface Playlist {
   createdAt: number;
 }
 
-export type TabType = 'home' | 'search' | 'library' | 'settings' | 'downloads' | 'subscriptions';
+export type TabType = 'search' | 'subscriptions' | 'library' | 'downloads' | 'settings';
 
 export interface DownloadConfig {
   format: 'mp3' | 'mp4';
