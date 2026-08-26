@@ -59,6 +59,126 @@ export const DEFAULT_CHANNELS: SubscribedChannel[] = [
   }
 ];
 
+export const DEFAULT_LIKED_TRACKS: Track[] = [
+  {
+    id: "dKjR8zF8a4I",
+    title: "We Opened 1000 GEMS Balls | 1000 GEMS Magic Pool",
+    channel: "Crazy XYZ",
+    views: "1.5M views",
+    duration: "23:19",
+    publishedTime: "2 days ago",
+    aiMoodTags: "Experiment • Fun • Gems",
+    genre: "Entertainment",
+    thumbnail: "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=800&auto=format&fit=crop"
+  },
+  {
+    id: "fG246bTq7pM_snake",
+    title: "Bablu Got Bitten By Snake 😭 | बबलू को सांप ने काटा",
+    channel: "Crazy XYZ",
+    views: "2.9M views",
+    duration: "31:48",
+    publishedTime: "4 days ago",
+    aiMoodTags: "Challenge • Vlog",
+    genre: "Entertainment"
+  },
+  {
+    id: "kite_2026_xyz",
+    title: "2026 New Kite Flying Challenge | Kite Stash",
+    channel: "Crazy XYZ",
+    views: "1.8M views",
+    duration: "18:24",
+    publishedTime: "1 week ago",
+    aiMoodTags: "Kite • Festival • Fun",
+    genre: "Entertainment"
+  },
+  {
+    id: "VAdGW7QDJiU",
+    title: "Kesariya - Brahmāstra | Arijit Singh, Pritam | Ranbir Kapoor, Alia Bhatt",
+    channel: "Sony Music India",
+    views: "520M views",
+    duration: "4:28",
+    publishedTime: "1 year ago",
+    aiMoodTags: "Hindi • Romantic • Melody",
+    genre: "Hindi"
+  },
+  {
+    id: "g6fnFALEseE",
+    title: "Apna Bana Le - Bhediya | Varun Dhawan, Kriti Sanon | Arijit Singh, Sachin-Jigar",
+    channel: "Zee Music Company",
+    views: "430M views",
+    duration: "4:21",
+    publishedTime: "1 year ago",
+    aiMoodTags: "Hindi • Heartfelt • Acoustic",
+    genre: "Hindi"
+  },
+  {
+    id: "WcOqJtWfW9I",
+    title: "Chaleya - Jawan | Shah Rukh Khan, Nayanthara | Arijit Singh, Shilpa Rao",
+    channel: "T-Series",
+    views: "380M views",
+    duration: "3:20",
+    publishedTime: "6 months ago",
+    aiMoodTags: "Hindi • Groovy • Romantic",
+    genre: "Hindi"
+  }
+];
+
+export const DEFAULT_HISTORY_TRACKS: Track[] = [
+  {
+    id: "crazy_prank_bablu",
+    title: "Crazy Prank On Bablu Gifting E-Rickshaw 🤣 | OL...",
+    channel: "Crazy XYZ",
+    views: "369K views",
+    duration: "25:57",
+    publishedTime: "Today",
+    aiMoodTags: "Prank • Funny • Vlog",
+    genre: "Entertainment",
+    thumbnail: "https://images.unsplash.com/photo-1517524008697-84bbe3c3fd98?w=800&auto=format&fit=crop"
+  },
+  {
+    id: "apk_phone_build_ai",
+    title: "Build Android App in Google AI Studio Using Just Your Ph...",
+    channel: "N-Educate",
+    views: "11K views",
+    duration: "10:59",
+    publishedTime: "Today",
+    aiMoodTags: "Tutorial • Android • AI",
+    genre: "Technology",
+    thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop"
+  },
+  {
+    id: "promo_man_sundar",
+    title: "Aakhir Do Din Baad Kiski Shaadi Hone...",
+    channel: "मन सुंदर",
+    views: "89K views",
+    duration: "0:20",
+    publishedTime: "Yesterday",
+    aiMoodTags: "Promo • Drama • Shorts",
+    genre: "Shorts",
+    thumbnail: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop"
+  },
+  {
+    id: "anger_then_lost",
+    title: "Anger - Then Lost | Full Episode Story",
+    channel: "Crazy XYZ",
+    views: "1.2M views",
+    duration: "15:40",
+    publishedTime: "Yesterday",
+    aiMoodTags: "Story • Episode",
+    genre: "Entertainment"
+  },
+  {
+    id: "VAdGW7QDJiU",
+    title: "Kesariya - Brahmāstra | Arijit Singh, Pritam",
+    channel: "Sony Music India",
+    views: "520M views",
+    duration: "4:28",
+    publishedTime: "Yesterday",
+    aiMoodTags: "Hindi • Romantic",
+    genre: "Hindi"
+  }
+];
+
 export const DEFAULT_TRACKS: Track[] = [
   {
     id: "BddP6PYo2gs",

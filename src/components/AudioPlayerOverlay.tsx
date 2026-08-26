@@ -446,6 +446,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
             <button
               onClick={() => onToggleFavorite(track)}
               className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-all active:scale-90"
+              title={isFavorite ? "Remove from Liked videos" : "Like video"}
             >
               <Heart size={20} className={isFavorite ? "fill-rose-500 text-rose-500" : "text-white"} />
             </button>

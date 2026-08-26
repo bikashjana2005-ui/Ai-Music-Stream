@@ -143,7 +143,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
       style={{ maxWidth: '100%' }}
     >
       <div 
-        className="relative bg-slate-900/90 dark:bg-slate-950/90 border border-white/20 backdrop-blur-3xl backdrop-saturate-200 rounded-3xl shadow-[0_16px_50px_rgba(0,0,0,0.5)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-black/20"
+        className="relative bg-slate-900/90 dark:bg-slate-950/90 border border-white/20 backdrop-blur-3xl backdrop-saturate-200 rounded-xl shadow-[0_16px_50px_rgba(0,0,0,0.5)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-black/20"
         style={{
           width: `${Math.min(window.innerWidth - 16, widthFigure * scaleFigure)}px`,
           height: `${heightFigure * scaleFigure}px`,

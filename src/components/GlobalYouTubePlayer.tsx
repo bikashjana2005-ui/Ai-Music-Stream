@@ -58,6 +58,7 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
+import { YouTubeVideoDescriptionSheet } from './YouTubeVideoDescriptionSheet';
 
 export type PlayerEngine = 'youtube' | 'youtube-nocookie' | 'invidious' | 'piped' | 'embed';
 
@@ -651,6 +652,15 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     }
   };
 
+  const handleSeekToSeconds = (seconds: number) => {
+    if (playerRef.current) {
+      playerRef.current.seekTo(seconds, 'seconds');
+    }
+    if (onProgress) {
+      onProgress(seconds);
+    }
+  };
+
   if (!videoId || videoId.length !== 11) return null;
 
   const isFull = isFullScreen || isNativeFullScreen;
@@ -676,9 +686,9 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     containerClassName = 'fixed inset-0 z-[90] flex flex-col items-center justify-center pointer-events-none p-4 pb-20 sm:pb-24';
     playerBoxClassName = 'relative w-full max-w-3xl aspect-video rounded-3xl overflow-hidden shadow-2xl ring-2 ring-rose-500/60 bg-black pointer-events-auto group';
   } else {
-    // Mini Floating Window
-    containerClassName = 'fixed bottom-20 right-3 sm:bottom-24 sm:right-6 rounded-3xl overflow-hidden shadow-2xl ring-2 ring-indigo-500/60 bg-slate-950 pointer-events-auto flex flex-col z-[90] border border-white/20 touch-none';
-    playerBoxClassName = 'relative flex-1 w-full h-full bg-black pointer-events-auto select-none';
+    // Mini Floating Window with slightly square modern edges
+    containerClassName = 'fixed bottom-20 right-3 sm:bottom-24 sm:right-6 rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/20 bg-slate-950 pointer-events-auto flex flex-col z-[90] border border-white/20 touch-none';
+    playerBoxClassName = 'relative flex-1 w-full h-full bg-black pointer-events-auto select-none rounded-b-lg overflow-hidden';
   }
 
   // Handle Corner/Edge Resizing
@@ -1081,7 +1091,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 const nextW = dimensions.width === 280 ? 330 : dimensions.width === 330 ? 220 : 280;
                 applyPresetSize(nextW, Math.round(nextW * (9 / 16)));
               }}
-              className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-white/15 rounded text-[10px] font-mono font-extrabold transition-all active:scale-95"
+              className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-white/15 rounded text-[10px] font-mono font-extrabold transition-all active:scale-95 cursor-pointer"
               title="Switch Mini Player Size (Medium Compact: 280x158)"
             >
               {dimensions.width <= 240 ? '220p' : dimensions.width <= 290 ? '280p' : '330p'}
@@ -1664,242 +1674,20 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* AUTHENTIC YOUTUBE EXPANDABLE VIDEO & CHANNEL DETAILS PANEL */}
-              {showFullDescription && (
-                <div className="bg-slate-900/90 border border-white/10 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4 text-xs animate-fade-in">
-                  {/* HEADER WITH CLOSE BUTTON */}
-                  <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                    <div className="flex items-center gap-2">
-                      <Info size={16} className="text-rose-400" />
-                      <span className="font-black text-sm text-white">Video & Channel Details</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowFullDescription(false)}
-                      className="px-3 py-1 bg-white/10 hover:bg-rose-600 text-white font-bold text-xs rounded-full border border-white/20 transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Close</span>
-                      <ChevronUp size={14} />
-                    </button>
-                  </div>
-
-                  {/* VIDEO STATS & METRICS BADGES */}
-                  <div className="flex flex-wrap items-center justify-between gap-2.5 pb-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-black text-slate-200">
-                      <span className="flex items-center gap-1.5 bg-slate-950/80 px-3 py-1 rounded-full border border-white/10">
-                        <Eye size={13} className="text-rose-500" />
-                        <span>{realViewCount || '1,428,910 views'}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5 bg-slate-950/80 px-3 py-1 rounded-full border border-white/10">
-                        <Calendar size={13} className="text-indigo-500" />
-                        <span>Aug 2, 2026</span>
-                      </span>
-                      <span className="flex items-center gap-1.5 bg-rose-500/10 text-rose-400 px-3 py-1 rounded-full border border-rose-500/20 font-mono">
-                        <Flame size={13} className="text-rose-500 fill-rose-500" />
-                        <span>#1 Trending in Music</span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20 font-mono font-bold text-[11px]">
-                      <Zap size={12} className="text-indigo-400" />
-                      <span>320kbps Lossless • 1080p HD</span>
-                    </div>
-                  </div>
-
-                  {/* ABOUT CHANNEL & VIDEO DESCRIPTION SECTION (REDESIGNED WITHOUT THUMBNAIL PREVIEW) */}
-                  <div className="p-4 bg-slate-950/80 rounded-2xl border border-white/10 space-y-4">
-                    {/* CHANNEL HEADER ROW */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shrink-0 shadow-md">
-                          <img
-                            src={realChannelAvatar || getChannelAvatar(realChannelName || currentTrack?.channel || '')}
-                            alt={realChannelName || currentTrack?.channel}
-                            className="w-full h-full rounded-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = getFallbackChannelAvatar(realChannelName || currentTrack?.channel || '');
-                            }}
-                          />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="font-black text-base text-white truncate">
-                              {decodeHtmlEntities(realChannelName || currentTrack?.channel || 'Official Channel')}
-                            </h3>
-                            <CheckCircle2 size={16} className="text-rose-500 fill-rose-500/20 shrink-0" />
-                          </div>
-                          <p className="text-xs text-slate-400 font-medium truncate">
-                            @{ (realChannelName || currentTrack?.channel || 'channel').toLowerCase().replace(/\s+/g, '') } • {realSubscriberCount || '2.48M subscribers'} • 1.4K videos
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* SUBSCRIBE BUTTON */}
-                      <div className="flex items-center gap-2 self-start sm:self-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const targetChan = realChannelName || currentTrack?.channel;
-                            if (onToggleSubscribe && targetChan) {
-                              onToggleSubscribe(targetChan);
-                            }
-                          }}
-                          className={`px-5 py-2 rounded-full font-extrabold text-xs transition-all active:scale-95 flex items-center gap-2 shadow-md cursor-pointer ${
-                            isSubscribed
-                              ? 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-white/10'
-                              : 'bg-white text-slate-950 hover:bg-slate-200'
-                          }`}
-                        >
-                          {isSubscribed ? (
-                            <>
-                              <span>Subscribed</span>
-                              <CheckCircle2 size={14} className="text-emerald-500" />
-                            </>
-                          ) : (
-                            <>
-                              <Bell size={14} className="text-slate-900 fill-slate-900" />
-                              <span>Subscribe to Channel</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* CHANNEL BIO & OVERVIEW */}
-                    <p className="text-xs text-slate-300 font-normal leading-relaxed">
-                      Welcome to the official channel for <strong className="text-white">@{decodeHtmlEntities(realChannelName || currentTrack?.channel || '')}</strong>. Stream official videos, tour performances, studio recordings, and behind-the-scenes content.
-                    </p>
-                  </div>
-
-                  {/* FULL DESCRIPTION TEXT & HASHTAGS */}
-                  <div className="space-y-2 p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                    <p className="text-slate-300 leading-relaxed font-normal">
-                      Official YouTube video stream for <strong className="font-bold text-white">"{decodeHtmlEntities(currentTrack?.title || '')}"</strong> by <span className="text-rose-400 font-bold">@{decodeHtmlEntities(currentTrack?.channel || '')}</span>. Mastered for high-fidelity audio and 1080p video stream. Subscribe to the official channel for upcoming releases, tour dates, and live performances.
-                    </p>
-
-                    <div className="space-y-1.5 pt-2 border-t border-white/10 text-slate-400 text-xs">
-                      <p className="font-mono text-[11px] text-indigo-400 font-bold">
-                        #musicvideo #{currentTrack?.genre?.replace(/\s+/g, '').toLowerCase() || 'youtube'} #official #audio #{currentTrack?.channel?.replace(/\s+/g, '').toLowerCase()}
-                      </p>
-                      <div className="flex flex-wrap gap-4 text-[11px] pt-1">
-                        <span className="font-bold">℗ 2026 {decodeHtmlEntities(currentTrack?.channel || 'YouTube Creator')}</span>
-                        <span>•</span>
-                        <span className="font-bold">Released on YouTube Music</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI SOUND INSIGHTS METADATA GRID */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <div className="p-2.5 bg-slate-950/60 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Genre</span>
-                      <span className="font-extrabold text-slate-200 truncate block">{currentTrack?.genre || 'Pop & Electronic'}</span>
-                    </div>
-                    <div className="p-2.5 bg-slate-950/60 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tempo & Key</span>
-                      <span className="font-extrabold text-rose-400 truncate block">124 BPM • C Minor</span>
-                    </div>
-                    <div className="p-2.5 bg-slate-950/60 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Release Type</span>
-                      <span className="font-extrabold text-slate-200 truncate block">Official Video Single</span>
-                    </div>
-                    <div className="p-2.5 bg-slate-950/60 rounded-xl border border-white/5 space-y-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Channel</span>
-                      <span className="font-extrabold text-indigo-400 truncate block">{decodeHtmlEntities(currentTrack?.channel || 'Vevo')}</span>
-                    </div>
-                  </div>
-
-                  {/* INTERACTIVE CHAPTER TIMESTAMPS */}
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles size={13} className="text-amber-500" />
-                      <span>Interactive Video Chapters</span>
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {videoChapters.map((ch) => (
-                        <button
-                          key={`desc-ch-${ch.timeDisplay}`}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSeekToChapter(ch);
-                          }}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-300 rounded-lg text-xs font-mono font-bold border border-white/10 transition-all flex items-center gap-1.5 active:scale-95 group cursor-pointer"
-                        >
-                          <span className="text-rose-400 group-hover:text-white font-extrabold">{ch.timeDisplay}</span>
-                          <span className="text-[10px] font-sans font-medium text-slate-400 group-hover:text-white">{ch.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ACTION FOOTER & SUMMARY TOGGLE */}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/10 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
-                          setCopyLinkSuccess(true);
-                          setTimeout(() => setCopyLinkSuccess(false), 2000);
-                          onShowToast?.('Direct YouTube link copied!', 'info');
-                        }}
-                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-full font-bold text-[11px] flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                      >
-                        {copyLinkSuccess ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
-                        <span>{copyLinkSuccess ? 'Copied Link!' : 'Copy Link'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowAiSummary(!showAiSummary);
-                        }}
-                        className={`px-3 py-1 rounded-full font-bold text-[11px] flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                          showAiSummary 
-                            ? 'bg-rose-500 text-white shadow-md' 
-                            : 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20'
-                        }`}
-                      >
-                        <Sparkles size={13} />
-                        <span>{showAiSummary ? 'Hide AI Summary' : 'AI Track Summary'}</span>
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowFullDescription(false);
-                      }}
-                      className="font-extrabold text-rose-400 hover:underline text-xs flex items-center gap-1 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 cursor-pointer"
-                    >
-                      <span>Close Details</span>
-                      <ChevronUp size={14} />
-                    </button>
-                  </div>
-
-                  {/* AI TRACK SUMMARY DRAWER */}
-                  {showAiSummary && (
-                    <div 
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl space-y-2 text-xs text-slate-200 animate-fade-in"
-                    >
-                      <div className="flex items-center gap-2 font-black text-rose-400">
-                        <Sparkles size={14} />
-                        <span>AI Generated Track Summary</span>
-                      </div>
-                      <ul className="list-disc list-inside space-y-1 text-[11px] font-medium leading-relaxed text-slate-300">
-                        <li>Features a driving bass rhythm coupled with spacious reverb and pristine 1080p HD video mastering.</li>
-                        <li>Verified YouTube release by {decodeHtmlEntities(currentTrack?.channel || 'Official Channel')} with millions of monthly listeners.</li>
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* AUTHENTIC YOUTUBE EXPANDABLE VIDEO DESCRIPTION BOTTOM SHEET */}
+              <YouTubeVideoDescriptionSheet
+                isOpen={showFullDescription}
+                onClose={() => setShowFullDescription(false)}
+                track={currentTrack}
+                realViewCount={realViewCount}
+                realSubscriberCount={realSubscriberCount}
+                realChannelName={realChannelName}
+                realChannelAvatar={realChannelAvatar}
+                isSubscribed={isSubscribed}
+                onToggleSubscribe={onToggleSubscribe}
+                onSeek={handleSeekToSeconds}
+                onShowToast={onShowToast}
+              />
 
               {/* AUTHENTIC YOUTUBE COMMENTS SECTION */}
               <div className="space-y-4 pt-4 border-t border-white/10">
@@ -2507,7 +2295,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
               <div
                 onMouseDown={(e) => handleResizeStart(e, 'br')}
                 onTouchStart={(e) => handleResizeStart(e, 'br')}
-                className="absolute bottom-0 right-0 z-40 cursor-se-resize flex items-center gap-1 px-2 py-1 bg-slate-950/90 border-t border-l border-amber-500/40 text-amber-300 font-mono text-[10px] font-extrabold rounded-tl-xl rounded-br-2xl shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 group"
+                className="absolute bottom-0 right-0 z-40 cursor-se-resize flex items-center gap-1 px-2 py-1 bg-slate-950/90 border-t border-l border-amber-500/40 text-amber-300 font-mono text-[10px] font-extrabold rounded-tl-md rounded-br-lg shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 group"
                 title="Drag corner to resize mini video player"
               >
                 <Scaling size={11} className="text-amber-400 group-hover:text-white" />

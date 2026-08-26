@@ -4,7 +4,7 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult, loginAnonymously, loginWithGoogle } from './lib/firebase';
 import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack } from './types';
-import { DEFAULT_TRACKS, DEFAULT_CHANNELS } from './data/fallbackTracks';
+import { DEFAULT_TRACKS, DEFAULT_CHANNELS, DEFAULT_LIKED_TRACKS, DEFAULT_HISTORY_TRACKS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
 import { AudioPlayerOverlay } from './components/AudioPlayerOverlay';
 import { GlobalYouTubePlayer, PlayerEngine } from './components/GlobalYouTubePlayer';
@@ -291,13 +291,13 @@ export default function App() {
     setIsAndroidModalOpen(true);
   }, []);
 
-  // Favorites state from localStorage
+  // Favorites (Liked) state from localStorage
   const [favorites, setFavorites] = useState<Track[]>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_favorites');
-      return saved ? JSON.parse(saved) : [DEFAULT_TRACKS[0], DEFAULT_TRACKS[1]];
+      return saved ? JSON.parse(saved) : DEFAULT_LIKED_TRACKS;
     } catch {
-      return [];
+      return DEFAULT_LIKED_TRACKS;
     }
   });
 
@@ -306,6 +306,19 @@ export default function App() {
     try {
       const saved = localStorage.getItem('aura_ai_playlists');
       return saved ? JSON.parse(saved) : [
+        {
+          id: 'p-song-default',
+          name: 'Song',
+          description: 'Number of song you can find here.',
+          tracks: [
+            DEFAULT_TRACKS[4] || DEFAULT_TRACKS[0], // Kesariya - Brahmāstra
+            DEFAULT_TRACKS[6] || DEFAULT_TRACKS[1], // Apna Bana Le
+            DEFAULT_TRACKS[7] || DEFAULT_TRACKS[2], // Chaleya
+            DEFAULT_TRACKS[5] || DEFAULT_TRACKS[3], // Mon Majhi Re
+            DEFAULT_TRACKS[2] || DEFAULT_TRACKS[0]  // Dola Re
+          ],
+          createdAt: Date.now()
+        },
         {
           id: 'p1',
           name: '✨ Chill AI Vibes',
@@ -323,9 +336,9 @@ export default function App() {
   const [history, setHistory] = useState<Track[]>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_history');
-      return saved ? JSON.parse(saved) : [DEFAULT_TRACKS[0], DEFAULT_TRACKS[1]];
+      return saved ? JSON.parse(saved) : DEFAULT_HISTORY_TRACKS;
     } catch {
-      return [DEFAULT_TRACKS[0]];
+      return DEFAULT_HISTORY_TRACKS;
     }
   });
 
@@ -796,6 +809,15 @@ export default function App() {
     showToast("Watch history cleared", "info");
   };
 
+  const handleRemoveFromHistory = (trackId: string) => {
+    setHistory((prev) => prev.filter(t => t.id !== trackId));
+    try {
+      const current = JSON.parse(localStorage.getItem('aura_ai_history') || '[]');
+      const filtered = current.filter((t: any) => t.id !== trackId);
+      localStorage.setItem('aura_ai_history', JSON.stringify(filtered));
+    } catch {}
+  };
+
   const handleTogglePlay = () => {
     setIsPlaying(!isPlaying);
   };
@@ -813,9 +835,9 @@ export default function App() {
     });
 
     if (exists) {
-      showToast(`Removed "${track.title}" from Favorites`, 'info');
+      showToast(`Removed from Liked videos`, 'info');
     } else {
-      showToast(`Added "${track.title}" to Favorites`, 'success');
+      showToast(`Added to Liked videos`, 'success');
     }
 
     // Sync to Firestore if logged in
@@ -980,6 +1002,31 @@ export default function App() {
     }
   };
 
+  const handleUpdatePlaylist = async (playlistId: string, name: string, description: string) => {
+    const targetPlaylist = playlists.find(p => p.id === playlistId);
+    if (!targetPlaylist) return;
+
+    const updated = {
+      ...targetPlaylist,
+      name,
+      description
+    };
+
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? updated : p));
+
+    if (user) {
+      const path = `users/${user.uid}/playlists/${playlistId}`;
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'playlists', playlistId), {
+          ...updated,
+          userId: user.uid
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, path);
+      }
+    }
+  };
+
   // Next / Prev Track handling
   const handleNextTrack = () => {
     const list = DEFAULT_TRACKS;
@@ -1074,6 +1121,8 @@ export default function App() {
                 currentTrackId={currentTrack?.id}
                 favorites={favorites}
                 onToggleFavorite={handleToggleFavorite}
+                onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+                onOpenMetadata={(track) => setMetadataTrack(track)}
                 subscriptions={subscriptions}
                 onOpenSubscriptionsModal={() => setIsSubscriptionsModalOpen(true)}
                 onToggleSubscribe={handleToggleSubscribe}
@@ -1109,14 +1158,17 @@ export default function App() {
                 favorites={favorites}
                 history={history}
                 onClearHistory={handleClearHistory}
+                onRemoveFromHistory={handleRemoveFromHistory}
                 onToggleFavorite={handleToggleFavorite}
                 playlists={playlists}
                 onCreatePlaylist={handleCreatePlaylist}
+                onUpdatePlaylist={handleUpdatePlaylist}
                 onDeletePlaylist={handleDeletePlaylist}
                 onRemoveTrackFromPlaylist={handleRemoveFromPlaylist}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
                 onOpenMetadata={(track) => setMetadataTrack(track)}
                 onShowToast={showToast}
+                userName={user?.displayName || user?.email?.split('@')[0] || 'Bikash Jana'}
               />
             )}
 

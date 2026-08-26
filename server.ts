@@ -1,12 +1,16 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Container & Ingress Health Checks
+app.get(["/api/health", "/healthz", "/health"], (req, res) => {
+  res.json({ status: "ok", environment: process.env.NODE_ENV || "development", uptime: process.uptime() });
+});
 
 // Initialize Gemini Client
 const getGeminiClient = () => {
@@ -658,19 +662,24 @@ app.post("/api/channels/search", async (req, res) => {
 // Channel Latest Songs/Streams Endpoint
 app.post("/api/channels/tracks", async (req, res) => {
   try {
-    const { channelName, channelNames, sortBy, forceFresh } = req.body;
+    const { channelName, channelNames, sortBy, forceFresh, feedFilter } = req.body;
     const isRecent = sortBy === 'recent' || sortBy === 'latest';
 
     // If array of channels is provided (e.g. for "All Subscriptions" aggregated feed)
     if (Array.isArray(channelNames) && channelNames.length > 0) {
       const targetChannels = channelNames.slice(0, 8); // Top 8 subscribed channels for fast multi-channel real-time stream aggregation
       const allPromises = targetChannels.map(async (name) => {
-        const cacheKey = `ch_tracks_${name.toLowerCase().trim()}_${isRecent ? 'recent' : 'pop'}`;
+        let filterSuffix = "";
+        if (feedFilter === 'official') filterSuffix = " official audio";
+        else if (feedFilter === 'live') filterSuffix = " live concert performance";
+        else if (feedFilter === 'remix') filterSuffix = " remix bass boosted";
+
+        const cacheKey = `ch_tracks_${name.toLowerCase().trim()}_${isRecent ? 'recent' : 'pop'}_${feedFilter || ''}`;
         if (!forceFresh) {
           const cached = getCached<any>(cacheKey);
           if (cached?.tracks?.length) return cached.tracks;
         }
-        const query = isRecent ? `${name}` : `${name} official audio full song`;
+        const query = isRecent ? `${name}${filterSuffix}` : `${name} official audio full song${filterSuffix}`;
         const scraped = await searchYouTubeScrape(query, isRecent);
         if (scraped && scraped.length > 0) {
           setCached(cacheKey, { tracks: scraped }, 5 * 60 * 1000);
@@ -686,24 +695,29 @@ app.post("/api/channels/tracks", async (req, res) => {
         }
       });
       const combined = Array.from(trackMap.values());
-      return res.json({ tracks: combined });
+      return res.json({ tracks: combined.length ? combined : FALLBACK_TRACKS });
     }
 
-    if (!channelName) return res.json({ tracks: [] });
+    if (!channelName) return res.json({ tracks: FALLBACK_TRACKS });
 
-    const cacheKey = `ch_tracks_${channelName.toLowerCase().trim()}_${isRecent ? 'recent' : 'pop'}`;
+    let filterSuffix = "";
+    if (feedFilter === 'official') filterSuffix = " official audio";
+    else if (feedFilter === 'live') filterSuffix = " live concert performance";
+    else if (feedFilter === 'remix') filterSuffix = " remix bass boosted";
+
+    const cacheKey = `ch_tracks_${channelName.toLowerCase().trim()}_${isRecent ? 'recent' : 'pop'}_${feedFilter || ''}`;
     if (!forceFresh) {
       const cached = getCached<any>(cacheKey);
       if (cached) return res.json(cached);
     }
 
-    const query = isRecent ? `${channelName}` : `${channelName} official audio full song`;
+    const query = isRecent ? `${channelName}${filterSuffix}` : `${channelName} official audio full song${filterSuffix}`;
     const scrapedTracks = await searchYouTubeScrape(query, isRecent);
-    const result = { tracks: scrapedTracks };
+    const result = { tracks: (scrapedTracks && scrapedTracks.length > 0) ? scrapedTracks : FALLBACK_TRACKS };
     setCached(cacheKey, result, 3 * 60 * 1000); // 3 minute cache for fast real-time video updates
     res.json(result);
   } catch (e) {
-    res.json({ tracks: [] });
+    res.json({ tracks: FALLBACK_TRACKS });
   }
 });
 
@@ -910,47 +924,6 @@ app.get("/api/cloudflare/proxy-thumbnail", async (req, res) => {
     const targetUrl = req.query.url as string;
     if (targetUrl) return res.redirect(targetUrl);
     res.status(500).send("Error proxying thumbnail");
-  }
-});
-
-// Real-time Channel Subscriptions Uploads Feed Endpoint
-app.post("/api/channels/tracks", async (req, res) => {
-  try {
-    const { channelName, channelNames, feedFilter } = req.body;
-    let query = "";
-    if (channelName && typeof channelName === "string" && channelName.trim()) {
-      query = `${channelName.trim()} song music video`;
-    } else if (Array.isArray(channelNames) && channelNames.length > 0) {
-      query = `${channelNames.slice(0, 3).join(" ")} latest music songs`;
-    } else {
-      query = "T-Series latest song official audio";
-    }
-
-    if (feedFilter === 'official') query += " official audio";
-    else if (feedFilter === 'live') query += " live concert performance";
-    else if (feedFilter === 'remix') query += " remix bass boosted";
-
-    const cacheKey = `channel_tracks_${query.toLowerCase().trim()}`;
-    const cached = getCached<any>(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    let scrapedTracks = await searchYouTubeScrape(query, true);
-    if (!scrapedTracks || scrapedTracks.length === 0) {
-      scrapedTracks = await searchYouTubeScrape(query);
-    }
-
-    if (scrapedTracks && scrapedTracks.length > 0) {
-      const result = { tracks: scrapedTracks, source: "YouTube Channel Feed" };
-      setCached(cacheKey, result, 5 * 60 * 1000);
-      return res.json(result);
-    }
-
-    res.json({ tracks: FALLBACK_TRACKS, source: "Fallback" });
-  } catch (e: any) {
-    console.error("Error in /api/channels/tracks:", e);
-    res.json({ tracks: FALLBACK_TRACKS, source: "Fallback" });
   }
 });
 
@@ -1588,6 +1561,94 @@ app.post("/api/music/smart-prompts", async (req, res) => {
   }
 });
 
+// Real-time AI Video Summarizer Endpoint
+app.post("/api/youtube/summarize", async (req, res) => {
+  try {
+    const { videoId, title, channel, description } = req.body;
+    const cacheKey = `summary_${videoId || title}`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) return res.json(cached);
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      const fallbackResult = {
+        summary: `"${title || 'This video'}" by ${channel || 'the creator'} features entertaining moments, high-quality audio/visual production, and highlights that resonate with audiences worldwide.`,
+        keyPoints: [
+          "High-definition video & lossless audio production stream.",
+          "Features key creator segments, highlights, and authentic reactions.",
+          "Connected to official channel releases, social handles, and community updates."
+        ],
+        tags: ["Entertainment", "Highlights", "Official Video"]
+      };
+      return res.json(fallbackResult);
+    }
+
+    const prompt = `You are a YouTube video summarizer assistant. Provide a concise, clear summary of this video based on its title, channel, and description.
+Video Title: ${title || 'Unknown'}
+Channel: ${channel || 'Unknown'}
+Video Description Snippet: ${description ? description.slice(0, 500) : 'None provided'}
+
+Format the JSON response with:
+1. "summary": A 2-sentence summary of the video content and what viewers experience.
+2. "keyPoints": Array of 3 key takeaway bullet points.
+3. "tags": Array of 3-4 topic keywords.`;
+
+    const reqConfig = {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+          tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["summary", "keyPoints"]
+      }
+    };
+
+    let responseText = "";
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: reqConfig
+      });
+      responseText = response.text || "";
+    } catch {
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: prompt,
+          config: reqConfig
+        });
+        responseText = response.text || "";
+      } catch (fallbackErr) {
+        console.warn("Gemini summarizer fallback triggered");
+      }
+    }
+
+    const parsed = responseText ? JSON.parse(responseText) : {};
+    const result = {
+      summary: parsed.summary || `"${title || 'This video'}" by ${channel || 'the creator'} delivers engaging highlights and official media presentation.`,
+      keyPoints: parsed.keyPoints || [
+        "Featuring engaging creator highlights and authentic presentation.",
+        "Mastered with high-fidelity audio and video streaming.",
+        "Includes direct access to channel subscriptions and social channels."
+      ],
+      tags: parsed.tags || ["YouTube", "Video", "Highlights"]
+    };
+
+    setCached(cacheKey, result, 10 * 60 * 1000);
+    return res.json(result);
+  } catch (e: any) {
+    res.json({
+      summary: `Enjoy watching "${req.body?.title || 'this video'}" by ${req.body?.channel || 'creator'}.`,
+      keyPoints: ["Entertainment and official highlights.", "Original creator performance."],
+      tags: ["YouTube"]
+    });
+  }
+});
+
 // --- Google OAuth Endpoints ---
 app.get("/api/auth/google/url", (req, res) => {
   const reqOrigin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer as string).origin : null);
@@ -1649,6 +1710,7 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
 // --- Vite Middleware / Static Server Setup ---
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

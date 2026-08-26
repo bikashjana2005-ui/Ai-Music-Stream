@@ -113,21 +113,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Brand Logo */}
           <div 
             onClick={() => setActiveTab('search')}
-            className="flex items-center gap-3 cursor-pointer group select-none shrink-0"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group select-none shrink-0 min-w-0"
           >
-            <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center shadow-lg shadow-black/30 group-hover:scale-105 group-active:scale-95 transition-all ring-1 ring-white/20">
-              <AppLogo size={36} />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black flex items-center justify-center shadow-lg shadow-black/30 group-hover:scale-105 group-active:scale-95 transition-all ring-1 ring-white/20 shrink-0">
+              <AppLogo size={32} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-lg bg-gradient-to-r from-gray-900 via-indigo-950 to-gray-800 dark:from-white dark:via-indigo-100 dark:to-gray-200 bg-clip-text text-transparent tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="font-black text-sm sm:text-lg bg-gradient-to-r from-gray-900 via-indigo-950 to-gray-800 dark:from-white dark:via-indigo-100 dark:to-gray-200 bg-clip-text text-transparent tracking-tight truncate">
                   Ai Music Stream
                 </span>
-                <span className="text-[10px] font-black tracking-wider px-2.5 py-0.5 bg-indigo-500/10 dark:bg-indigo-400/15 text-indigo-700 dark:text-indigo-300 rounded-full flex items-center gap-1 border border-indigo-500/20 dark:border-indigo-400/20 backdrop-blur-md">
+                <span className="text-[9px] sm:text-[10px] font-black tracking-wider px-1.5 sm:px-2 py-0.5 bg-indigo-500/10 dark:bg-indigo-400/15 text-indigo-700 dark:text-indigo-300 rounded-full flex items-center gap-1 border border-indigo-500/20 dark:border-indigo-400/20 backdrop-blur-md shrink-0">
                   <Sparkles size={10} /> Pro
                 </span>
               </div>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold -mt-0.5 tracking-wide">
+              <p className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 font-semibold -mt-0.5 tracking-wide truncate max-w-[160px] sm:max-w-none">
                 YouTube Audio & AI Music Stream
               </p>
             </div>
@@ -265,16 +265,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Right Top Bar Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
             {!isOnline && (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-500/15 dark:bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30 backdrop-blur-md animate-pulse" title="You are currently offline. Local downloaded tracks will play seamlessly.">
-                <WifiOff size={13} className="text-amber-500" />
-                <span>Offline Mode</span>
+              <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-500/15 dark:bg-amber-500/20 px-2 sm:px-2.5 py-1 rounded-full border border-amber-500/30 backdrop-blur-md animate-pulse shrink-0" title="You are currently offline. Local downloaded tracks will play seamlessly.">
+                <WifiOff size={12} className="text-amber-500" />
+                <span className="hidden sm:inline">Offline Mode</span>
               </span>
             )}
 
             {hasYouTubeKey && (
-              <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/20 dark:border-emerald-500/30 backdrop-blur-md">
+              <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/20 dark:border-emerald-500/30 backdrop-blur-md shrink-0">
                 <Key size={11} /> Key Connected
               </span>
             )}
@@ -283,10 +283,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenWebView && (
               <button
                 onClick={() => onOpenWebView('https://m.youtube.com', 'In-App YouTube WebView')}
-                className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-2xl border border-indigo-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0"
+                className="w-9 h-9 sm:w-auto sm:px-2.5 sm:py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-2xl border border-indigo-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs font-bold shrink-0"
                 title="Open In-App YouTube WebView Browser"
               >
-                <Globe size={15} className="text-indigo-500 animate-pulse" />
+                <Globe size={16} className="text-indigo-500 animate-pulse shrink-0" />
                 <span className="hidden sm:inline">WebView</span>
               </button>
             )}
@@ -295,10 +295,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenAndroidModal && (
               <button
                 onClick={onOpenAndroidModal}
-                className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0"
+                className="w-9 h-9 sm:w-auto sm:px-2.5 sm:py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-500/25 shadow-xs backdrop-blur-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs font-bold shrink-0"
                 title="Native Android APK & Flutter Code Exporter"
               >
-                <Smartphone size={15} className="text-emerald-500" />
+                <Smartphone size={16} className="text-emerald-500 shrink-0" />
                 <span className="hidden md:inline">Android APK</span>
               </button>
             )}
@@ -307,10 +307,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onOpenShareModal && (
               <button
                 onClick={onOpenShareModal}
-                className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-sm transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold shrink-0"
+                className="w-9 h-9 sm:w-auto sm:px-2.5 sm:py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs font-bold shrink-0"
                 title="Use & Share Application Link"
               >
-                <Share2 size={15} />
+                <Share2 size={15} className="shrink-0" />
                 <span className="hidden sm:inline">Use App</span>
               </button>
             )}

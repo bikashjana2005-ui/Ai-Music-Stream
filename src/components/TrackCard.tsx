@@ -153,7 +153,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
             <button 
               onClick={() => onToggleFavorite(track)}
               className="p-2 text-gray-400 hover:text-rose-500 dark:hover:text-rose-400 rounded-xl transition-all active:scale-90"
-              title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+              title={isFavorite ? "Remove from Liked videos" : "Like video"}
             >
               <Heart size={16} className={isFavorite ? "fill-rose-500 text-rose-500" : ""} />
             </button>
@@ -303,7 +303,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
             <button 
               onClick={() => onToggleFavorite(track)}
               className="p-2 text-gray-400 hover:text-rose-500 dark:hover:text-rose-400 rounded-xl transition-all active:scale-90"
-              title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+              title={isFavorite ? "Remove from Liked videos" : "Like video"}
             >
               <Heart size={17} className={isFavorite ? "fill-rose-500 text-rose-500" : ""} />
             </button>

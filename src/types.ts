@@ -22,6 +22,8 @@ export interface Track {
   commentCount?: string;
   isOfficial?: boolean;
   channelId?: string;
+  thumbnail?: string;
+  artist?: string;
 }
 
 export interface YouTubeVideoMetadata {
