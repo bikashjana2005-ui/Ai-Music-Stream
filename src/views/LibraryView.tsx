@@ -1,10 +1,28 @@
 import React, { useState } from 'react';
-import { Library, ThumbsUp, Heart, ListPlus, Download, Music2, Trash2, Plus, Sparkles, History, LayoutGrid, List, ArrowLeft, Play, Eye } from 'lucide-react';
+import { 
+  ChevronRight, 
+  ChevronDown, 
+  ThumbsUp, 
+  Clock, 
+  Download, 
+  ListPlus, 
+  Plus, 
+  MoreVertical, 
+  Play, 
+  Trash2, 
+  Share2, 
+  Award, 
+  Sparkles, 
+  User, 
+  ExternalLink,
+  ShieldCheck,
+  Check
+} from 'lucide-react';
 import { Track, Playlist } from '../types';
-import { TrackCard } from '../components/TrackCard';
 import { YouTubePlaylistDetail } from '../components/YouTubePlaylistDetail';
 import { YouTubeLikedVideos } from '../components/YouTubeLikedVideos';
 import { YouTubeHistory } from '../components/YouTubeHistory';
+import { extractYouTubeId } from '../utils/youtube';
 
 interface LibraryViewProps {
   onPlay: (track: Track) => void;
@@ -23,9 +41,47 @@ interface LibraryViewProps {
   onRemoveTrackFromPlaylist?: (playlistId: string, trackId: string) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
   onOpenMetadata?: (track: Track) => void;
+  onOpenChannelDetails?: (channelName: string) => void;
+  onOpenAuthModal?: () => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   userName?: string;
+  userEmail?: string;
+  userPhoto?: string;
 }
+
+// Sample recent history items matching Screenshot 2
+const SAMPLE_RECENT_HISTORY: Track[] = [
+  {
+    id: 'yt-hist-1',
+    title: '2 JCB vs CAR🔥 | Ripping Off a Car ...',
+    channel: 'Crazy XYZ',
+    views: '82K views',
+    duration: '17:00',
+    publishedTime: '31 minutes ago',
+    aiMoodTags: 'Trending',
+    thumbnail: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=400&auto=format&fit=crop'
+  },
+  {
+    id: 'yt-hist-2',
+    title: 'Sansarer Sankirtan | আজ 10:00 PM | Star Jalsha',
+    channel: 'Star Jalsha',
+    views: '95K views',
+    duration: '1:00',
+    publishedTime: '18 hours ago',
+    aiMoodTags: 'Drama',
+    thumbnail: 'https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=400&auto=format&fit=crop'
+  },
+  {
+    id: 'yt-hist-3',
+    title: '28 আগস্ট - 1 সেপ্টেম্বর 7:00 PM | কুমকুম',
+    channel: 'Star Jalsha',
+    views: '161K views',
+    duration: '0:40',
+    publishedTime: '16 hours ago',
+    aiMoodTags: 'Serial',
+    thumbnail: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&auto=format&fit=crop'
+  }
+];
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   onPlay,
@@ -44,24 +100,33 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onRemoveTrackFromPlaylist,
   onOpenAddToPlaylist,
   onOpenMetadata,
+  onOpenChannelDetails,
+  onOpenAuthModal,
   onShowToast,
-  userName = 'Bikash Jana'
+  userName = 'Bikash Jana',
+  userEmail = 'bikashjana908@gmail.com',
+  userPhoto
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'favorites' | 'playlists' | 'history'>('favorites');
+  const [activeFilter, setActiveFilter] = useState<'recents' | 'playlists' | 'music'>('recents');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'main' | 'liked' | 'history' | 'watch_later'>('main');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
 
-  // View format toggle state (grid vs list)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
-    return (localStorage.getItem('aura_view_mode') as 'grid' | 'list') || 'grid';
+  // Watch Later list state
+  const [watchLaterList, setWatchLaterList] = useState<Track[]>(() => {
+    try {
+      const saved = localStorage.getItem('aura_watch_later');
+      return saved ? JSON.parse(saved) : SAMPLE_RECENT_HISTORY.slice(0, 2);
+    } catch {
+      return SAMPLE_RECENT_HISTORY.slice(0, 2);
+    }
   });
 
-  const handleToggleViewMode = (mode: 'grid' | 'list') => {
-    setViewMode(mode);
-    localStorage.setItem('aura_view_mode', mode);
-  };
+  const displayHistory = history.length > 0 ? history : SAMPLE_RECENT_HISTORY;
+  const initialLetter = (userName.trim()[0] || 'B').toUpperCase();
+  const userHandle = userEmail.includes('@') ? `@${userEmail.split('@')[0]}` : `@${userEmail}`;
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,75 +135,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setNewPlaylistName('');
     setNewPlaylistDesc('');
     setShowCreateModal(false);
-    onShowToast("Playlist created successfully!");
+    onShowToast("Playlist created successfully!", "success");
   };
 
   const selectedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
 
-  return (
-    <div className="space-y-6 animate-fade-in pb-20 w-full max-w-full mx-auto">
-      
-      {/* Sub Tabs & Quick Stats Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white/70 dark:bg-slate-900/70 p-3 sm:p-4 rounded-3xl border border-slate-200/80 dark:border-white/10 backdrop-blur-xl shadow-xs">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full flex-nowrap py-0.5">
-          <div className="flex items-center gap-1 sm:gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-inner flex-nowrap shrink-0">
-            <button
-              onClick={() => setActiveSubTab('favorites')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
-                activeSubTab === 'favorites'
-                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs ring-1 ring-blue-500/20'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <ThumbsUp size={14} className={favorites.length > 0 ? "fill-blue-500 text-blue-500" : ""} />
-              <span>Liked</span>
-              <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                {favorites.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('playlists')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
-                activeSubTab === 'playlists'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs ring-1 ring-indigo-500/20'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <ListPlus size={14} className={activeSubTab === 'playlists' ? "text-indigo-500" : ""} />
-              <span>Playlists</span>
-              <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                {playlists.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('history')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
-                activeSubTab === 'history'
-                  ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-xs ring-1 ring-purple-500/20'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <History size={14} className={activeSubTab === 'history' ? "text-purple-500" : ""} />
-              <span>History</span>
-              <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                {history.length}
-              </span>
-            </button>
-          </div>
-
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-3.5 sm:px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold rounded-2xl shadow-md shadow-indigo-600/20 text-xs flex items-center gap-1.5 transition-all active:scale-95 border border-indigo-400/30 shrink-0 whitespace-nowrap"
-          >
-            <Plus size={14} /> New Playlist
-          </button>
-        </div>
-      </div>
-
-      {/* Content Sections */}
-      {activeSubTab === 'favorites' && (
+  // Sub-view: Liked Videos
+  if (activeView === 'liked') {
+    return (
+      <div className="w-full bg-gradient-to-b from-zinc-950 via-zinc-900 to-red-950/20 text-white min-h-screen pb-24 p-3 sm:p-4">
+        <button
+          onClick={() => setActiveView('main')}
+          className="mb-4 px-3 py-1.5 bg-zinc-800/90 border border-red-500/20 text-white rounded-xl text-xs font-semibold hover:bg-zinc-700 transition-colors"
+        >
+          ← Back to You
+        </button>
         <YouTubeLikedVideos
           likedTracks={favorites}
           onPlay={onPlay}
@@ -150,11 +161,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           onShowToast={onShowToast}
           userName={userName}
         />
-      )}
+      </div>
+    );
+  }
 
-      {activeSubTab === 'history' && (
+  // Sub-view: Full History
+  if (activeView === 'history') {
+    return (
+      <div className="w-full bg-gradient-to-b from-zinc-950 via-zinc-900 to-red-950/20 text-white min-h-screen pb-24 p-3 sm:p-4">
+        <button
+          onClick={() => setActiveView('main')}
+          className="mb-4 px-3 py-1.5 bg-zinc-800/90 border border-red-500/20 text-white rounded-xl text-xs font-semibold hover:bg-zinc-700 transition-colors"
+        >
+          ← Back to You
+        </button>
         <YouTubeHistory
-          historyTracks={history}
+          historyTracks={displayHistory}
           onPlay={onPlay}
           onDownload={onDownload}
           currentTrackId={currentTrackId}
@@ -164,146 +186,430 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           onOpenMetadata={onOpenMetadata}
           onShowToast={onShowToast}
         />
-      )}
+      </div>
+    );
+  }
 
-      {activeSubTab === 'playlists' && (
-        <div className="space-y-4">
-          {selectedPlaylist ? (
-            /* YOUTUBE MOBILE PLAYLIST VIEW */
-            <YouTubePlaylistDetail
-              playlist={selectedPlaylist}
-              onBack={() => setSelectedPlaylistId(null)}
-              onPlay={onPlay}
-              onDownload={onDownload}
-              onDownloadPlaylist={onDownloadPlaylist}
-              currentTrackId={currentTrackId}
-              isFavorite={(t) => favorites.some(f => f.id === t.id)}
-              onToggleFavorite={onToggleFavorite}
-              onRemoveTrackFromPlaylist={onRemoveTrackFromPlaylist}
-              onUpdatePlaylist={onUpdatePlaylist}
-              onDeletePlaylist={onDeletePlaylist}
-              onOpenAddToPlaylist={onOpenAddToPlaylist}
-              onOpenMetadata={onOpenMetadata}
-              onShowToast={onShowToast}
-              userName={userName}
-            />
-          ) : (
-            /* ALL PLAYLISTS YOUTUBE LIST */
-            <div>
-              {playlists.length === 0 ? (
-                <div className="py-20 text-center space-y-3 bg-white/60 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-dashed border-gray-200 dark:border-white/10 p-8 shadow-inner">
-                  <ListPlus size={48} className="text-gray-400 dark:text-gray-500 mx-auto" />
-                  <h3 className="text-lg font-black text-gray-900 dark:text-white">No custom playlists created</h3>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
-                    Click "New Playlist" above to create custom mixtapes and video sets.
-                  </p>
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl text-xs shadow-lg shadow-indigo-600/20 transition-all inline-flex items-center gap-1.5"
-                  >
-                    <Plus size={16} /> Create First Playlist
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {playlists.map((playlist) => {
-                    const hasTracks = playlist.tracks.length > 0;
-                    const coverThumb = hasTracks 
-                      ? (playlist.tracks[0].thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop')
-                      : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop';
+  // Sub-view: Playlist Detail
+  if (selectedPlaylist) {
+    return (
+      <div className="w-full bg-gradient-to-b from-zinc-950 via-zinc-900 to-red-950/20 text-white min-h-screen pb-24 p-3 sm:p-4">
+        <YouTubePlaylistDetail
+          playlist={selectedPlaylist}
+          onBack={() => setSelectedPlaylistId(null)}
+          onPlay={onPlay}
+          onDownload={onDownload}
+          onDownloadPlaylist={onDownloadPlaylist}
+          currentTrackId={currentTrackId}
+          isFavorite={(t) => favorites.some(f => f.id === t.id)}
+          onToggleFavorite={onToggleFavorite}
+          onRemoveTrackFromPlaylist={onRemoveTrackFromPlaylist}
+          onUpdatePlaylist={onUpdatePlaylist}
+          onDeletePlaylist={onDeletePlaylist}
+          onOpenAddToPlaylist={onOpenAddToPlaylist}
+          onOpenMetadata={onOpenMetadata}
+          onShowToast={onShowToast}
+          userName={userName}
+        />
+      </div>
+    );
+  }
 
-                    return (
-                      <div 
-                        key={playlist.id} 
-                        onClick={() => setSelectedPlaylistId(playlist.id)}
-                        className="group flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white/80 dark:bg-slate-900/80 hover:bg-white dark:hover:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-white/10 shadow-xs hover:shadow-lg transition-all duration-200 cursor-pointer relative"
-                      >
-                        {/* 16:9 Thumbnail with YouTube Playlist Stack Overlay */}
-                        <div className="relative w-full sm:w-36 aspect-video rounded-xl overflow-hidden bg-slate-950 shrink-0 shadow-md">
-                          <img 
-                            src={coverThumb} 
-                            alt={playlist.name} 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop';
-                            }}
-                          />
+  return (
+    <div className="w-full bg-gradient-to-b from-zinc-950 via-zinc-900 to-red-950/20 text-white min-h-screen pb-24 px-3 sm:px-4 py-3 select-none space-y-6">
+      
+      {/* 1. PROFILE HEADER SECTION (MATCHING SCREENSHOT 2) */}
+      <div className="flex items-center gap-4 pt-1">
+        {/* Large Pink/Red Avatar with 'B' or Photo */}
+        {userPhoto && userPhoto.trim() ? (
+          <img 
+            src={userPhoto} 
+            alt={userName} 
+            className="w-18 h-18 sm:w-20 sm:h-20 rounded-full object-cover ring-2 ring-red-500/50 shadow-lg shadow-red-950/40 shrink-0" 
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-red-600 via-rose-600 to-amber-600 text-white flex items-center justify-center text-3xl font-bold shadow-lg shadow-red-900/40 ring-2 ring-red-500/30 shrink-0">
+            {initialLetter}
+          </div>
+        )}
 
-                          {/* YouTube Playlist Stack Overlay on right */}
-                          <div className="absolute right-0 top-0 bottom-0 w-12 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center text-white gap-0.5 border-l border-white/10">
-                            <span className="text-[11px] font-black">{playlist.tracks.length}</span>
-                            <ListPlus size={14} className="text-white/90" />
-                          </div>
-
-                          {/* Hover Play Button */}
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-lg">
-                              <Play size={14} className="fill-slate-950 ml-0.5" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Playlist Metadata */}
-                        <div className="flex-1 min-w-0 pr-2">
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                            {playlist.name}
-                          </h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                            Playlist • {userName}
-                          </p>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                            {playlist.tracks.length} {playlist.tracks.length === 1 ? 'video' : 'videos'}
-                          </p>
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="flex items-center gap-1 self-end sm:self-center shrink-0">
-                          {hasTracks && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onPlay(playlist.tracks[0]);
-                              }}
-                              className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all cursor-pointer"
-                              title="Play all"
-                            >
-                              <Play size={15} className="fill-current" />
-                            </button>
-                          )}
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeletePlaylist(playlist.id);
-                              onShowToast("Playlist removed", "info");
-                            }}
-                            className="w-8 h-8 rounded-full hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-all cursor-pointer"
-                            title="Delete Playlist"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+        {/* Name & Handle & Account Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
+              {userName}
+            </h2>
+            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-semibold">
+              <ShieldCheck size={11} className="text-red-400" />
+              <span>Verified Account</span>
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-zinc-300 font-medium mt-0.5 truncate">
+            {userHandle} <span className="text-zinc-500 mx-1">•</span> <span className="text-rose-400/90 font-mono">{userEmail}</span>
+          </p>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              YouTube Real-Time Sync Connected
+            </span>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* 2. PILL ACTION BUTTONS (VIEW CHANNEL & GET PREMIUM) */}
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => {
+            if (onOpenChannelDetails) {
+              onOpenChannelDetails(userName);
+            } else {
+              onShowToast(`Viewing channel for ${userName}`, 'info');
+            }
+          }}
+          className="px-4 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white border border-red-500/20 text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer active:scale-95 shadow-sm"
+        >
+          View channel
+        </button>
+
+        <button
+          onClick={() => onShowToast('YouTube Premium is active with Ad-Free & Background Stream', 'success')}
+          className="px-4 py-1.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-md shadow-red-600/20"
+        >
+          <span>Get Premium</span>
+        </button>
+
+        <button
+          onClick={onOpenAuthModal}
+          className="px-4 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white border border-red-500/20 text-xs sm:text-sm font-semibold transition-colors shrink-0 cursor-pointer active:scale-95 shadow-sm"
+        >
+          Switch account
+        </button>
+      </div>
+
+      {/* 3. HISTORY SECTION (MATCHING SCREENSHOT 2) */}
+      <div className="space-y-3 pt-2">
+        <div 
+          onClick={() => setActiveView('history')}
+          className="flex items-center justify-between cursor-pointer group"
+        >
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-red-400 transition-colors">
+              History
+            </h3>
+            <ChevronRight size={18} className="text-white group-hover:translate-x-0.5 transition-transform" />
+          </div>
+          <span className="text-xs font-semibold text-rose-400 hover:text-rose-300 hover:underline">
+            View all
+          </span>
+        </div>
+
+        {/* Horizontal Carousel of History Tracks */}
+        <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 py-1">
+          {displayHistory.slice(0, 10).map((item) => (
+            <div
+              key={`hist-${item.id}`}
+              onClick={() => onPlay(item)}
+              className="w-40 sm:w-44 shrink-0 space-y-2 cursor-pointer group"
+            >
+              {/* 16:9 Thumbnail with Duration Tag */}
+              <div className="aspect-video w-full rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/15 relative shadow-sm">
+                <img
+                  src={item.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop'}
+                  alt={item.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div className="absolute inset-0 bg-red-950/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Play size={18} className="fill-white text-white" />
+                </div>
+                <span className="absolute bottom-1.5 right-1.5 bg-zinc-900/90 text-white text-[10px] font-mono px-1.5 py-0.5 rounded border border-white/10">
+                  {item.duration || '3:30'}
+                </span>
+              </div>
+
+              {/* Title & Channel */}
+              <div className="flex items-start justify-between gap-1">
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-xs font-semibold text-white leading-snug line-clamp-2 group-hover:text-red-400">
+                    {item.title}
+                  </h4>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                    {item.channel}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenMetadata) onOpenMetadata(item);
+                  }}
+                  className="p-1 text-zinc-400 hover:text-white rounded-full transition-colors"
+                >
+                  <MoreVertical size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. PLAYLISTS / LIBRARY SECTION (MATCHING SCREENSHOT 2 & 3) */}
+      <div className="space-y-4 pt-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base sm:text-lg font-bold text-white">
+            Playlists
+          </h3>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-rose-400 hover:text-rose-300"
+          >
+            <Plus size={16} />
+            <span>New playlist</span>
+          </button>
+        </div>
+
+        {/* Filter Chips Bar (Recents ⌄, Playlists, Music) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => setActiveFilter('recents')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+              activeFilter === 'recents' 
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30' 
+                : 'bg-zinc-850/90 text-zinc-300 hover:bg-zinc-800 border border-red-500/20'
+            }`}
+          >
+            <span>Recents</span>
+            <ChevronDown size={14} />
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('playlists')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              activeFilter === 'playlists' 
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30' 
+                : 'bg-zinc-850/90 text-zinc-300 hover:bg-zinc-800 border border-red-500/20'
+            }`}
+          >
+            Playlists
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('music')}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              activeFilter === 'music' 
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30' 
+                : 'bg-zinc-850/90 text-zinc-300 hover:bg-zinc-800 border border-red-500/20'
+            }`}
+          >
+            Music
+          </button>
+        </div>
+
+        {/* 5. YOUTUBE LIST ITEMS (MATCHING SCREENSHOT 2 & 3) */}
+        <div className="space-y-3 divide-y divide-red-500/15">
+          
+          {/* ITEM 1: Liked videos */}
+          <div
+            onClick={() => setActiveView('liked')}
+            className="pt-2 flex items-center justify-between gap-3 group cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              {/* Stacked Thumbnail with Thumbs Up Badge */}
+              <div className="w-28 sm:w-32 aspect-video rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/20 relative shrink-0 shadow-sm">
+                <img
+                  src={favorites[0]?.thumbnail || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&auto=format&fit=crop'}
+                  alt="Liked videos"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div className="absolute inset-0 bg-red-950/40 flex items-center justify-center">
+                  <ThumbsUp size={18} className="fill-white text-white" />
+                </div>
+                <span className="absolute bottom-1 right-1.5 bg-zinc-900/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/10">
+                  {favorites.length}
+                </span>
+              </div>
+
+              {/* Title & Metadata */}
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-red-400 transition-colors truncate">
+                  Liked videos
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Private • {favorites.length} videos
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowToast('Liked videos playlist options', 'info');
+              }}
+              className="p-2 text-zinc-400 hover:text-white rounded-full"
+            >
+              <MoreVertical size={18} />
+            </button>
+          </div>
+
+          {/* ITEM 2: Downloads */}
+          <div
+            onClick={() => onShowToast('Offline Downloads library is ready', 'info')}
+            className="pt-3 flex items-center justify-between gap-3 group cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              {/* Stacked Thumbnail with Download Down-Arrow Badge */}
+              <div className="w-28 sm:w-32 aspect-video rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/20 relative shrink-0 shadow-sm">
+                <img
+                  src="https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=300&auto=format&fit=crop"
+                  alt="Downloads"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div className="absolute inset-0 bg-red-950/40 flex items-center justify-center">
+                  <Download size={18} className="text-white" />
+                </div>
+                <span className="absolute bottom-1 right-1.5 bg-zinc-900/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/10">
+                  Offline
+                </span>
+              </div>
+
+              {/* Title & Metadata */}
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-red-400 transition-colors truncate">
+                  Downloads
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Saved on device • High Quality
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowToast('Downloads options', 'info');
+              }}
+              className="p-2 text-zinc-400 hover:text-white rounded-full"
+            >
+              <MoreVertical size={18} />
+            </button>
+          </div>
+
+          {/* ITEM 3: Playlist "Song" */}
+          <div
+            onClick={() => {
+              if (playlists.length > 0) {
+                setSelectedPlaylistId(playlists[0].id);
+              } else {
+                onCreatePlaylist("Song", "Public Playlist");
+                onShowToast("Opened playlist: Song", "info");
+              }
+            }}
+            className="pt-3 flex items-center justify-between gap-3 group cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              {/* Thumbnail with Playlist Icon Overlay */}
+              <div className="w-28 sm:w-32 aspect-video rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/20 relative shrink-0 shadow-sm">
+                <img
+                  src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop"
+                  alt="Song"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                />
+                <div className="absolute right-0 top-0 bottom-0 w-10 bg-zinc-950/80 border-l border-red-500/20 flex items-center justify-center">
+                  <ListPlus size={16} className="text-white" />
+                </div>
+              </div>
+
+              {/* Title & Metadata */}
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-red-400 transition-colors truncate">
+                  Song
+                </h4>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Public • Playlist
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowToast('Playlist options for Song', 'info');
+              }}
+              className="p-2 text-zinc-400 hover:text-white rounded-full"
+            >
+              <MoreVertical size={18} />
+            </button>
+          </div>
+
+          {/* Dynamic User Playlists */}
+          {playlists.map((playlist) => {
+            if (playlist.name === 'Song') return null;
+            const coverThumb = playlist.tracks[0]?.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop';
+
+            return (
+              <div
+                key={playlist.id}
+                onClick={() => setSelectedPlaylistId(playlist.id)}
+                className="pt-3 flex items-center justify-between gap-3 group cursor-pointer"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-28 sm:w-32 aspect-video rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/20 relative shrink-0 shadow-sm">
+                    <img
+                      src={coverThumb}
+                      alt={playlist.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute right-0 top-0 bottom-0 w-10 bg-zinc-950/80 border-l border-red-500/20 flex flex-col items-center justify-center text-white">
+                      <span className="text-[10px] font-bold">{playlist.tracks.length}</span>
+                      <ListPlus size={14} />
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-red-400 transition-colors truncate">
+                      {playlist.name}
+                    </h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Playlist • {playlist.tracks.length} {playlist.tracks.length === 1 ? 'video' : 'videos'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeletePlaylist(playlist.id);
+                    onShowToast('Playlist removed', 'info');
+                  }}
+                  className="p-2 text-zinc-400 hover:text-red-400 rounded-full"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            );
+          })}
+
+        </div>
+      </div>
 
       {/* Create Playlist Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-700 space-y-4 animate-scale-in">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <ListPlus size={20} className="text-indigo-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-zinc-900 border border-red-500/30 rounded-2xl p-5 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <ListPlus size={18} className="text-rose-500" />
               Create Custom Playlist
             </h3>
 
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleCreate} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">
                   Playlist Title
                 </label>
                 <input
@@ -311,37 +617,37 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   required
                   value={newPlaylistName}
                   onChange={(e) => setNewPlaylistName(e.target.value)}
-                  placeholder="e.g. Midnight Chill, Workout Power"
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g. My Favorite Hits"
+                  className="w-full p-2.5 bg-zinc-800/90 border border-red-500/20 rounded-xl text-xs font-medium text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
+                <label className="text-xs font-semibold text-zinc-300 block mb-1">
                   Description (Optional)
                 </label>
                 <input
                   type="text"
                   value={newPlaylistDesc}
                   onChange={(e) => setNewPlaylistDesc(e.target.value)}
-                  placeholder="e.g. Hand-picked AI lofi beats for intense coding"
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g. Hand-picked songs for chill vibes"
+                  className="w-full p-2.5 bg-zinc-800/90 border border-red-500/20 rounded-xl text-xs font-medium text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                 />
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 py-3 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl"
+                  className="flex-1 py-2.5 text-xs font-bold text-zinc-300 hover:bg-zinc-800 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg shadow-indigo-600/30"
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 rounded-xl shadow-md shadow-red-600/30 transition-all"
                 >
-                  Create Playlist
+                  Create
                 </button>
               </div>
             </form>

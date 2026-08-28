@@ -63,7 +63,7 @@ export const ChannelDetailsModal: React.FC<ChannelDetailsModalProps> = ({
   // Determine if channel is currently subscribed
   const cleanName = (channelName || '').trim();
   const isSubscribed = subscriptions.some(
-    s => s.name.toLowerCase() === cleanName.toLowerCase()
+    s => (s?.name || '').toLowerCase() === cleanName.toLowerCase()
   );
 
   // Fetch uploads for this specific channel
@@ -88,7 +88,7 @@ export const ChannelDetailsModal: React.FC<ChannelDetailsModalProps> = ({
           } else {
             // Fallback matching
             const filtered = DEFAULT_TRACKS.filter(t => 
-              (t.channel || '').toLowerCase().includes(cleanName.toLowerCase())
+              (t?.channel || '').toLowerCase().includes(cleanName.toLowerCase())
             );
             setTracks(filtered.length ? filtered : DEFAULT_TRACKS);
           }
@@ -97,7 +97,7 @@ export const ChannelDetailsModal: React.FC<ChannelDetailsModalProps> = ({
         console.warn("Error fetching channel details:", err);
         if (isMounted) {
           const filtered = DEFAULT_TRACKS.filter(t => 
-            (t.channel || '').toLowerCase().includes(cleanName.toLowerCase())
+            (t?.channel || '').toLowerCase().includes(cleanName.toLowerCase())
           );
           setTracks(filtered.length ? filtered : DEFAULT_TRACKS);
         }
@@ -119,7 +119,7 @@ export const ChannelDetailsModal: React.FC<ChannelDetailsModalProps> = ({
   const displayTracks = tracks.filter(t => {
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
-      if (!t.title.toLowerCase().includes(q)) return false;
+      if (!(t?.title || '').toLowerCase().includes(q)) return false;
     }
 
     if (activeTab === 'popular') {

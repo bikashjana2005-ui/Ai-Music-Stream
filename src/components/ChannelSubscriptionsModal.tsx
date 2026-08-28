@@ -356,11 +356,14 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
     onShowToast(!current ? `Notifications turned ON for ${channelName}` : `Notifications turned OFF for ${channelName}`, 'info');
   };
 
-  const filteredSubscriptions = subscriptions.filter(ch => 
-    filterActiveQuery.trim() === '' ||
-    (ch.name || '').toLowerCase().includes(filterActiveQuery.toLowerCase()) ||
-    (ch.handle && ch.handle.toLowerCase().includes(filterActiveQuery.toLowerCase()))
-  );
+  const filteredSubscriptions = subscriptions.filter(ch => {
+    const q = (filterActiveQuery || '').trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (ch?.name || '').toLowerCase().includes(q) ||
+      (ch?.handle && ch.handle.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <AnimatePresence>

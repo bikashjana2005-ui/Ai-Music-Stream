@@ -69,7 +69,7 @@ export const YouTubeHistory: React.FC<YouTubeHistoryProps> = ({
     } else if (filterType === 'music') {
       result = result.filter(t => 
         (t.genre && (t.genre.toLowerCase().includes('hindi') || t.genre.toLowerCase().includes('music') || t.genre.toLowerCase().includes('pop') || t.genre.toLowerCase().includes('lofi'))) ||
-        t.title.toLowerCase().includes('song') || t.title.toLowerCase().includes('audio') || t.title.toLowerCase().includes('music')
+        (t.title && (t.title.toLowerCase().includes('song') || t.title.toLowerCase().includes('audio') || t.title.toLowerCase().includes('music')))
       );
     }
 
@@ -106,7 +106,7 @@ export const YouTubeHistory: React.FC<YouTubeHistoryProps> = ({
 
   // Badge tag helper for authentic YouTube overlay look
   const getBadgeTag = (track: Track, index: number) => {
-    const title = track.title.toLowerCase();
+    const title = (track?.title || '').toLowerCase();
     if (title.includes('prank')) return 'PRANK';
     if (title.includes('apk') || title.includes('android')) return 'APK ONLY';
     if (title.includes('promo')) return 'PROMO';

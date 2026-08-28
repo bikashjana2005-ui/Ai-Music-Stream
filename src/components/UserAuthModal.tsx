@@ -65,9 +65,30 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => {
     try {
       const saved = localStorage.getItem('aura_saved_accounts');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) return JSON.parse(saved);
+      return [
+        {
+          uid: 'google-bikash-real',
+          email: 'bikashjana908@gmail.com',
+          displayName: 'Bikash Jana',
+          photoURL: null,
+          isAnonymous: false,
+          provider: 'google',
+          lastUsed: Date.now()
+        }
+      ];
     } catch {
-      return [];
+      return [
+        {
+          uid: 'google-bikash-real',
+          email: 'bikashjana908@gmail.com',
+          displayName: 'Bikash Jana',
+          photoURL: null,
+          isAnonymous: false,
+          provider: 'google',
+          lastUsed: Date.now()
+        }
+      ];
     }
   });
 
@@ -303,10 +324,10 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Ambient visual banner */}
-            <div className="relative px-6 pt-6 pb-5 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white overflow-hidden">
+            <div className="relative px-6 pt-6 pb-5 bg-gradient-to-br from-red-600 via-rose-600 to-zinc-950 text-white overflow-hidden">
               {/* Decorative background glow circles */}
-              <div className="absolute -top-12 -right-12 w-40 h-40 bg-pink-500/20 rounded-full blur-2xl pointer-events-none" />
-              <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-indigo-400/20 rounded-full blur-xl pointer-events-none" />
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-red-500/20 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-amber-500/20 rounded-full blur-xl pointer-events-none" />
 
               <div className="relative z-10 flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -316,13 +337,13 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-extrabold text-xl text-white tracking-tight">
-                        {user ? 'Account Hub' : 'Welcome to Aura'}
+                        {user ? 'Account Hub' : 'Welcome to Ai Music Stream'}
                       </h3>
                       <span className="px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-[10px] font-bold tracking-wide uppercase text-white/90">
                         Cloud Sync
                       </span>
                     </div>
-                    <p className="text-xs text-indigo-100/90 font-medium mt-0.5">
+                    <p className="text-xs text-rose-100/90 font-medium mt-0.5">
                       {user 
                         ? 'Manage your cloud profile and synchronized library' 
                         : 'Sign in to access synchronized playlists, favorites & channels'}
@@ -344,8 +365,15 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
               {user && (
                 <div className="mt-4 pt-3 border-t border-white/15 flex items-center justify-between">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {user.photoURL ? (
-                      <img src={user.photoURL} alt="Avatar" className="w-7 h-7 rounded-full object-cover ring-2 ring-white/50" />
+                    {user.photoURL && user.photoURL.trim() ? (
+                      <img
+                        src={user.photoURL}
+                        alt="Avatar"
+                        className="w-7 h-7 rounded-full object-cover ring-2 ring-white/50"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">
                         <UserIcon size={14} />
@@ -371,7 +399,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                   onClick={() => { setAuthTab('google'); setErrorMsg(null); }}
                   className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                     authTab === 'google'
-                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      ? 'bg-white dark:bg-slate-700 text-red-600 dark:text-white shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -384,7 +412,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                   onClick={() => { setAuthTab('email'); setErrorMsg(null); }}
                   className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                     authTab === 'email'
-                      ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      ? 'bg-white dark:bg-slate-700 text-red-600 dark:text-white shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -410,14 +438,14 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                   onClick={() => { setAuthTab('accounts'); setErrorMsg(null); }}
                   className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1.5 relative ${
                     authTab === 'accounts'
-                      ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
+                      ? 'bg-white dark:bg-slate-700 text-red-600 dark:text-rose-300 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-600'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <Users size={13} />
                   <span className="truncate">Profiles</span>
                   {savedAccounts.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow">
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white rounded-full text-[9px] font-black flex items-center justify-center shadow">
                       {savedAccounts.length}
                     </span>
                   )}
@@ -485,7 +513,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                       className="w-full py-3.5 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow flex items-center justify-center gap-3 transition-all active:scale-98 disabled:opacity-50"
                     >
                       {loading ? (
-                        <Loader2 size={18} className="animate-spin text-indigo-600" />
+                        <Loader2 size={18} className="animate-spin text-red-600" />
                       ) : (
                         <>
                           <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -505,21 +533,21 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                       disabled={loading}
                       className="w-full py-2.5 px-3 bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition-all border border-slate-200/80 dark:border-slate-700/60"
                     >
-                      <LogIn size={14} className="text-indigo-500" />
+                      <LogIn size={14} className="text-red-500" />
                       <span>Use Full-Page Redirect Sign-In</span>
                     </button>
                   </div>
 
                   {/* Browser Sandbox Helper Box */}
-                  <div className="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-800/40 rounded-2xl text-left space-y-2">
-                    <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                  <div className="p-3.5 bg-red-50/70 dark:bg-red-950/20 border border-red-200/70 dark:border-red-800/30 rounded-2xl text-left space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-red-900 dark:text-red-200">
                       <span className="flex items-center gap-1.5">
-                        <ExternalLink size={14} className="text-indigo-600 dark:text-indigo-400" />
+                        <ExternalLink size={14} className="text-red-600 dark:text-red-400" />
                         Running in Preview Mode?
                       </span>
                       <button
                         onClick={handleOpenNewTab}
-                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
+                        className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] rounded-lg shadow-sm transition-all active:scale-95 flex items-center gap-1"
                       >
                         Open New Tab <ArrowRight size={11} />
                       </button>
@@ -543,7 +571,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                 >
                   <div className="text-center space-y-1">
                     <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">
-                      {isRegistering ? 'Create your Aura Account' : 'Sign in with Email'}
+                      {isRegistering ? 'Create your Account' : 'Sign in with Email'}
                     </h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {isRegistering 
@@ -563,7 +591,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                           value={displayName}
                           onChange={(e) => setDisplayName(e.target.value)}
                           placeholder="e.g. Alex Rivera"
-                          className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 dark:text-white transition-all"
+                          className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-slate-900 dark:text-white transition-all"
                         />
                       </div>
                     </div>
@@ -580,7 +608,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="your.email@example.com"
-                        className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 dark:text-white transition-all"
+                        className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-slate-900 dark:text-white transition-all"
                       />
                     </div>
                   </div>
@@ -597,7 +625,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-900 dark:text-white transition-all"
+                        className="w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-slate-900 dark:text-white transition-all"
                       />
                       <button
                         type="button"
@@ -614,7 +642,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                     id="submit-email-auth-btn"
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50 mt-1"
+                    className="w-full py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50 mt-1"
                   >
                     {loading ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -636,11 +664,11 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                         setIsRegistering(!isRegistering);
                         setErrorMsg(null);
                       }}
-                      className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                      className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline"
                     >
                       {isRegistering 
                         ? 'Already registered? Switch to Sign In' 
-                        : "New to Aura? Create an Account"}
+                        : "New user? Create an Account"}
                     </button>
                   </div>
                 </motion.form>
@@ -698,7 +726,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Users size={14} className="text-purple-500" />
+                        <Users size={14} className="text-red-500" />
                         Saved User Profiles ({savedAccounts.length})
                       </h4>
                       <p className="text-[10px] text-slate-400">
@@ -708,7 +736,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
 
                     <button
                       onClick={() => setAuthTab('email')}
-                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] rounded-lg shadow-sm flex items-center gap-1 transition-all active:scale-95 shrink-0"
+                      className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] rounded-lg shadow-sm flex items-center gap-1 transition-all active:scale-95 shrink-0"
                     >
                       <Plus size={12} /> Add New
                     </button>
@@ -720,7 +748,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                       <p className="text-xs text-slate-500 font-medium">No saved accounts found on this device.</p>
                       <button
                         onClick={() => setAuthTab('google')}
-                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl"
+                        className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-xl"
                       >
                         Sign in now
                       </button>
@@ -735,15 +763,22 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                             onClick={() => handleSwitchToAccount(acc)}
                             className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer ${
                               isActive
-                                ? 'bg-indigo-500/10 dark:bg-indigo-500/20 border-indigo-500/40 ring-2 ring-indigo-500/30'
+                                ? 'bg-red-500/10 dark:bg-red-500/20 border-red-500/40 ring-2 ring-red-500/30'
                                 : 'bg-slate-50 dark:bg-slate-800/70 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700/60'
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1">
-                              {acc.photoURL ? (
-                                <img src={acc.photoURL} alt={acc.displayName || 'Account'} className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-indigo-500/50" />
+                              {acc.photoURL && acc.photoURL.trim() ? (
+                                <img
+                                  src={acc.photoURL}
+                                  alt={acc.displayName || 'Account'}
+                                  className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-red-500/50"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
                               ) : (
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-red-600 via-rose-600 to-amber-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
                                   <UserIcon size={16} />
                                 </div>
                               )}
@@ -758,7 +793,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                                       ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
                                       : acc.provider === 'guest'
                                       ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                                      : 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
                                   }`}>
                                     {acc.provider}
                                   </span>
@@ -781,7 +816,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                                     e.stopPropagation();
                                     handleSwitchToAccount(acc);
                                   }}
-                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] rounded-lg shadow transition-all active:scale-95"
+                                  className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] rounded-lg shadow transition-all active:scale-95"
                                 >
                                   Switch
                                 </button>
@@ -822,11 +857,11 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Channels</span>
                     </div>
                     <div className="bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-2xl text-center border border-slate-200/80 dark:border-slate-700/60">
-                      <span className="block text-base font-black text-indigo-500">{favoritesCount}</span>
+                      <span className="block text-base font-black text-red-500">{favoritesCount}</span>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Favorites</span>
                     </div>
                     <div className="bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-2xl text-center border border-slate-200/80 dark:border-slate-700/60">
-                      <span className="block text-base font-black text-purple-500">{playlistsCount}</span>
+                      <span className="block text-base font-black text-amber-500">{playlistsCount}</span>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Playlists</span>
                     </div>
                   </div>

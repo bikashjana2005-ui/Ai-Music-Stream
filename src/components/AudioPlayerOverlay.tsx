@@ -422,23 +422,15 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => setShowVideo(!showVideo)}
-            className={`p-2.5 rounded-full backdrop-blur-md transition-all active:scale-90 ${
-              showVideo ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white/10 text-gray-300 hover:bg-white/20'
-            }`}
-            title="Toggle YouTube Video Frame"
-          >
-            <Video size={20} />
-          </button>
-
-          {showVideo && onToggleFullScreen && (
+          {onToggleFullScreen && (
             <button
-              onClick={onToggleFullScreen}
+              onClick={() => {
+                onToggleFullScreen();
+              }}
               className="p-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 rounded-full text-white shadow-lg shadow-rose-600/30 transition-all active:scale-90 flex items-center justify-center border border-rose-400/40"
               title="Launch Full Video Player Mode"
             >
-              <Zap size={20} className="fill-yellow-300 text-yellow-300 animate-pulse" />
+              <Video size={20} />
             </button>
           )}
 
@@ -462,45 +454,39 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
         </div>
       </div>
 
-      {/* Center Audio Player Card / Video View */}
-      <div className={`relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 mx-auto w-full pb-8 ${showVideo ? 'max-w-2xl' : 'max-w-md'}`}>
-        
-        {showVideo && videoId && videoId.length === 11 ? (
-          /* Slot for Global Persistent YouTube Video Player */
-          <div className="relative w-full aspect-video my-3 sm:my-5 rounded-3xl overflow-hidden pointer-events-none opacity-0" />
-        ) : (
-          /* Album Cover Art Display */
-          <div className="relative w-64 h-64 sm:w-72 sm:h-72 my-4 rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/15 group flex items-center justify-center bg-gray-900">
-            {imgStage > 3 ? (
-              <div className="w-full h-full bg-gradient-to-br from-indigo-700 to-purple-800 flex items-center justify-center text-white">
-                <Music size={48} />
-              </div>
-            ) : (
-              <img 
-                src={thumbnailUrl} 
-                alt={title} 
-                onError={() => setImgStage(prev => prev + 1)}
-                className={`w-full h-full object-cover transition-all duration-700 ${isPlaying ? 'scale-105' : 'scale-100 opacity-80'}`} 
-              />
-            )}
-            
-            {/* Animated Vinyl Disc Effect behind */}
-            <div className="absolute top-2 right-2 text-white/40">
-              <Disc size={28} className={`transition-transform duration-1000 ${isPlaying ? 'animate-spin-slow' : ''}`} />
+      {/* Center Audio Player Card */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 mx-auto w-full pb-8 max-w-md">
+        {/* Album Cover Art Display */}
+        <div className="relative w-64 h-64 sm:w-72 sm:h-72 my-4 rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/15 group flex items-center justify-center bg-gray-900">
+          {imgStage > 3 ? (
+            <div className="w-full h-full bg-gradient-to-br from-indigo-700 to-purple-800 flex items-center justify-center text-white">
+              <Music size={48} />
             </div>
-
-            {/* Equalizer Wave Overlay */}
-            {isPlaying && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-end gap-1.5 bg-black/70 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                <div className="w-1 bg-indigo-400 h-4 animate-[bounce_0.8s_infinite]"></div>
-                <div className="w-1 bg-indigo-400 h-7 animate-[bounce_1.1s_infinite]"></div>
-                <div className="w-1 bg-indigo-400 h-3 animate-[bounce_0.6s_infinite]"></div>
-                <div className="w-1 bg-indigo-400 h-6 animate-[bounce_0.9s_infinite]"></div>
-                <div className="w-1 bg-indigo-400 h-4 animate-[bounce_0.7s_infinite]"></div>
-              </div>
-            )}
+          ) : (
+            <img 
+              src={thumbnailUrl} 
+              alt={title} 
+              onError={() => setImgStage(prev => prev + 1)}
+              className={`w-full h-full object-cover transition-all duration-700 ${isPlaying ? 'scale-105' : 'scale-100 opacity-80'}`} 
+            />
+          )}
+          
+          {/* Animated Vinyl Disc Effect behind */}
+          <div className="absolute top-2 right-2 text-white/40">
+            <Disc size={28} className={`transition-transform duration-1000 ${isPlaying ? 'animate-spin-slow' : ''}`} />
           </div>
-        )}
+
+          {/* Equalizer Wave Overlay */}
+          {isPlaying && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-end gap-1.5 bg-black/70 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+              <div className="w-1 bg-indigo-400 h-4 animate-[bounce_0.8s_infinite]"></div>
+              <div className="w-1 bg-indigo-400 h-7 animate-[bounce_1.1s_infinite]"></div>
+              <div className="w-1 bg-indigo-400 h-3 animate-[bounce_0.6s_infinite]"></div>
+              <div className="w-1 bg-indigo-400 h-6 animate-[bounce_0.9s_infinite]"></div>
+              <div className="w-1 bg-indigo-400 h-4 animate-[bounce_0.7s_infinite]"></div>
+            </div>
+          )}
+        </div>
 
         {/* Track Title & Artist */}
         <div className="text-center mt-3 w-full flex flex-col items-center">

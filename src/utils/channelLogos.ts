@@ -65,13 +65,13 @@ const KNOWN_OFFICIAL_LOGOS: Record<string, string> = {
   'bruno mars': 'https://unavatar.io/youtube/BrunoMars'
 };
 
-export const getChannelAvatar = (channelName: string): string => {
-  if (!channelName) {
+export const getChannelAvatar = (channelName?: string | null): string => {
+  if (!channelName || typeof channelName !== 'string') {
     return 'https://ui-avatars.com/api/?name=YT&background=e11d48&color=ffffff&bold=true';
   }
 
   const cleanName = channelName.split('•')[0].split('|')[0].trim();
-  const lower = cleanName.toLowerCase();
+  const lower = (cleanName || '').toLowerCase();
 
   // Check known map
   for (const [key, logoUrl] of Object.entries(KNOWN_OFFICIAL_LOGOS)) {

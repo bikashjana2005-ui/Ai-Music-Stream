@@ -953,14 +953,413 @@ app.post("/api/youtube/sync-playlists", async (req, res) => {
     const playlists = (data.items || []).map((item: any) => ({
       id: item.id,
       title: item.snippet?.title || "YouTube Playlist",
+      name: item.snippet?.title || "YouTube Playlist",
+      description: item.snippet?.description || "Synced from YouTube Mobile",
       itemCount: item.contentDetails?.itemCount || 0,
       thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || ""
     }));
 
-    res.json({ playlists });
+    res.json({ playlists, count: playlists.length, status: "success" });
   } catch (e: any) {
     res.status(500).json({ error: e.message || "Internal server error" });
   }
+});
+
+// Real-time YouTube Channel Profile Sync Endpoint
+app.post("/api/youtube/sync-channel", async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+    if (!accessToken) {
+      return res.status(400).json({ error: "Access token required" });
+    }
+
+    const ytRes = await fetch(
+      "https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics,brandingSettings&mine=true",
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json"
+        }
+      }
+    );
+
+    if (!ytRes.ok) {
+      const err = await ytRes.json().catch(() => ({}));
+      return res.status(ytRes.status).json({ 
+        error: err?.error?.message || "Failed to fetch YouTube channel",
+        reason: err?.error?.errors?.[0]?.reason || "authError"
+      });
+    }
+
+    const data = await ytRes.json();
+    const item = (data.items || [])[0];
+    if (!item) {
+      return res.json({ profile: null, status: "no_channel" });
+    }
+
+    const snippet = item.snippet || {};
+    const stats = item.statistics || {};
+    const contentDetails = item.contentDetails || {};
+    const branding = item.brandingSettings || {};
+
+    const profile = {
+      id: item.id,
+      title: snippet.title || "My YouTube Channel",
+      customUrl: snippet.customUrl || `@${(snippet.title || '').replace(/\s+/g, '')}`,
+      description: snippet.description || "",
+      avatar: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || "",
+      banner: branding.image?.bannerExternalUrl || "",
+      subscriberCount: stats.subscriberCount ? parseInt(stats.subscriberCount, 10).toLocaleString() + " subscribers" : "Hidden",
+      videoCount: stats.videoCount ? parseInt(stats.videoCount, 10).toLocaleString() + " videos" : "0",
+      viewCount: stats.viewCount ? parseInt(stats.viewCount, 10).toLocaleString() + " views" : "0",
+      uploadsPlaylistId: contentDetails.relatedPlaylists?.uploads || "",
+      syncedAt: new Date().toISOString()
+    };
+
+    res.json({ profile, status: "success" });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Internal server error" });
+  }
+});
+
+// Real-time YouTube Liked Videos Sync Endpoint
+app.post("/api/youtube/sync-liked", async (req, res) => {
+  try {
+    const { accessToken, maxResults = 50 } = req.body;
+    if (!accessToken) {
+      return res.status(400).json({ error: "Access token required" });
+    }
+
+    let tracks: any[] = [];
+    // 1. Try fetching from Liked Videos playlist ("LL")
+    const llRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=LL&maxResults=${maxResults}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json"
+        }
+      }
+    );
+
+    if (llRes.ok) {
+      const data = await llRes.json();
+      const videoIds = (data.items || []).map((item: any) => item.contentDetails?.videoId || item.snippet?.resourceId?.videoId).filter(Boolean);
+      const metaMap = await fetchYouTubeVideoMetadataFromAPI(videoIds);
+
+      tracks = (data.items || []).map((item: any) => {
+        const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+        if (!vid) return null;
+        const snippet = item.snippet || {};
+        const meta = metaMap[vid] || {};
+        return {
+          id: vid,
+          title: meta.title || snippet.title || "Liked Video",
+          channel: meta.channel || snippet.videoOwnerChannelTitle || snippet.channelTitle || "YouTube Creator",
+          views: meta.views || "Liked on YouTube",
+          duration: meta.duration || "3:45",
+          publishedTime: meta.publishedAt || (snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : "YouTube"),
+          description: meta.description || snippet.description || "",
+          thumbnail: meta.thumbnail || snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+          likeCount: meta.likeCount,
+          isOfficial: true,
+          aiMoodTags: "YouTube Liked Track",
+          genre: "Liked Collection"
+        };
+      }).filter(Boolean);
+    } else {
+      // 2. Fallback to videos.list with myRating=like
+      const videosRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&myRating=like&maxResults=${maxResults}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json"
+          }
+        }
+      );
+
+      if (videosRes.ok) {
+        const data = await videosRes.json();
+        tracks = (data.items || []).map((item: any) => {
+          const snippet = item.snippet || {};
+          const contentDetails = item.contentDetails || {};
+          const statistics = item.statistics || {};
+          return {
+            id: item.id,
+            title: snippet.title || "Liked Video",
+            channel: snippet.channelTitle || "YouTube Creator",
+            views: statistics.viewCount ? parseInt(statistics.viewCount, 10).toLocaleString() + " views" : "Verified Stream",
+            duration: parseISO8601Duration(contentDetails.duration),
+            publishedTime: snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : "YouTube",
+            description: snippet.description || "",
+            thumbnail: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+            likeCount: statistics.likeCount ? parseInt(statistics.likeCount, 10).toLocaleString() : undefined,
+            isOfficial: true,
+            aiMoodTags: "YouTube Liked Track",
+            genre: "Liked Collection"
+          };
+        });
+      } else {
+        const err = await llRes.json().catch(() => ({}));
+        return res.json({ 
+          tracks: [], 
+          status: "notice", 
+          reason: err?.error?.errors?.[0]?.reason || "authError",
+          message: err?.error?.message || "Could not fetch liked videos"
+        });
+      }
+    }
+
+    res.json({ tracks, count: tracks.length, status: "success" });
+  } catch (e: any) {
+    console.error("Error in sync-liked:", e);
+    res.json({ tracks: [], count: 0, status: "error", error: e.message });
+  }
+});
+
+// Real-time YouTube Watch History Sync Endpoint
+app.post("/api/youtube/sync-history", async (req, res) => {
+  try {
+    const { accessToken, maxResults = 40 } = req.body;
+    if (!accessToken) {
+      return res.status(400).json({ error: "Access token required" });
+    }
+
+    let tracks: any[] = [];
+    const hlRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=HL&maxResults=${maxResults}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json"
+        }
+      }
+    );
+
+    if (hlRes.ok) {
+      const data = await hlRes.json();
+      const videoIds = (data.items || []).map((item: any) => item.contentDetails?.videoId || item.snippet?.resourceId?.videoId).filter(Boolean);
+      const metaMap = await fetchYouTubeVideoMetadataFromAPI(videoIds);
+
+      tracks = (data.items || []).map((item: any) => {
+        const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+        if (!vid) return null;
+        const snippet = item.snippet || {};
+        const meta = metaMap[vid] || {};
+        return {
+          id: vid,
+          title: meta.title || snippet.title || "History Video",
+          channel: meta.channel || snippet.videoOwnerChannelTitle || snippet.channelTitle || "YouTube Creator",
+          views: meta.views || "YouTube History",
+          duration: meta.duration || "3:45",
+          publishedTime: meta.publishedAt || (snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : "Recent"),
+          description: meta.description || snippet.description || "",
+          thumbnail: meta.thumbnail || snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+          isOfficial: true,
+          aiMoodTags: "YouTube History Stream"
+        };
+      }).filter(Boolean);
+    } else {
+      // Fallback: activities list
+      const actRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/activities?part=snippet,contentDetails&mine=true&maxResults=${maxResults}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json"
+          }
+        }
+      );
+      if (actRes.ok) {
+        const data = await actRes.json();
+        const videoIds = (data.items || []).map((item: any) => item.contentDetails?.upload?.videoId || item.contentDetails?.like?.resourceId?.videoId).filter(Boolean);
+        const metaMap = await fetchYouTubeVideoMetadataFromAPI(videoIds);
+
+        tracks = (data.items || []).map((item: any) => {
+          const vid = item.contentDetails?.upload?.videoId || item.contentDetails?.like?.resourceId?.videoId;
+          if (!vid) return null;
+          const snippet = item.snippet || {};
+          const meta = metaMap[vid] || {};
+          return {
+            id: vid,
+            title: meta.title || snippet.title || "Recent Activity",
+            channel: meta.channel || snippet.channelTitle || "YouTube Creator",
+            views: meta.views || "Recent Stream",
+            duration: meta.duration || "3:45",
+            publishedTime: meta.publishedAt || (snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : "Recent"),
+            thumbnail: meta.thumbnail || snippet.thumbnails?.high?.url || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+            isOfficial: true,
+            aiMoodTags: "Recent Activity"
+          };
+        }).filter(Boolean);
+      }
+    }
+
+    res.json({ tracks, count: tracks.length, status: "success" });
+  } catch (e: any) {
+    console.error("Error in sync-history:", e);
+    res.json({ tracks: [], count: 0, status: "error", error: e.message });
+  }
+});
+
+// Real-time YouTube Specific Playlist Items Sync Endpoint
+app.post("/api/youtube/sync-playlist-items", async (req, res) => {
+  try {
+    const { playlistId, accessToken, youtubeApiKey } = req.body;
+    if (!playlistId) {
+      return res.status(400).json({ error: "playlistId required" });
+    }
+
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    const ytKey = youtubeApiKey || process.env.YOUTUBE_API_KEY || "";
+    const keyParam = (!accessToken && ytKey) ? `&key=${ytKey.trim()}` : "";
+    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50${keyParam}`;
+
+    const ytRes = await fetch(url, { headers });
+    if (!ytRes.ok) {
+      return res.status(ytRes.status).json({ error: "Failed to fetch playlist items" });
+    }
+
+    const data = await ytRes.json();
+    const videoIds = (data.items || []).map((item: any) => item.contentDetails?.videoId || item.snippet?.resourceId?.videoId).filter(Boolean);
+    const metaMap = await fetchYouTubeVideoMetadataFromAPI(videoIds, ytKey);
+
+    const tracks = (data.items || []).map((item: any) => {
+      const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+      if (!vid) return null;
+      const snippet = item.snippet || {};
+      const meta = metaMap[vid] || {};
+      return {
+        id: vid,
+        title: meta.title || snippet.title || "Playlist Track",
+        channel: meta.channel || snippet.videoOwnerChannelTitle || snippet.channelTitle || "YouTube Creator",
+        views: meta.views || "Verified Stream",
+        duration: meta.duration || "3:45",
+        publishedTime: meta.publishedAt || (snippet.publishedAt ? new Date(snippet.publishedAt).toLocaleDateString() : "YouTube"),
+        description: meta.description || snippet.description || "",
+        thumbnail: meta.thumbnail || snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+        isOfficial: true,
+        aiMoodTags: "Imported YouTube Playlist",
+        genre: "YouTube Mix"
+      };
+    }).filter(Boolean);
+
+    res.json({ tracks, count: tracks.length, status: "success" });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Internal server error" });
+  }
+});
+
+// Master Endpoint: One-click real-time sync for Channel, Subscriptions, Playlists, Liked, and History
+app.post("/api/youtube/sync-all", async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+    if (!accessToken) {
+      return res.status(400).json({ error: "Access token required" });
+    }
+
+    const [channelPromise, subsPromise, playlistsPromise, likedPromise] = await Promise.allSettled([
+      fetch("http://127.0.0.1:3000/api/youtube/sync-channel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken })
+      }).then(r => r.json()),
+
+      fetch("http://127.0.0.1:3000/api/youtube/sync-subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken })
+      }).then(r => r.json()),
+
+      fetch("http://127.0.0.1:3000/api/youtube/sync-playlists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken })
+      }).then(r => r.json()),
+
+      fetch("http://127.0.0.1:3000/api/youtube/sync-liked", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken })
+      }).then(r => r.json())
+    ]);
+
+    const channelData = channelPromise.status === 'fulfilled' ? channelPromise.value : {};
+    const subsData = subsPromise.status === 'fulfilled' ? subsPromise.value : {};
+    const playlistsData = playlistsPromise.status === 'fulfilled' ? playlistsPromise.value : {};
+    const likedData = likedPromise.status === 'fulfilled' ? likedPromise.value : {};
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      channel: channelData?.profile || null,
+      subscriptions: subsData?.channels || [],
+      playlists: playlistsData?.playlists || [],
+      likedTracks: likedData?.tracks || [],
+      summary: {
+        subscriptionsCount: subsData?.channels?.length || 0,
+        playlistsCount: playlistsData?.playlists?.length || 0,
+        likedCount: likedData?.tracks?.length || 0
+      }
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || "Failed to complete full sync" });
+  }
+});
+
+// Real-time Mobile Device Pairing & Session Synchronization Memory Store
+const mobilePairingSessions = new Map<string, any>();
+
+app.post("/api/youtube/mobile-pair", (req, res) => {
+  const { deviceName = "YouTube Mobile Client", activeTrack, isPlaying, userProfile } = req.body;
+  const pairCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const session = {
+    pairCode,
+    deviceName,
+    connectedAt: Date.now(),
+    lastActive: Date.now(),
+    activeTrack: activeTrack || null,
+    isPlaying: !!isPlaying,
+    userProfile: userProfile || null
+  };
+  mobilePairingSessions.set(pairCode, session);
+
+  // Auto clean old sessions (> 24h)
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [code, sess] of mobilePairingSessions.entries()) {
+    if (sess.lastActive < oneDayAgo) mobilePairingSessions.delete(code);
+  }
+
+  res.json({ success: true, pairCode, session });
+});
+
+app.get("/api/youtube/mobile-pair/:code", (req, res) => {
+  const { code } = req.params;
+  const session = mobilePairingSessions.get(code);
+  if (!session) {
+    return res.status(404).json({ error: "Invalid or expired pair code" });
+  }
+  session.lastActive = Date.now();
+  res.json({ success: true, session });
+});
+
+app.post("/api/youtube/mobile-pair-sync", (req, res) => {
+  const { pairCode, activeTrack, isPlaying, volume, playbackTime } = req.body;
+  if (!pairCode || !mobilePairingSessions.has(pairCode)) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  const session = mobilePairingSessions.get(pairCode);
+  if (activeTrack !== undefined) session.activeTrack = activeTrack;
+  if (isPlaying !== undefined) session.isPlaying = isPlaying;
+  if (volume !== undefined) session.volume = volume;
+  if (playbackTime !== undefined) session.playbackTime = playbackTime;
+  session.lastActive = Date.now();
+  res.json({ success: true, session });
 });
 
 // Helper: Parse ISO 8601 Duration (PT4M28S -> 4:28)
@@ -1198,63 +1597,109 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", environment: process.env.NODE_ENV || "development" });
 });
 
-// Recommendations Endpoint (Multi-Topic & Multi-Channel Support)
-app.post("/api/music/recommendations", async (req, res) => {
+// YouTube Recommendations Feed Endpoint (Trending, Multi-Category, and Channels)
+app.post(["/api/youtube/recommendations", "/api/music/recommendations"], async (req, res) => {
   try {
-    const { mood = "General Trending", genre, trackTitle, channel, category = "All" } = req.body;
-    const cacheKey = `rec_v2_${category}_${mood}_${genre || ''}_${trackTitle || ''}_${channel || ''}`;
-    const cached = getCached<any>(cacheKey);
-    if (cached) {
-      return res.json(cached);
+    const { 
+      category = "all", 
+      query: customQuery, 
+      mood = "Top Trending Indian YouTube Videos 2026", 
+      genre, 
+      trackTitle, 
+      channel, 
+      page = 1,
+      forceFresh = false 
+    } = req.body;
+
+    let targetQuery = "Top Trending YouTube Videos India Crazy XYZ Star Jalsha Music";
+    if (customQuery && customQuery.trim()) {
+      targetQuery = customQuery.trim();
+    } else if (category && category !== "all") {
+      switch (category) {
+        case 'indian_soaps':
+          targetQuery = "Star Jalsha Zee Bangla Bengali Serial Promo Drama 2026 episode";
+          break;
+        case 'music':
+          targetQuery = "Top Indian Bollywood Bengali Romantic Hits Songs Arijit Singh Shreya Ghoshal";
+          break;
+        case 'crazy_xyz':
+          targetQuery = "Crazy XYZ Experiments JCB Stunts Challenge viral";
+          break;
+        case 'bengali':
+          targetQuery = "Top Bengali Romantic Songs Coke Studio SVF Bangla Hoichoi";
+          break;
+        case 'hindi':
+          targetQuery = "Top Hindi Bollywood Songs Chartbusters Arijit Anirudh T-Series";
+          break;
+        case 'punjabi':
+          targetQuery = "Top Punjabi Songs Karan Aujla Diljit Dosanjh AP Dhillon";
+          break;
+        case 'news':
+          targetQuery = "Live Indian News ABP Ananda Aaj Tak Kolkata TV 24 Ghanta";
+          break;
+        case 'lofi':
+          targetQuery = "Chill Indian Lofi Slowed Reverb Hindi Bengali Acoustic";
+          break;
+        case 'mixes':
+          targetQuery = "Non Stop Hindi Bengali DJ Remix Party Mashup 2026";
+          break;
+        default:
+          targetQuery = `${category} official trending video`;
+      }
+    } else if (trackTitle) {
+      targetQuery = `${trackTitle} ${channel || ''} official video songs`;
     }
 
-    let scrapedTracks: any[] = [];
+    if (page > 1) {
+      targetQuery = `${targetQuery} latest new upload`;
+    }
 
-    if (category && category !== "All") {
-      // Category specific query across diverse channels
-      const query = `${category} official video music audio`.trim();
-      scrapedTracks = await searchYouTubeScrape(query);
-    } else if (trackTitle) {
-      // Fetch related videos from title & channel first
-      const primaryQuery = `${trackTitle} ${channel || ''} official video music`.trim();
-      scrapedTracks = await searchYouTubeScrape(primaryQuery);
+    const cacheKey = `yt_rec_v3_${category}_${targetQuery.toLowerCase().trim()}_p${page}`;
+    if (!forceFresh) {
+      const cached = getCached<any>(cacheKey);
+      if (cached && cached.tracks?.length) {
+        return res.json(cached);
+      }
+    }
 
-      if (!scrapedTracks || scrapedTracks.length < 6) {
-        const secondaryQuery = `${genre || 'trending'} top music songs`.trim();
-        const extraTracks = await searchYouTubeScrape(secondaryQuery);
-        const seen = new Set(scrapedTracks.map(t => t.id));
-        for (const t of extraTracks) {
-          if (!seen.has(t.id)) {
-            seen.add(t.id);
-            scrapedTracks.push(t);
-          }
+    let tracks: any[] = [];
+
+    // 1. Try search scraper for live YouTube feed
+    tracks = await searchYouTubeScrape(targetQuery);
+
+    // 2. If fewer than 8 tracks, enrich with secondary search
+    if (!tracks || tracks.length < 8) {
+      const secondaryTracks = await searchYouTubeScrape(`${targetQuery} trending full`);
+      const seen = new Set(tracks.map(t => t.id));
+      for (const t of secondaryTracks) {
+        if (!seen.has(t.id)) {
+          seen.add(t.id);
+          tracks.push(t);
         }
       }
-
-      // Add genre tag if missing
-      scrapedTracks.forEach(t => {
-        if (!t.genre) {
-          t.genre = t.title.toLowerCase().includes('lofi') ? 'Lofi & Chill'
-                  : t.title.toLowerCase().includes('pop') ? 'Pop & Hits'
-                  : t.title.toLowerCase().includes('rock') ? 'Rock & Indie'
-                  : t.title.toLowerCase().includes('remix') ? 'EDM & Remix'
-                  : 'Trending Music';
-        }
-      });
-    } else {
-      const searchQuery = `${mood} ${genre || ''} official audio full song`.trim();
-      scrapedTracks = await searchYouTubeScrape(searchQuery);
     }
 
-    if (scrapedTracks && scrapedTracks.length > 0) {
-      const result = { tracks: scrapedTracks, isFallback: false };
+    if (tracks && tracks.length > 0) {
+      const result = { 
+        tracks, 
+        source: "YouTube Recommendations Feed", 
+        category, 
+        query: targetQuery, 
+        totalResults: tracks.length,
+        timestamp: new Date().toISOString() 
+      };
       setCached(cacheKey, result, 10 * 60 * 1000);
       return res.json(result);
     }
 
-    return res.json({ tracks: FALLBACK_TRACKS, isFallback: true });
+    return res.json({ 
+      tracks: FALLBACK_TRACKS, 
+      source: "Fallback Recommendations", 
+      category, 
+      isFallback: true 
+    });
   } catch (error: any) {
-    console.error("Error fetching recommendations:", error?.message || error);
+    console.error("Error in YouTube recommendations feed:", error?.message || error);
     res.json({ tracks: FALLBACK_TRACKS, isFallback: true });
   }
 });

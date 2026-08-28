@@ -109,7 +109,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   const videoId = extractYouTubeId(currentTrack.id);
   const title = decodeHtmlEntities(currentTrack.title);
   const channel = decodeHtmlEntities(currentTrack.channel);
-  const thumbnail = currentTrack.thumbnail || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '');
+  const thumbnail = currentTrack.thumbnail || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop');
 
   const duration = realDuration || 220;
   const progressPercent = Math.min(100, Math.max(0, (playbackTime / duration) * 100));
@@ -143,7 +143,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
       style={{ maxWidth: '100%' }}
     >
       <div 
-        className="relative bg-slate-900/90 dark:bg-slate-950/90 border border-white/20 backdrop-blur-3xl backdrop-saturate-200 rounded-xl shadow-[0_16px_50px_rgba(0,0,0,0.5)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-black/20"
+        className="relative bg-slate-900/95 dark:bg-slate-950/95 border border-white/20 backdrop-blur-3xl backdrop-saturate-200 rounded-md sm:rounded-lg shadow-[0_16px_50px_rgba(0,0,0,0.5)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-black/20"
         style={{
           width: `${Math.min(window.innerWidth - 16, widthFigure * scaleFigure)}px`,
           height: `${heightFigure * scaleFigure}px`,
@@ -173,7 +173,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             onClick={onOpenOverlay}
             className="flex items-center gap-3 min-w-0 cursor-pointer group flex-1"
           >
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-2xl overflow-hidden bg-slate-800 border border-white/15 shrink-0 shadow-md group-hover:scale-105 transition-transform">
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-slate-800 border border-white/15 shrink-0 shadow-md group-hover:scale-105 transition-transform">
               <img 
                 src={thumbnail} 
                 alt={title} 
@@ -209,7 +209,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={onPrevTrack}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-all active:scale-90"
               title="Previous Track"
             >
               <SkipBack size={16} />
@@ -217,7 +217,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
             <button
               onClick={onTogglePlay}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-600/30 transition-all active:scale-95 shrink-0"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-600/30 transition-all active:scale-95 shrink-0"
               title={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause size={18} className="fill-white" /> : <Play size={18} className="fill-white ml-0.5" />}

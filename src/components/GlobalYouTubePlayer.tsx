@@ -121,6 +121,8 @@ interface GlobalYouTubePlayerProps {
   isOnline?: boolean;
   downloadedTracks?: Track[];
   darkMode?: boolean;
+  isAutoplay?: boolean;
+  onToggleAutoplay?: (enabled?: boolean) => void;
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -152,7 +154,9 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   onShowToast,
   isOnline = true,
   downloadedTracks = [],
-  darkMode = true
+  darkMode = true,
+  isAutoplay = false,
+  onToggleAutoplay
 }) => {
   const playerRef = useRef<ReactPlayer | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -160,6 +164,8 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [showEngineMenu, setShowEngineMenu] = useState<boolean>(false);
   const [showSizePresets, setShowSizePresets] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
+  const [showBufferIndicator, setShowBufferIndicator] = useState<boolean>(false);
+  const bufferingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isNativeFullScreen, setIsNativeFullScreen] = useState<boolean>(false);
   const [isPlaybackError, setIsPlaybackError] = useState<boolean>(false);
   const [offlinePlayedSeconds, setOfflinePlayedSeconds] = useState<number>(0);
@@ -170,7 +176,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [hasDisliked, setHasDisliked] = useState<boolean>(false);
   const [subBellActive, setSubBellActive] = useState<boolean>(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const [selectedQuality, setSelectedQuality] = useState<string>('1080p HD');
+  const [selectedQuality, setSelectedQuality] = useState<string>('Auto (Buffer-Free)');
   const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
@@ -665,26 +671,22 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
   const isFull = isFullScreen || isNativeFullScreen;
   const isFloating = showVideo && !isOverlayOpen && !isFull;
-  const isOverlay = showVideo && isOverlayOpen && !isFull;
-  const isHidden = !showVideo;
+  const isOverlay = false; // Prevent duplicate floating player over AudioPlayerOverlay
+  const isHidden = !showVideo || (isOverlayOpen && !isFull);
 
   let containerClassName = '';
   let playerBoxClassName = '';
 
   if (isFull) {
-    // YouTube Original Full Player Layout Mode - Always Pure Dark Theme
+    // YouTube Original Full Player Layout Mode - Always Pure Dark Theme with solid White Border & RGB Visual Effect
     containerClassName = `fixed inset-0 z-[100] w-screen h-screen bg-slate-950 text-slate-100 flex flex-col pointer-events-auto p-0 m-0 overflow-y-auto select-none transition-colors duration-300 dark`;
     playerBoxClassName = isTheaterMode 
-      ? 'relative w-full aspect-video max-h-[80vh] bg-black flex items-center justify-center shadow-2xl'
-      : 'relative w-full aspect-video bg-black flex items-center justify-center shadow-2xl rounded-none sm:rounded-2xl overflow-hidden';
+      ? 'relative w-full aspect-video max-h-[88vh] bg-black flex items-center justify-center shadow-2xl border-2 border-white ring-1 ring-white/50 rounded-none sm:rounded-2xl overflow-hidden rgb-video-player-frame'
+      : 'relative w-full aspect-video min-h-[250px] sm:min-h-[360px] md:min-h-[440px] lg:min-h-[500px] xl:min-h-[560px] max-h-[82vh] bg-black flex items-center justify-center shadow-2xl rounded-none sm:rounded-2xl overflow-hidden border-2 border-white ring-1 ring-white/50 rgb-video-player-frame';
   } else if (isHidden) {
     // Background Audio Mode
     containerClassName = 'fixed -top-[9999px] -left-[9999px] w-[320px] h-[180px] pointer-events-none z-[-10] overflow-hidden';
     playerBoxClassName = 'w-full h-full bg-black';
-  } else if (isOverlay) {
-    // Overlay Mode
-    containerClassName = 'fixed inset-0 z-[90] flex flex-col items-center justify-center pointer-events-none p-4 pb-20 sm:pb-24';
-    playerBoxClassName = 'relative w-full max-w-3xl aspect-video rounded-3xl overflow-hidden shadow-2xl ring-2 ring-rose-500/60 bg-black pointer-events-auto group';
   } else {
     // Mini Floating Window with slightly square modern edges
     containerClassName = 'fixed bottom-20 right-3 sm:bottom-24 sm:right-6 rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/20 bg-slate-950 pointer-events-auto flex flex-col z-[90] border border-white/20 touch-none';
@@ -767,6 +769,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   };
 
   const getThirdPartyEmbedUrl = () => {
+    if (!videoId) return null;
     const autoplayParam = isPlaying ? 1 : 0;
     switch (playerEngine) {
       case 'invidious':
@@ -776,9 +779,8 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       case 'youtube-nocookie':
         return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=${autoplayParam}&enablejsapi=1&rel=0&modestbranding=1&playsinline=1`;
       case 'embed':
-        return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplayParam}&playsinline=1&controls=1&rel=0`;
       default:
-        return '';
+        return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplayParam}&playsinline=1&controls=1&rel=0`;
     }
   };
 
@@ -972,8 +974,23 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
         ? `https://www.youtube-nocookie.com/embed/${videoId}`
         : `https://www.youtube.com/watch?v=${videoId}`;
 
+      // Calculate quality parameter only if user requested specific resolution
+      let vqParam: string | undefined = undefined;
+      const lowerQ = (selectedQuality || '').toLowerCase();
+      if (lowerQ.includes('4k') || lowerQ.includes('2160')) {
+        vqParam = 'highres';
+      } else if (lowerQ.includes('1080')) {
+        vqParam = 'hd1080';
+      } else if (lowerQ.includes('720')) {
+        vqParam = 'hd720';
+      } else if (lowerQ.includes('480')) {
+        vqParam = 'large';
+      } else if (lowerQ.includes('360')) {
+        vqParam = 'medium';
+      }
+
       return (
-        <div className="relative w-full h-full bg-black">
+        <div className="relative w-full h-full bg-black touch-manipulation">
           <ReactPlayer
             ref={playerRef}
             url={playerUrl}
@@ -984,10 +1001,22 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
             onEnded={onTrackEnded}
             onProgress={(state) => onProgress?.(state.playedSeconds)}
             onDuration={(duration) => onDuration?.(duration)}
-            onBuffer={() => setIsBuffering(true)}
-            onBufferEnd={() => setIsBuffering(false)}
+            onBuffer={() => {
+              setIsBuffering(true);
+              if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+              bufferingTimeoutRef.current = setTimeout(() => {
+                setShowBufferIndicator(true);
+              }, 700);
+            }}
+            onBufferEnd={() => {
+              setIsBuffering(false);
+              setShowBufferIndicator(false);
+              if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+            }}
             onReady={() => {
               setIsBuffering(false);
+              setShowBufferIndicator(false);
+              if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
               if (isPlaying && playerRef.current) {
                 try {
                   const internal = playerRef.current.getInternalPlayer();
@@ -1004,7 +1033,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
             height="100%"
             playsinline={true}
             controls={true}
-            progressInterval={150}
+            progressInterval={500}
             config={{
               youtube: {
                 playerVars: {
@@ -1018,19 +1047,16 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                   cc_load_policy: 0,
                   origin: typeof window !== 'undefined' ? window.location.origin : '',
                   widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
-                  vq: (selectedQuality || '').toLowerCase().includes('4k') ? 'highres' : 'hd1080'
-                },
-                embedOptions: {
-                  host: 'https://www.youtube-nocookie.com'
+                  ...(vqParam ? { vq: vqParam } : {})
                 }
               }
             }}
           />
-          {isBuffering && isPlaying && (
+          {showBufferIndicator && isPlaying && (
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none transition-opacity">
               <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-950/90 text-white border border-white/20 text-xs font-mono font-bold shadow-2xl">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <span>Fast Loading Stream...</span>
+                <span>Buffering Stream...</span>
               </div>
             </div>
           )}
@@ -1038,10 +1064,19 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       );
     }
 
+    const embedUrl = getThirdPartyEmbedUrl();
+    if (!embedUrl) {
+      return (
+        <div className="relative w-full h-full bg-black flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+
     return (
       <div className="relative w-full h-full bg-black">
         <iframe
-          src={getThirdPartyEmbedUrl()}
+          src={embedUrl}
           title={currentTrack?.title || "Third Party Player"}
           className="w-full h-full border-0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -1121,7 +1156,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       {/* ========================================================= */}
       {isFull ? (
         /* YouTube Official Video Page Container Layout (Dark Theme) */
-        <div className={`w-full mx-auto p-0 sm:p-6 space-y-3 sm:space-y-4 ${isTheaterMode ? 'max-w-full' : 'max-w-7xl'}`}>
+        <div className={`w-full mx-auto p-0 sm:p-4 md:p-6 space-y-3 sm:space-y-4 ${isTheaterMode ? 'max-w-full' : 'max-w-[1520px]'}`}>
           {/* Top Control Bar with Back Button */}
           <div className="flex items-center justify-between px-3 sm:px-0 pt-2 sm:pt-0 pb-1">
             <button
@@ -1158,12 +1193,12 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* MAIN COLUMN (Video + Actions + Description + Comments) */}
-            <div className={`space-y-4 ${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-8'}`}>
+            <div className={`space-y-4 ${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-8 xl:col-span-9'}`}>
               
               {/* VIDEO STAGE CONTAINER WITH CINEMATIC AMBIENT GLOW */}
               <div className="sticky top-0 sm:top-2 lg:top-4 z-30 group">
-                {/* Cinematic Ambient Glow Backlight */}
-                <div className="hidden sm:block absolute -inset-2 bg-gradient-to-r from-rose-600/30 via-indigo-600/20 to-purple-600/30 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                {/* Dynamic RGB Ambient Glow Backlight */}
+                <div className="absolute -inset-2.5 rgb-video-ambient-glow rounded-3xl blur-2xl opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
                 <div className={playerBoxClassName}>
                   {renderVideoStage(false)}
@@ -1505,6 +1540,27 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                       {/* Action Buttons List */}
                       <div className="space-y-1 divide-y divide-zinc-900 text-xs">
                         <div className="space-y-1 pb-2">
+                          {/* Video Quality / Stream Engine */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowActionMoreMenu(false);
+                              setShowQualityMenu(true);
+                            }}
+                            className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
+                                <Settings2 size={18} />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-white">Video Quality</span>
+                                <span className="text-xs text-zinc-400 font-normal">{selectedQuality}</span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">Change ›</span>
+                          </button>
+
                           {/* Playback Speed */}
                           <button
                             type="button"
@@ -1589,6 +1645,90 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                             </button>
                           )}
                         </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* VIDEO QUALITY SELECTION SHEET */}
+              <AnimatePresence>
+                {showQualityMenu && (
+                  <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowQualityMenu(false);
+                      }}
+                      className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
+                    />
+
+                    <motion.div
+                      initial={{ y: '100%', opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: '100%', opacity: 0 }}
+                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="relative w-full max-w-sm bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 text-white space-y-3"
+                    >
+                      <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
+
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                        <div className="flex items-center gap-2">
+                          <Settings2 size={20} className="text-emerald-400" />
+                          <span className="font-extrabold text-base text-white">Video Quality</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowQualityMenu(false)}
+                          className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        {[
+                          { id: 'Auto (Buffer-Free)', label: 'Auto (Buffer-Free Streaming)', desc: 'Adaptive bitrate • No buffering lag', badge: 'Recommended' },
+                          { id: '1080p HD', label: '1080p Full HD', desc: 'Highest clarity for fast networks' },
+                          { id: '720p HD', label: '720p HD', desc: 'Crisp balanced stream' },
+                          { id: '480p SD', label: '480p Standard', desc: 'Smooth on standard mobile data' },
+                          { id: '360p Data Saver', label: '360p Data Saver', desc: 'Instant playback • Minimum data' },
+                        ].map((q) => {
+                          const isSelected = selectedQuality === q.id || (q.id.startsWith('Auto') && selectedQuality.startsWith('Auto'));
+                          return (
+                            <button
+                              key={q.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedQuality(q.id);
+                                setShowQualityMenu(false);
+                                onShowToast?.(`Video quality set to ${q.id}`, 'info');
+                              }}
+                              className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/20 border border-emerald-500/40 text-emerald-300'
+                                  : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 border border-transparent'
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-white">{q.label}</span>
+                                  {q.badge && (
+                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                      {q.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-zinc-400">{q.desc}</span>
+                              </div>
+                              {isSelected && <CheckCircle2 size={18} className="text-emerald-400 shrink-0 ml-2" />}
+                            </button>
+                          );
+                        })}
                       </div>
                     </motion.div>
                   </div>
@@ -1831,7 +1971,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                         <div key={cmt.id} className="flex gap-3 text-xs group/cmt">
                           {/* User Avatar */}
                           <img
-                            src={cmt.avatar}
+                            src={cmt.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'}
                             alt={cmt.author}
                             className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-white/10"
                             onError={(e) => {
@@ -2018,7 +2158,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                                     {cmt.replies.map((reply) => (
                                       <div key={reply.id} className="flex gap-2.5 items-start text-xs">
                                         <img
-                                          src={reply.avatar}
+                                          src={reply.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'}
                                           alt={reply.author}
                                           className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-white/10"
                                         />
@@ -2075,7 +2215,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
             {/* RIGHT SIDEBAR (Up Next & Chapters Page - Exactly like YouTube) */}
             {!isTheaterMode && (
-              <div className="lg:col-span-4 px-3 sm:px-0 space-y-3">
+              <div className="lg:col-span-4 xl:col-span-3 px-3 sm:px-0 space-y-3">
                 {/* Navigation Header between "Up Next" and "Chapters" */}
                 <div className="flex items-center justify-between pb-2 border-b border-white/10">
                   <div className="flex items-center gap-2">
@@ -2116,9 +2256,25 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                       <X size={15} />
                     </button>
                   ) : (
-                    <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                      Diverse Channels
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onToggleAutoplay?.(!isAutoplay)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border select-none active:scale-95 ${
+                        isAutoplay
+                          ? 'bg-rose-600/30 text-rose-300 border-rose-500/60 shadow-xs'
+                          : 'bg-slate-900 text-slate-400 border-white/10 hover:border-white/25 hover:text-slate-200'
+                      }`}
+                      title={isAutoplay ? 'Autoplay is ON (Click to turn off)' : 'Autoplay is OFF (Click to turn on)'}
+                    >
+                      <span className="text-[11px]">Autoplay</span>
+                      <div className={`w-7 h-4 rounded-full p-0.5 transition-colors relative flex items-center ${
+                        isAutoplay ? 'bg-rose-500' : 'bg-slate-700'
+                      }`}>
+                        <div className={`w-3 h-3 rounded-full bg-white transition-transform ${
+                          isAutoplay ? 'translate-x-3' : 'translate-x-0'
+                        }`} />
+                      </div>
+                    </button>
                   )}
                 </div>
 

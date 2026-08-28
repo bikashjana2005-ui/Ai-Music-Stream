@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, handleGoogleRedirectResult, loginAnonymously, loginWithGoogle } from './lib/firebase';
-import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack } from './types';
+import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, fetchYouTubeChannelProfile, fetchYouTubeUserPlaylists, fetchYouTubeLikedVideos, fetchYouTubeWatchHistory, fetchYouTubeSyncAll, handleGoogleRedirectResult, loginAnonymously, loginWithGoogle } from './lib/firebase';
+import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack, YouTubeChannelProfile } from './types';
 import { DEFAULT_TRACKS, DEFAULT_CHANNELS, DEFAULT_LIKED_TRACKS, DEFAULT_HISTORY_TRACKS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
 import { AudioPlayerOverlay } from './components/AudioPlayerOverlay';
@@ -15,8 +15,10 @@ import { ChannelSubscriptionsModal } from './components/ChannelSubscriptionsModa
 import { ChannelDetailsModal } from './components/ChannelDetailsModal';
 import { UserAuthModal } from './components/UserAuthModal';
 import { YouTubeMetadataModal } from './components/YouTubeMetadataModal';
+import { YouTubeMobileConnectModal } from './components/YouTubeMobileConnectModal';
 import { Toast } from './components/Toast';
 import { SubscriptionsView } from './views/SubscriptionsView';
+import { HomeView } from './views/HomeView';
 import { SearchView } from './views/SearchView';
 import { LibraryView } from './views/LibraryView';
 import { SettingsView } from './views/SettingsView';
@@ -25,31 +27,50 @@ import { SplashScreen } from './components/SplashScreen';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { InAppWebViewModal } from './components/InAppWebViewModal';
 import { AndroidNativeExporterModal } from './components/AndroidNativeExporterModal';
+import { NotificationsModal } from './components/NotificationsModal';
+import { CreateActionModal } from './components/CreateActionModal';
+import { VideoQualitySelectorModal, QualityOptionId } from './components/VideoQualitySelectorModal';
 import { applyAccentTheme } from './utils/accentTheme';
 
-const TAB_ORDER: TabType[] = ['search', 'subscriptions', 'library', 'downloads', 'settings'];
+const TAB_ORDER: TabType[] = ['search', 'subscriptions', 'downloads', 'library', 'settings'];
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const handleCompleteSplash = useCallback(() => {
     setShowSplash(false);
   }, []);
+  const [pendingQualityTrack, setPendingQualityTrack] = useState<Track | null>(null);
   const [activeTab, setActiveTabState] = useState<TabType>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_last_active_tab');
-      return (saved as string) === 'home' || (saved as string) === 'facebook' ? 'search' : (saved as TabType) || 'search';
+      if (saved === 'home') return 'search';
+      return (saved as TabType) || 'search';
     } catch {
       return 'search';
     }
   });
   const [tabDirection, setTabDirection] = useState<number>(1);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
 
-  const handleTabChange = useCallback((newTab: TabType) => {
+  // Tab Navigation History Stack for Device Navigation Bar Back Support
+  const tabHistoryRef = useRef<TabType[]>([activeTab]);
+  const activeTabRef = useRef<TabType>(activeTab);
+  activeTabRef.current = activeTab;
+
+  const handleTabChange = useCallback((newTab: TabType, pushToHistory: boolean = true) => {
     setActiveTabState((currentTab) => {
       if (currentTab === newTab) return currentTab;
       const currentIndex = TAB_ORDER.indexOf(currentTab);
       const newIndex = TAB_ORDER.indexOf(newTab);
       setTabDirection(newIndex >= currentIndex ? 1 : -1);
+
+      if (pushToHistory) {
+        tabHistoryRef.current.push(newTab);
+        if (typeof window !== 'undefined') {
+          window.history.pushState({ auraType: 'tab', tab: newTab }, '');
+        }
+      }
       return newTab;
     });
   }, []);
@@ -168,6 +189,23 @@ export default function App() {
     const saved = localStorage.getItem('aura_ai_autoplay_select');
     return saved ? saved === 'true' : true;
   });
+  const [isAutoplayUpNext, setIsAutoplayUpNext] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('aura_autoplay_upnext');
+      return saved === 'true'; // Defaults to false (Stop automatic upnext video playback)
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleAutoplayUpNext = (enabled?: boolean) => {
+    setIsAutoplayUpNext(prev => {
+      const nextVal = typeof enabled === 'boolean' ? enabled : !prev;
+      localStorage.setItem('aura_autoplay_upnext', String(nextVal));
+      showToast(nextVal ? '▶ Autoplay enabled: Up next videos will play automatically' : '⏹ Autoplay stopped: Videos will not play automatically', 'info');
+      return nextVal;
+    });
+  };
 
   // Subscribed YouTube Channels state from localStorage
   const [subscriptions, setSubscriptions] = useState<SubscribedChannel[]>(() => {
@@ -181,6 +219,9 @@ export default function App() {
 
   // Subscriptions modal state
   const [isSubscriptionsModalOpen, setIsSubscriptionsModalOpen] = useState<boolean>(false);
+  const [isMobileConnectModalOpen, setIsMobileConnectModalOpen] = useState<boolean>(false);
+  const [isYouTubeSyncing, setIsYouTubeSyncing] = useState<boolean>(false);
+  const [youtubeChannelProfile, setYoutubeChannelProfile] = useState<YouTubeChannelProfile | null>(null);
   const [selectedChannelFilter, setSelectedChannelFilter] = useState<string | null>(null);
   const [selectedChannelDetailsName, setSelectedChannelDetailsName] = useState<string | null>(null);
   const [selectedChannelForDetails, setSelectedChannelForDetails] = useState<string | null>(null);
@@ -342,6 +383,189 @@ export default function App() {
     }
   });
 
+  // Synchronize state refs for popstate listener to guarantee fresh values without stale closures
+  const isFullScreenVideoRef = useRef(isFullScreenVideo);
+  isFullScreenVideoRef.current = isFullScreenVideo;
+
+  const isOverlayOpenRef = useRef(isOverlayOpen);
+  isOverlayOpenRef.current = isOverlayOpen;
+
+  const selectedChannelFilterRef = useRef(selectedChannelFilter);
+  selectedChannelFilterRef.current = selectedChannelFilter;
+
+  const pendingQualityTrackRef = useRef(pendingQualityTrack);
+  pendingQualityTrackRef.current = pendingQualityTrack;
+
+  const selectedChannelForDetailsRef = useRef(selectedChannelForDetails);
+  selectedChannelForDetailsRef.current = selectedChannelForDetails;
+
+  const metadataTrackRef = useRef(metadataTrack);
+  metadataTrackRef.current = metadataTrack;
+
+  const downloadTrackRef = useRef(downloadTrack);
+  downloadTrackRef.current = downloadTrack;
+
+  const downloadPlaylistRef = useRef(downloadPlaylist);
+  downloadPlaylistRef.current = downloadPlaylist;
+
+  const addToPlaylistTrackRef = useRef(addToPlaylistTrack);
+  addToPlaylistTrackRef.current = addToPlaylistTrack;
+
+  const isAuthModalOpenRef = useRef(isAuthModalOpen);
+  isAuthModalOpenRef.current = isAuthModalOpen;
+
+  const isSubscriptionsModalOpenRef = useRef(isSubscriptionsModalOpen);
+  isSubscriptionsModalOpenRef.current = isSubscriptionsModalOpen;
+
+  const isMobileConnectModalOpenRef = useRef(isMobileConnectModalOpen);
+  isMobileConnectModalOpenRef.current = isMobileConnectModalOpen;
+
+  const isNotificationsOpenRef = useRef(isNotificationsOpen);
+  isNotificationsOpenRef.current = isNotificationsOpen;
+
+  const isCreateModalOpenRef = useRef(isCreateModalOpen);
+  isCreateModalOpenRef.current = isCreateModalOpen;
+
+  const isShareModalOpenRef = useRef(isShareModalOpen);
+  isShareModalOpenRef.current = isShareModalOpen;
+
+  const isAndroidModalOpenRef = useRef(isAndroidModalOpen);
+  isAndroidModalOpenRef.current = isAndroidModalOpen;
+
+  const isWebViewOpenRef = useRef(isWebViewOpen);
+  isWebViewOpenRef.current = isWebViewOpen;
+
+  // Device Navigation Bar Back Button Handler (Android System Navigation & Browser Back)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({ auraType: 'root_tab', tab: activeTab }, '');
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      // 1. Check & close active top modals/sheets
+      if (pendingQualityTrackRef.current) {
+        setPendingQualityTrack(null);
+        return;
+      }
+      if (selectedChannelForDetailsRef.current) {
+        setSelectedChannelForDetails(null);
+        return;
+      }
+      if (metadataTrackRef.current) {
+        setMetadataTrack(null);
+        return;
+      }
+      if (downloadTrackRef.current || downloadPlaylistRef.current) {
+        setDownloadTrack(null);
+        setDownloadPlaylist(null);
+        return;
+      }
+      if (addToPlaylistTrackRef.current) {
+        setAddToPlaylistTrack(null);
+        return;
+      }
+      if (isAuthModalOpenRef.current) {
+        setIsAuthModalOpen(false);
+        return;
+      }
+      if (isSubscriptionsModalOpenRef.current) {
+        setIsSubscriptionsModalOpen(false);
+        return;
+      }
+      if (isMobileConnectModalOpenRef.current) {
+        setIsMobileConnectModalOpen(false);
+        return;
+      }
+      if (isNotificationsOpenRef.current) {
+        setIsNotificationsOpen(false);
+        return;
+      }
+      if (isCreateModalOpenRef.current) {
+        setIsCreateModalOpen(false);
+        return;
+      }
+      if (isShareModalOpenRef.current) {
+        setIsShareModalOpen(false);
+        return;
+      }
+      if (isAndroidModalOpenRef.current) {
+        setIsAndroidModalOpen(false);
+        return;
+      }
+      if (isWebViewOpenRef.current) {
+        setIsWebViewOpen(false);
+        return;
+      }
+
+      // 2. Close Full Video Player Mode if active
+      if (isFullScreenVideoRef.current) {
+        setIsFullScreenVideo(false);
+        return;
+      }
+
+      // 3. Close Audio Player Overlay if active
+      if (isOverlayOpenRef.current) {
+        setIsOverlayOpen(false);
+        return;
+      }
+
+      // 4. Clear Subscriptions Channel Filter if active
+      if (selectedChannelFilterRef.current) {
+        setSelectedChannelFilter(null);
+        return;
+      }
+
+      // 5. Navigate back to previous section tab in the history stack
+      if (tabHistoryRef.current.length > 1) {
+        tabHistoryRef.current.pop(); // Pop current tab
+        const prevTab = tabHistoryRef.current[tabHistoryRef.current.length - 1];
+        if (prevTab) {
+          const currentIndex = TAB_ORDER.indexOf(activeTabRef.current);
+          const prevIndex = TAB_ORDER.indexOf(prevTab);
+          setTabDirection(prevIndex >= currentIndex ? 1 : -1);
+          setActiveTabState(prevTab);
+          showToast(`‹ Returned to ${prevTab.charAt(0).toUpperCase() + prevTab.slice(1)}`, 'info');
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showToast]);
+
+  // Push state when an overlay, full video, or modal opens so device back button pops it smoothly
+  const anyModalOrOverlayOpen = !!(
+    isFullScreenVideo ||
+    isOverlayOpen ||
+    pendingQualityTrack ||
+    selectedChannelForDetails ||
+    metadataTrack ||
+    downloadTrack ||
+    downloadPlaylist ||
+    addToPlaylistTrack ||
+    isAuthModalOpen ||
+    isSubscriptionsModalOpen ||
+    isMobileConnectModalOpen ||
+    isNotificationsOpen ||
+    isCreateModalOpen ||
+    isShareModalOpen ||
+    isAndroidModalOpen ||
+    isWebViewOpen
+  );
+
+  const prevModalOrOverlayOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (anyModalOrOverlayOpen && !prevModalOrOverlayOpenRef.current) {
+      if (typeof window !== 'undefined') {
+        window.history.pushState({ auraType: 'modal_or_overlay' }, '');
+      }
+    }
+    prevModalOrOverlayOpenRef.current = anyModalOrOverlayOpen;
+  }, [anyModalOrOverlayOpen]);
+
   // Sync dark mode class
   useEffect(() => {
     localStorage.setItem('aura_ai_theme', darkMode ? 'dark' : 'light');
@@ -461,6 +685,7 @@ export default function App() {
 
   // Real-time YouTube Subscription Sync from Google Account
   const handleSyncYouTubeSubscriptions = useCallback(async () => {
+    setIsYouTubeSyncing(true);
     try {
       showToast('Syncing YouTube channels from Google Account...', 'info');
       let ytChannels: SubscribedChannel[] = [];
@@ -516,8 +741,242 @@ export default function App() {
       } else {
         showToast('YouTube sync notice: please ensure you are signed in with your Google account.', 'info');
       }
+    } finally {
+      setIsYouTubeSyncing(false);
     }
-  }, [user]);
+  }, [user, showToast]);
+
+  // Real-time YouTube Liked Videos Sync
+  const handleSyncYouTubeLiked = useCallback(async () => {
+    setIsYouTubeSyncing(true);
+    try {
+      showToast('Syncing YouTube liked videos from Google Account...', 'info');
+      let tracks: Track[] = [];
+      try {
+        tracks = await fetchYouTubeLikedVideos();
+      } catch (tokenErr: any) {
+        if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
+          showToast('Authenticating with Google for Liked Videos...', 'info');
+          const loginRes = await loginWithGoogle();
+          if (loginRes?.accessToken) {
+            tracks = await fetchYouTubeLikedVideos(loginRes.accessToken);
+          } else {
+            return;
+          }
+        } else {
+          throw tokenErr;
+        }
+      }
+
+      if (tracks.length > 0) {
+        setFavorites((prev) => {
+          const map = new Map<string, Track>();
+          prev.forEach(t => map.set(t.id, t));
+          tracks.forEach(t => map.set(t.id, t));
+          return Array.from(map.values());
+        });
+
+        if (user) {
+          for (const t of tracks) {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'favorites', t.id), {
+                ...t,
+                userId: user.uid,
+                syncedFromYouTube: true,
+                syncedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (e) {}
+          }
+        }
+        showToast(`⚡ Synced ${tracks.length} YouTube liked videos!`, 'success');
+      } else {
+        showToast('No liked videos found on your YouTube account.', 'info');
+      }
+    } catch (err) {
+      showToast('Notice: Could not sync YouTube liked videos.', 'info');
+    } finally {
+      setIsYouTubeSyncing(false);
+    }
+  }, [user, showToast]);
+
+  // Real-time YouTube Playlists Sync
+  const handleSyncYouTubePlaylists = useCallback(async () => {
+    setIsYouTubeSyncing(true);
+    try {
+      showToast('Syncing YouTube playlists from Google Account...', 'info');
+      let lists: Playlist[] = [];
+      try {
+        lists = await fetchYouTubeUserPlaylists();
+      } catch (tokenErr: any) {
+        if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
+          showToast('Authenticating with Google for Playlists...', 'info');
+          const loginRes = await loginWithGoogle();
+          if (loginRes?.accessToken) {
+            lists = await fetchYouTubeUserPlaylists(loginRes.accessToken);
+          } else {
+            return;
+          }
+        } else {
+          throw tokenErr;
+        }
+      }
+
+      if (lists.length > 0) {
+        setPlaylists((prev) => {
+          const map = new Map<string, Playlist>();
+          prev.forEach(p => map.set(p.id, p));
+          lists.forEach(p => map.set(p.id, p));
+          return Array.from(map.values());
+        });
+
+        if (user) {
+          for (const p of lists) {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'playlists', p.id), {
+                ...p,
+                userId: user.uid,
+                syncedFromYouTube: true,
+                syncedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (e) {}
+          }
+        }
+        showToast(`⚡ Synced ${lists.length} YouTube playlists!`, 'success');
+      } else {
+        showToast('No playlists found on your YouTube account.', 'info');
+      }
+    } catch (err) {
+      showToast('Notice: Could not sync YouTube playlists.', 'info');
+    } finally {
+      setIsYouTubeSyncing(false);
+    }
+  }, [user, showToast]);
+
+  // Real-time YouTube Watch History Sync
+  const handleSyncYouTubeHistory = useCallback(async () => {
+    setIsYouTubeSyncing(true);
+    try {
+      showToast('Syncing YouTube watch history from Google Account...', 'info');
+      let tracks: Track[] = [];
+      try {
+        tracks = await fetchYouTubeWatchHistory();
+      } catch (tokenErr: any) {
+        if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
+          showToast('Authenticating with Google for Watch History...', 'info');
+          const loginRes = await loginWithGoogle();
+          if (loginRes?.accessToken) {
+            tracks = await fetchYouTubeWatchHistory(loginRes.accessToken);
+          } else {
+            return;
+          }
+        } else {
+          throw tokenErr;
+        }
+      }
+
+      if (tracks.length > 0) {
+        setHistory((prev) => {
+          const map = new Map<string, Track>();
+          prev.forEach(t => map.set(t.id, t));
+          tracks.forEach(t => map.set(t.id, t));
+          return Array.from(map.values());
+        });
+
+        if (user) {
+          for (const t of tracks) {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'history', t.id), {
+                ...t,
+                userId: user.uid,
+                syncedFromYouTube: true,
+                syncedAt: new Date().toISOString()
+              }, { merge: true });
+            } catch (e) {}
+          }
+        }
+        showToast(`⚡ Synced ${tracks.length} YouTube history videos!`, 'success');
+      } else {
+        showToast('No watch history items found on your YouTube account.', 'info');
+      }
+    } catch (err) {
+      showToast('Notice: Could not sync YouTube watch history.', 'info');
+    } finally {
+      setIsYouTubeSyncing(false);
+    }
+  }, [user, showToast]);
+
+  // Real-time Full YouTube Synchronization (All In One)
+  const handleSyncYouTubeAll = useCallback(async () => {
+    setIsYouTubeSyncing(true);
+    try {
+      showToast('Starting full real-time YouTube sync (channels, liked, playlists, history)...', 'info');
+      let syncResult: any = null;
+      try {
+        syncResult = await fetchYouTubeSyncAll();
+      } catch (tokenErr: any) {
+        if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
+          showToast('Authenticating with Google for Full YouTube Sync...', 'info');
+          const loginRes = await loginWithGoogle();
+          if (loginRes?.accessToken) {
+            syncResult = await fetchYouTubeSyncAll(loginRes.accessToken);
+          } else {
+            return;
+          }
+        } else {
+          throw tokenErr;
+        }
+      }
+
+      if (syncResult) {
+        if (syncResult.profile) {
+          setYoutubeChannelProfile(syncResult.profile);
+        }
+
+        if (syncResult.subscriptions && Array.isArray(syncResult.subscriptions) && syncResult.subscriptions.length > 0) {
+          setSubscriptions((prev) => {
+            const map = new Map<string, SubscribedChannel>();
+            prev.forEach(c => map.set(c.id, c));
+            syncResult.subscriptions.forEach((c: SubscribedChannel) => map.set(c.id, c));
+            return Array.from(map.values());
+          });
+        }
+
+        if (syncResult.likedVideos && Array.isArray(syncResult.likedVideos) && syncResult.likedVideos.length > 0) {
+          setFavorites((prev) => {
+            const map = new Map<string, Track>();
+            prev.forEach(t => map.set(t.id, t));
+            syncResult.likedVideos.forEach((t: Track) => map.set(t.id, t));
+            return Array.from(map.values());
+          });
+        }
+
+        if (syncResult.playlists && Array.isArray(syncResult.playlists) && syncResult.playlists.length > 0) {
+          setPlaylists((prev) => {
+            const map = new Map<string, Playlist>();
+            prev.forEach(p => map.set(p.id, p));
+            syncResult.playlists.forEach((p: Playlist) => map.set(p.id, p));
+            return Array.from(map.values());
+          });
+        }
+
+        if (syncResult.history && Array.isArray(syncResult.history) && syncResult.history.length > 0) {
+          setHistory((prev) => {
+            const map = new Map<string, Track>();
+            prev.forEach(t => map.set(t.id, t));
+            syncResult.history.forEach((t: Track) => map.set(t.id, t));
+            return Array.from(map.values());
+          });
+        }
+
+        showToast('⚡ Full YouTube mobile real-time sync completed successfully!', 'success');
+      }
+    } catch (err: any) {
+      console.warn('Full sync error:', err);
+      showToast('YouTube sync notice: Ensure you are logged into Google.', 'info');
+    } finally {
+      setIsYouTubeSyncing(false);
+    }
+  }, [user, showToast]);
 
   // Firebase Authentication listener and Firestore real-time sync on startup / open
   useEffect(() => {
@@ -782,16 +1241,17 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [user, currentTrack, playbackTime, activeTab, volume, isMuted]);
 
-  const handlePlayTrack = (track: Track) => {
+  const startActualPlayTrack = (track: Track) => {
     setIsMiniPlayerDismissed(false);
     setShowVideo(true);
     setIsFullScreenVideo(true);
+    setIsOverlayOpen(false);
     if (currentTrack?.id === track.id) {
-      // Toggle or keep paused as requested
-      setIsPlaying(false);
+      // Resume playback
+      setIsPlaying(true);
     } else {
       setCurrentTrack(track);
-      setIsPlaying(false);
+      setIsPlaying(true);
       setPlaybackTime(0);
       setRealDuration(0);
     }
@@ -800,7 +1260,34 @@ export default function App() {
       const filtered = prev.filter(t => t.id !== track.id);
       return [track, ...filtered].slice(0, 30);
     });
-    setIsOverlayOpen(true);
+  };
+
+  const handlePlayTrack = (track: Track, forceDirect: boolean = false) => {
+    const skipPrompt = localStorage.getItem('aura_skip_quality_prompt') === 'true';
+    if (forceDirect || skipPrompt) {
+      startActualPlayTrack(track);
+    } else {
+      setPendingQualityTrack(track);
+    }
+  };
+
+  const handleConfirmQualityPlay = (track: Track, selectedQuality: QualityOptionId, dontShowAgain: boolean) => {
+    if (selectedQuality === 'data_saver') {
+      handleToggleDataSaverMode(true);
+      showToast('⚡ Data saver applied: 144p streaming', 'info');
+    } else if (selectedQuality === 'higher') {
+      handleToggleDataSaverMode(false);
+      handleSetVideoQuality('1080p');
+      setAudioQuality('320');
+      showToast('High quality (1080p) enabled', 'info');
+    } else {
+      handleToggleDataSaverMode(false);
+      handleSetVideoQuality('auto');
+      setAudioQuality('320');
+    }
+
+    setPendingQualityTrack(null);
+    startActualPlayTrack(track);
   };
 
   const handleClearHistory = () => {
@@ -1037,6 +1524,15 @@ export default function App() {
     setIsPlaying(true);
   };
 
+  const handleTrackEnded = () => {
+    if (isAutoplayUpNext) {
+      handleNextTrack();
+    } else {
+      setIsPlaying(false);
+      showToast('Video playback completed • Autoplay is OFF', 'info');
+    }
+  };
+
   const handlePrevTrack = () => {
     const list = DEFAULT_TRACKS;
     if (!currentTrack) return;
@@ -1096,15 +1592,18 @@ export default function App() {
         onOpenSubscriptionsModal={() => setIsSubscriptionsModalOpen(true)}
         user={user}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenCreateModal={() => setIsCreateModalOpen(true)}
         onOpenShareModal={() => setIsShareModalOpen(true)}
         onOpenWebView={handleOpenWebView}
         onOpenAndroidModal={handleOpenAndroidModal}
         isDataSaverMode={isDataSaverMode}
         onToggleDataSaverMode={handleToggleDataSaverMode}
+        userName={user?.displayName || 'Bikash Jana'}
       />
 
       {/* Primary Main Content Area */}
-      <main className="mx-auto pt-2 sm:pt-4 pb-28 w-full flex flex-col items-center justify-start self-center overflow-x-hidden max-w-full min-h-screen px-0 sm:px-4 lg:px-6">
+      <main className="mx-auto pt-0 pb-20 w-full flex flex-col items-center justify-start self-center overflow-x-hidden max-w-full min-h-screen px-0 sm:px-4 lg:px-6">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeTab}
@@ -1114,6 +1613,22 @@ export default function App() {
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center will-change-transform"
           >
+            {activeTab === 'home' && (
+              <HomeView
+                onPlay={handlePlayTrack}
+                onDownload={(track) => setDownloadTrack(track)}
+                currentTrackId={currentTrack?.id}
+                favorites={favorites}
+                history={history}
+                onClearHistory={handleClearHistory}
+                onToggleFavorite={handleToggleFavorite}
+                onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+                onOpenMetadata={(track) => setMetadataTrack(track)}
+                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
+                onShowToast={showToast}
+              />
+            )}
+
             {activeTab === 'subscriptions' && (
               <SubscriptionsView
                 onPlay={handlePlayTrack}
@@ -1167,8 +1682,12 @@ export default function App() {
                 onRemoveTrackFromPlaylist={handleRemoveFromPlaylist}
                 onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
                 onOpenMetadata={(track) => setMetadataTrack(track)}
+                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
+                onOpenAuthModal={() => setIsAuthModalOpen(true)}
                 onShowToast={showToast}
-                userName={user?.displayName || user?.email?.split('@')[0] || 'Bikash Jana'}
+                userName={user?.displayName || 'Bikash Jana'}
+                userEmail={user?.email || 'bikashjana2005@gmail.com'}
+                userPhoto={user?.photoURL || undefined}
               />
             )}
 
@@ -1207,10 +1726,18 @@ export default function App() {
                 onOpenWebView={handleOpenWebView}
                 onOpenAndroidModal={handleOpenAndroidModal}
                 onSyncGoogleAccount={handleSyncGoogleAccount}
+                onSyncYouTubeAll={handleSyncYouTubeAll}
                 onSyncYouTubeSubscriptions={handleSyncYouTubeSubscriptions}
+                onSyncYouTubeLiked={handleSyncYouTubeLiked}
+                onSyncYouTubePlaylists={handleSyncYouTubePlaylists}
+                onSyncYouTubeHistory={handleSyncYouTubeHistory}
+                onOpenMobileConnectModal={() => setIsMobileConnectModalOpen(true)}
+                isYouTubeSyncing={isYouTubeSyncing}
+                youtubeChannelProfile={youtubeChannelProfile}
                 favoritesCount={favorites.length}
                 subscriptionsCount={subscriptions.length}
                 playlistsCount={playlists.length}
+                historyCount={history.length}
                 playerEngine={playerEngine}
                 onChangePlayerEngine={handleChangePlayerEngine}
                 isDataSaverMode={isDataSaverMode}
@@ -1251,7 +1778,11 @@ export default function App() {
           onChangePlayerEngine={handleChangePlayerEngine}
           isDataSaverMode={isDataSaverMode}
           onToggleDataSaverMode={handleToggleDataSaverMode}
-          onToggleFullScreen={() => setIsFullScreenVideo(prev => !prev)}
+          onToggleFullScreen={() => {
+            setIsOverlayOpen(false);
+            setShowVideo(true);
+            setIsFullScreenVideo(true);
+          }}
         />
       )}
 
@@ -1266,7 +1797,9 @@ export default function App() {
           isOverlayOpen={isOverlayOpen}
           isFullScreen={isFullScreenVideo}
           onToggleFullScreen={() => setIsFullScreenVideo(prev => !prev)}
-          onTrackEnded={handleNextTrack}
+          onTrackEnded={handleTrackEnded}
+          isAutoplay={isAutoplayUpNext}
+          onToggleAutoplay={handleToggleAutoplayUpNext}
           audioQuality={audioQuality}
           isDataSaverMode={isDataSaverMode}
           onOpenOverlay={() => setIsOverlayOpen(true)}
@@ -1284,7 +1817,7 @@ export default function App() {
           onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
           isFavorite={favorites.some(f => f.id === currentTrack.id)}
           onToggleFavorite={handleToggleFavorite}
-          isSubscribed={subscriptions.some(s => (s.name || '').toLowerCase() === (currentTrack.channel || '').toLowerCase())}
+          isSubscribed={subscriptions.some(s => (s?.name || '').toLowerCase() === (currentTrack?.channel || '').toLowerCase())}
           onToggleSubscribe={handleToggleSubscribe}
           onShowToast={showToast}
           isOnline={isOnline}
@@ -1351,6 +1884,35 @@ export default function App() {
         onShowToast={showToast}
       />
 
+      {/* Notifications Modal (Bell 9+) */}
+      <NotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onPlayTrack={handlePlayTrack}
+        onShowToast={showToast}
+      />
+
+      {/* Create Action Bottom Sheet (+) */}
+      <CreateActionModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onPlayUrl={(url) => {
+          handlePlayTrack({
+            id: url,
+            title: 'YouTube Custom Stream',
+            channel: 'YouTube Direct',
+            duration: 'Stream',
+            views: 'Direct Play',
+            aiMoodTags: 'Custom Stream'
+          });
+        }}
+        onOpenSearch={() => handleTabChange('search')}
+        onOpenCreatePlaylist={() => handleTabChange('library')}
+        onSyncYouTubeAll={handleSyncYouTubeAll}
+        onOpenWebView={() => handleOpenWebView('https://m.youtube.com', 'YouTube In-App WebView')}
+        onShowToast={showToast}
+      />
+
       {/* Native Android APK & Flutter Source Exporter Modal */}
       <AndroidNativeExporterModal
         isOpen={isAndroidModalOpen}
@@ -1401,6 +1963,36 @@ export default function App() {
         favoritesCount={favorites.length}
         subscriptionsCount={subscriptions.length}
         playlistsCount={playlists.length}
+      />
+
+      {/* YouTube Mobile App Real-Time Synchronization Modal */}
+      <YouTubeMobileConnectModal
+        isOpen={isMobileConnectModalOpen}
+        onClose={() => setIsMobileConnectModalOpen(false)}
+        user={user}
+        youtubeChannelProfile={youtubeChannelProfile}
+        onSyncAll={handleSyncYouTubeAll}
+        onSyncSubscriptions={handleSyncYouTubeSubscriptions}
+        onSyncLiked={handleSyncYouTubeLiked}
+        onSyncPlaylists={handleSyncYouTubePlaylists}
+        onSyncHistory={handleSyncYouTubeHistory}
+        isSyncing={isYouTubeSyncing}
+        subscriptionsCount={subscriptions.length}
+        likedCount={favorites.length}
+        playlistsCount={playlists.length}
+        historyCount={history.length}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        onShowToast={showToast}
+      />
+
+      {/* Video Quality Selection Popup (Screenshot matching) */}
+      <VideoQualitySelectorModal
+        isOpen={!!pendingQualityTrack}
+        track={pendingQualityTrack}
+        onClose={() => setPendingQualityTrack(null)}
+        onConfirmPlay={handleConfirmQualityPlay}
+        isDataSaverActive={isDataSaverMode}
       />
 
 

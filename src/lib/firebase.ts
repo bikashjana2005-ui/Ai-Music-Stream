@@ -14,6 +14,7 @@ import {
   User 
 } from 'firebase/auth';
 import { 
+  initializeFirestore,
   getFirestore, 
   doc, 
   getDocFromServer,
@@ -28,13 +29,24 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with force long polling for reliable cloud/sandbox iframe connections
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  }, firebaseConfig.firestoreDatabaseId);
+} catch (e) {
+  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+export const db = firestoreInstance;
 
 // Initialize Auth
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/youtube.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/youtube');
+googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
 
 // Error Handler for Firestore operations
 export enum OperationType {
@@ -56,6 +68,10 @@ export interface FirestoreErrorInfo {
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
     tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
   };
 }
 
@@ -69,6 +85,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       emailVerified: auth.currentUser?.emailVerified,
       isAnonymous: auth.currentUser?.isAnonymous,
       tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
     },
     operationType,
     path
@@ -80,9 +100,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     errorMessage.includes('unavailable') || 
     errorMessage.includes('offline') || 
     errorMessage.includes('Could not reach Cloud Firestore') ||
-    errorMessage.includes('Failed to get document')
+    errorMessage.includes('Failed to get document') ||
+    errorMessage.includes('the client is offline')
   ) {
-    console.warn('Firestore connectivity notification:', errorMessage);
+    console.warn('Firestore connectivity notification (offline mode active):', errorMessage);
     return;
   }
 
@@ -92,11 +113,11 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // Connection test helper
 export async function testFirebaseConnection() {
   try {
-    await getDocFromServer(doc(db, '_connection_test', 'ping'));
+    await getDocFromServer(doc(db, 'test', 'connection'));
     console.log('Firebase Firestore connection active.');
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore')) {
+    if (msg.includes('offline') || msg.includes('unavailable') || msg.includes('Could not reach Cloud Firestore') || msg.includes('the client is offline')) {
       console.warn('Firebase Firestore is operating in offline mode.');
     }
   }
@@ -219,6 +240,145 @@ export async function fetchYouTubeUserSubscriptions(token?: string) {
   }
 
   return data.channels || [];
+}
+
+export async function fetchYouTubeChannelProfile(token?: string) {
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
+  if (!accessToken) {
+    throw new Error('NO_ACCESS_TOKEN');
+  }
+
+  const res = await fetch('/api/youtube/sync-channel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken })
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch YouTube channel profile');
+  }
+
+  const data = await res.json();
+  return data.profile || null;
+}
+
+export async function fetchYouTubeUserPlaylists(token?: string) {
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
+  if (!accessToken) {
+    throw new Error('NO_ACCESS_TOKEN');
+  }
+
+  const res = await fetch('/api/youtube/sync-playlists', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken })
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch YouTube playlists');
+  }
+
+  const data = await res.json();
+  return data.playlists || [];
+}
+
+export async function fetchYouTubePlaylistTracks(playlistId: string, token?: string, apiKey?: string) {
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
+  const res = await fetch('/api/youtube/sync-playlist-items', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ playlistId, accessToken, youtubeApiKey: apiKey })
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch playlist tracks');
+  }
+
+  const data = await res.json();
+  return data.tracks || [];
+}
+
+export async function fetchYouTubeLikedVideos(token?: string) {
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
+  if (!accessToken) {
+    throw new Error('NO_ACCESS_TOKEN');
+  }
+
+  const res = await fetch('/api/youtube/sync-liked', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken })
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch YouTube liked videos');
+  }
+
+  const data = await res.json();
+  return data.tracks || [];
+}
+
+export async function fetchYouTubeWatchHistory(token?: string) {
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
+  if (!accessToken) {
+    throw new Error('NO_ACCESS_TOKEN');
+  }
+
+  const res = await fetch('/api/youtube/sync-history', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken })
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch YouTube watch history');
+  }
+
+  const data = await res.json();
+  return data.tracks || [];
+}
+
+export async function fetchYouTubeSyncAll(token?: string) {
+  const accessToken = token || sessionStorage.getItem('aura_yt_access_token') || localStorage.getItem('aura_yt_access_token');
+  if (!accessToken) {
+    throw new Error('NO_ACCESS_TOKEN');
+  }
+
+  const res = await fetch('/api/youtube/sync-all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken })
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to run full YouTube sync');
+  }
+
+  return await res.json();
+}
+
+export async function createMobilePairCode(sessionData: any) {
+  const res = await fetch('/api/youtube/mobile-pair', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sessionData)
+  });
+  return await res.json();
+}
+
+export async function checkMobilePairCode(code: string) {
+  const res = await fetch(`/api/youtube/mobile-pair/${code}`);
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+export async function sendMobilePairSync(pairCode: string, stateUpdate: any) {
+  const res = await fetch('/api/youtube/mobile-pair-sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pairCode, ...stateUpdate })
+  });
+  return await res.json();
 }
 
 export async function logoutUser() {

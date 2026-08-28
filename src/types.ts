@@ -58,7 +58,7 @@ export interface Playlist {
   createdAt: number;
 }
 
-export type TabType = 'search' | 'subscriptions' | 'library' | 'downloads' | 'settings';
+export type TabType = 'home' | 'subscriptions' | 'library' | 'downloads' | 'settings' | 'search';
 
 export interface DownloadConfig {
   format: 'mp3' | 'mp4';
@@ -74,4 +74,38 @@ export interface CloudflareConfig {
   latencyMs: number;
   cacheHitRate: number;
   shieldActive: boolean;
+}
+
+export interface YouTubeChannelProfile {
+  id: string;
+  title: string;
+  customUrl?: string;
+  description?: string;
+  avatar: string;
+  banner?: string;
+  subscriberCount?: string;
+  videoCount?: string;
+  viewCount?: string;
+  uploadsPlaylistId?: string;
+  syncedAt?: string;
+}
+
+export interface YouTubeSyncSummary {
+  channelSynced: boolean;
+  channelName?: string;
+  subscriptionsCount: number;
+  playlistsCount: number;
+  likedCount: number;
+  historyCount: number;
+  lastSyncedAt: string;
+  autoSyncEnabled: boolean;
+}
+
+export interface YouTubeMobilePairing {
+  pairCode: string;
+  deviceName: string;
+  connectedAt: number;
+  lastActive: number;
+  activeTrack?: Track | null;
+  isPlaying?: boolean;
 }

@@ -9,28 +9,12 @@ export interface AccentPreset {
 
 export const ACCENT_PRESETS: AccentPreset[] = [
   {
-    id: 'indigo',
-    name: 'Liquid Indigo & Violet',
-    primary: '#6366f1',
-    primaryHover: '#4f46e5',
-    secondary: '#a855f7',
-    description: 'Default deep indigo & neon violet gradient'
-  },
-  {
-    id: 'emerald',
-    name: 'Liquid Emerald & Mint',
-    primary: '#10b981',
-    primaryHover: '#059669',
-    secondary: '#14b8a6',
-    description: 'Vibrant forest emerald & refreshing mint teal'
-  },
-  {
     id: 'rose',
-    name: 'Liquid Rose & Ruby',
-    primary: '#f43f5e',
-    primaryHover: '#e11d48',
-    secondary: '#ec4899',
-    description: 'Energetic crimson rose & hot magenta pink'
+    name: 'Ai Music Red & Rose',
+    primary: '#ef4444',
+    primaryHover: '#dc2626',
+    secondary: '#f43f5e',
+    description: 'Application Main Theme (Ai Music Stream)'
   },
   {
     id: 'amber',
@@ -39,6 +23,22 @@ export const ACCENT_PRESETS: AccentPreset[] = [
     primaryHover: '#d97706',
     secondary: '#f97316',
     description: 'Warm golden amber & glowing sunset orange'
+  },
+  {
+    id: 'indigo',
+    name: 'Liquid Indigo & Violet',
+    primary: '#6366f1',
+    primaryHover: '#4f46e5',
+    secondary: '#a855f7',
+    description: 'Deep indigo & neon violet gradient'
+  },
+  {
+    id: 'emerald',
+    name: 'Liquid Emerald & Mint',
+    primary: '#10b981',
+    primaryHover: '#059669',
+    secondary: '#14b8a6',
+    description: 'Vibrant forest emerald & refreshing mint teal'
   },
   {
     id: 'cyan',
@@ -77,9 +77,9 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } | nul
 export function applyAccentTheme(themeId: string, customHex?: string): void {
   if (typeof window === 'undefined') return;
 
-  let primary = '#6366f1';
-  let primaryHover = '#4f46e5';
-  let secondary = '#a855f7';
+  let primary = '#ef4444';
+  let primaryHover = '#dc2626';
+  let secondary = '#f43f5e';
 
   if (themeId === 'custom' && customHex && /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(customHex)) {
     primary = customHex;

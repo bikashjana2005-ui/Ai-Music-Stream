@@ -92,8 +92,8 @@ export const YouTubePlaylistDetail: React.FC<YouTubePlaylistDetailProps> = ({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(t => 
-        (t.title && t.title.toLowerCase().includes(q)) || 
-        (t.channel && t.channel.toLowerCase().includes(q))
+        (t?.title && t.title.toLowerCase().includes(q)) || 
+        (t?.channel && t.channel.toLowerCase().includes(q))
       );
     }
 

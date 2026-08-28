@@ -1,6 +1,6 @@
 {
   "name": "Ai Music Stream",
-  "description": "AI-powered music discovery, audio streaming, track insights, and download manager.",
+  "description": "AI-powered music streaming, YouTube mobile synchronization for subscriptions, channels, history, liked videos, and playlists in real time.",
   "requestFramePermissions": [
     "microphone"
   ],

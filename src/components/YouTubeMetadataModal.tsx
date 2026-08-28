@@ -148,9 +148,9 @@ export const YouTubeMetadataModal: React.FC<YouTubeMetadataModalProps> = ({
   if (!isOpen || !track) return null;
 
   const videoUrl = `https://www.youtube.com/watch?v=${track.id}`;
-  const displayTitle = metadata?.title || track.title;
-  const displayChannel = metadata?.channel || track.channel;
-  const channelHandle = `@${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+  const displayTitle = metadata?.title || track.title || 'Official Stream';
+  const displayChannel = metadata?.channel || track.channel || 'Official Channel';
+  const channelHandle = `@${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
   
   const formattedLikes = metadata?.likeCount ? metadata.likeCount.replace(' likes', '') : '54,244';
   const formattedViews = metadata?.views ? metadata.views.replace(' views', '') : (track.views ? `${track.views}` : '359,071');
@@ -162,15 +162,15 @@ Download App For Unlimited Music & Video Streams:
 https://play.google.com/store/apps
 
 My Official Channels:
-• @${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}
-• @${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}Vlogs
-• @${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}Shorts
+• @${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}
+• @${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}Vlogs
+• @${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}Shorts
 
 Follow on Social Media:
-Instagram: https://instagram.com/${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}
-Facebook: https://facebook.com/${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}
+Instagram: https://instagram.com/${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}
+Facebook: https://facebook.com/${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}
 
-#${(track.genre || 'music').replace(/\s+/g, '').toLowerCase()} #youtube #official #${displayChannel.replace(/[^a-z0-9]/g, '').toLowerCase()}`;
+#${(track.genre || 'music').replace(/\s+/g, '').toLowerCase()} #youtube #official #${(displayChannel || '').replace(/[^a-z0-9]/g, '').toLowerCase()}`;
 
   const renderFormattedDescription = (text: string) => {
     const lines = text.split('\n');
@@ -378,7 +378,7 @@ Facebook: https://facebook.com/${displayChannel.toLowerCase().replace(/[^a-z0-9]
                         {/* Avatar & Channel Details */}
                         <div className="flex items-center gap-3 min-w-0">
                           <img
-                            src={chan.avatarUrl}
+                            src={chan.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chan.name)}`}
                             alt={chan.name}
                             className="w-11 h-11 rounded-full object-cover bg-zinc-800 shrink-0 border border-white/10"
                             onError={(e) => {

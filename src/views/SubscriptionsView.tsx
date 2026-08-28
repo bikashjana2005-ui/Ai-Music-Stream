@@ -71,6 +71,7 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   onOpenMetadata,
   subscriptions,
   onOpenSubscriptionsModal,
+  onToggleSubscribe,
   selectedChannelFilter,
   setSelectedChannelFilter,
   onOpenChannelDetails,
@@ -85,6 +86,25 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
   const [activePill, setActivePill] = useState<CategoryPillFilter>('All');
   const [internalSyncing, setInternalSyncing] = useState<boolean>(false);
   const [activeMenuTrackId, setActiveMenuTrackId] = useState<string | null>(null);
+
+  // Toggle to show only last subscribed channel
+  const [showOnlyLastSubscribed, setShowOnlyLastSubscribed] = useState<boolean>(() => {
+    return localStorage.getItem('aura_show_last_sub_only') === 'true';
+  });
+
+  const lastSubscribedChannel = subscriptions.length > 0 ? subscriptions[subscriptions.length - 1] : null;
+
+  const handleToggleLastSubscribedOnly = (enabled: boolean) => {
+    setShowOnlyLastSubscribed(enabled);
+    localStorage.setItem('aura_show_last_sub_only', String(enabled));
+    if (enabled && lastSubscribedChannel) {
+      setSelectedChannelFilter(lastSubscribedChannel.name);
+      onShowToast(`Showing latest subscribed channel: ${lastSubscribedChannel.name}`, 'info');
+    } else {
+      setSelectedChannelFilter(null);
+      onShowToast('Showing all subscribed feeds', 'info');
+    }
+  };
 
   // View mode state (defaults to 'mobile' YouTube style)
   const [layoutMode, setLayoutMode] = useState<ViewLayoutMode>(() => {
@@ -110,7 +130,9 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
     const activeSort = filterOverride || feedSort;
     try {
       const payload: any = { sortBy: activeSort, forceFresh: silent };
-      if (channelName) {
+      if (showOnlyLastSubscribed && lastSubscribedChannel) {
+        payload.channelName = lastSubscribedChannel.name;
+      } else if (channelName) {
         payload.channelName = channelName;
       } else if (subscriptions.length > 0) {
         payload.channelNames = subscriptions.map(s => s.name);
@@ -232,25 +254,40 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-3 sm:p-4 space-y-3">
         
         {/* Top Header Bar with YouTube Branding */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-600/30">
+            <div className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-600/30 shrink-0">
               <Youtube size={18} className="fill-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white">
                   Subscriptions
                 </h1>
                 <span className="px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-[10px] font-extrabold border border-red-200 dark:border-red-800/40">
-                  {subscriptions.length} Channels
+                  {showOnlyLastSubscribed && lastSubscribedChannel ? 'Last Subscribed Channel' : `${subscriptions.length} Channels`}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions: All / Manage & Sync */}
-          <div className="flex items-center gap-1.5">
+          {/* Quick Actions: Last Subscribed Toggle / Manage & Sync */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {lastSubscribedChannel && (
+              <button
+                onClick={() => handleToggleLastSubscribedOnly(!showOnlyLastSubscribed)}
+                className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border active:scale-95 ${
+                  showOnlyLastSubscribed
+                    ? 'bg-red-600 text-white border-red-600 shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                }`}
+                title={showOnlyLastSubscribed ? 'Show all channels' : 'Show only latest subscribed channel'}
+              >
+                <Zap size={13} className={showOnlyLastSubscribed ? 'fill-white' : 'text-amber-500'} />
+                <span>{showOnlyLastSubscribed ? 'Last Channel Only' : 'Last Subscribed'}</span>
+              </button>
+            )}
+
             <button
               onClick={async () => {
                 setInternalSyncing(true);
@@ -287,13 +324,17 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
           {/* ALL Feeds Bubble */}
           <button
             onClick={() => {
-              setSelectedChannelFilter(null);
-              onShowToast('Showing all subscribed feeds', 'info');
+              if (showOnlyLastSubscribed) {
+                handleToggleLastSubscribedOnly(false);
+              } else {
+                setSelectedChannelFilter(null);
+                onShowToast('Showing all subscribed feeds', 'info');
+              }
             }}
             className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
           >
             <div className={`w-13 h-13 rounded-full flex items-center justify-center transition-all p-0.5 ${
-              !selectedChannelFilter
+              !selectedChannelFilter && !showOnlyLastSubscribed
                 ? 'bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 ring-2 ring-red-500 scale-105 shadow-md'
                 : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700'
             }`}>
@@ -301,14 +342,15 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
                 ALL
               </div>
             </div>
-            <span className={`text-[11px] font-bold truncate max-w-[66px] ${!selectedChannelFilter ? 'text-red-600 dark:text-red-400 font-extrabold' : 'text-slate-600 dark:text-slate-400'}`}>
+            <span className={`text-[11px] font-bold truncate max-w-[66px] ${!selectedChannelFilter && !showOnlyLastSubscribed ? 'text-red-600 dark:text-red-400 font-extrabold' : 'text-slate-600 dark:text-slate-400'}`}>
               All
             </span>
           </button>
 
-          {/* Subscribed Channels List */}
-          {subscriptions.map((ch) => {
-            const isSelected = selectedChannelFilter && (ch.name || '').toLowerCase() === selectedChannelFilter.toLowerCase();
+          {/* Subscribed Channels List - When showOnlyLastSubscribed is active, highlights or limits */}
+          {(showOnlyLastSubscribed && lastSubscribedChannel ? [lastSubscribedChannel] : subscriptions).map((ch) => {
+            const isSelected = (showOnlyLastSubscribed && ch.id === lastSubscribedChannel?.id) || 
+              (selectedChannelFilter && (ch.name || '').toLowerCase() === selectedChannelFilter.toLowerCase());
             const hasUnread = unreadChannels.has(ch.name);
 
             return (
@@ -369,6 +411,47 @@ export const SubscriptionsView: React.FC<SubscriptionsViewProps> = ({
           </button>
 
         </div>
+
+        {/* Optional Last Subscribed Spotlight Banner */}
+        {showOnlyLastSubscribed && lastSubscribedChannel && (
+          <div className="p-3 bg-gradient-to-r from-red-500/10 via-rose-500/5 to-transparent rounded-xl border border-red-500/20 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={lastSubscribedChannel.avatar || getChannelAvatar(lastSubscribedChannel.name)}
+                alt={lastSubscribedChannel.name}
+                className="w-9 h-9 rounded-full object-cover border border-red-500 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-black text-slate-900 dark:text-white truncate">
+                    {lastSubscribedChannel.name}
+                  </span>
+                  <Check size={13} className="text-red-500 shrink-0" />
+                </div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                  Latest Subscribed Channel • Showing recent uploads
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {onOpenChannelDetails && (
+                <button
+                  onClick={() => onOpenChannelDetails(lastSubscribedChannel.name)}
+                  className="px-2.5 py-1 text-[11px] font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs"
+                >
+                  Visit Channel
+                </button>
+              )}
+              <button
+                onClick={() => handleToggleLastSubscribedOnly(false)}
+                className="px-2.5 py-1 text-[11px] font-bold bg-red-600 text-white rounded-lg shadow-xs"
+              >
+                View All Feeds
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 3. YOUTUBE PILL FILTER CHIPS BAR */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth pt-2 border-t border-slate-100 dark:border-slate-800">

@@ -59,20 +59,20 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
     // Filter by type
     if (filterType === 'shorts') {
       result = result.filter(t => {
-        const dur = t.duration || '';
+        const dur = t?.duration || '';
         // If duration is less than 1 min or title has #shorts
-        return (t.title && t.title.toLowerCase().includes('#shorts')) || dur.startsWith('0:') || dur === '0:59';
+        return (t?.title && t.title.toLowerCase().includes('#shorts')) || dur.startsWith('0:') || dur === '0:59';
       });
     } else if (filterType === 'videos') {
-      result = result.filter(t => !t.title?.toLowerCase().includes('#shorts'));
+      result = result.filter(t => !t?.title?.toLowerCase().includes('#shorts'));
     }
 
     // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(t => 
-        (t.title && t.title.toLowerCase().includes(q)) || 
-        (t.channel && t.channel.toLowerCase().includes(q))
+        (t?.title && t.title.toLowerCase().includes(q)) || 
+        (t?.channel && t.channel.toLowerCase().includes(q))
       );
     }
 

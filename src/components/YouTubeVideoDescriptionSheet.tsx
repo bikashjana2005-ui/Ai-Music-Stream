@@ -167,7 +167,7 @@ Facebook: https://facebook.com/${(t.channel || 'artist').toLowerCase().replace(/
 
   const displayTitle = track.title || 'Official Video';
   const displayChannel = realChannelName || track.channel || 'Official Channel';
-  const channelHandle = `@${displayChannel.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+  const channelHandle = `@${(displayChannel || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
   
   // Dynamic stats
   const formattedLikes = realLikeCountStr?.replace(' likes', '') || '54,244';
@@ -378,7 +378,7 @@ Facebook: https://facebook.com/${(t.channel || 'artist').toLowerCase().replace(/
                       {/* Avatar & Channel Details */}
                       <div className="flex items-center gap-3 min-w-0">
                         <img
-                          src={chan.avatarUrl}
+                          src={chan.avatarUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(chan.name)}`}
                           alt={chan.name}
                           className="w-11 h-11 rounded-full object-cover bg-zinc-800 shrink-0 border border-white/10"
                           onError={(e) => {

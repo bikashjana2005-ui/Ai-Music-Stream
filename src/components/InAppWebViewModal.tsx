@@ -221,7 +221,7 @@ export const InAppWebViewModal: React.FC<InAppWebViewModalProps> = ({
 
             <iframe
               key={iframeKey}
-              src={currentUrl}
+              src={currentUrl || 'https://m.youtube.com'}
               title="In-App WebView Browser"
               onLoad={() => setLoading(false)}
               className="w-full h-full border-none bg-white dark:bg-slate-900"
