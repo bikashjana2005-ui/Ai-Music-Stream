@@ -143,7 +143,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
       style={{ maxWidth: '100%' }}
     >
       <div 
-        className="relative bg-slate-900/95 dark:bg-slate-950/95 border border-white/20 backdrop-blur-3xl backdrop-saturate-200 rounded-md sm:rounded-lg shadow-[0_16px_50px_rgba(0,0,0,0.5)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-black/20"
+        className="relative bg-[#1e1a22]/95 dark:bg-[#1a1720]/95 border border-white/15 dark:border-white/10 backdrop-blur-3xl backdrop-saturate-200 rounded-[24px] sm:rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.6)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-white/5"
         style={{
           width: `${Math.min(window.innerWidth - 16, widthFigure * scaleFigure)}px`,
           height: `${heightFigure * scaleFigure}px`,
@@ -152,16 +152,16 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
         {/* Top Mini Progress Bar Slider */}
         <div 
           onClick={handleSeekClick}
-          className="w-full h-1 bg-white/10 cursor-pointer relative group shrink-0"
+          className="w-full h-1.5 bg-white/10 cursor-pointer relative group shrink-0"
           title="Click to seek"
         >
           <div 
-            className="h-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-rose-400 transition-all duration-200"
+            className="h-full bg-gradient-to-r from-rose-500 via-rose-400 to-amber-400 rounded-r-full transition-all duration-200"
             style={{ width: `${progressPercent}%` }}
           />
           <div 
-            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-            style={{ left: `calc(${progressPercent}% - 6px)` }}
+            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            style={{ left: `calc(${progressPercent}% - 7px)` }}
           />
         </div>
 
@@ -173,7 +173,7 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
             onClick={onOpenOverlay}
             className="flex items-center gap-3 min-w-0 cursor-pointer group flex-1"
           >
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-md overflow-hidden bg-slate-800 border border-white/15 shrink-0 shadow-md group-hover:scale-105 transition-transform">
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-[16px] sm:rounded-[18px] overflow-hidden bg-slate-800 border border-white/15 shrink-0 shadow-md group-hover:scale-105 transition-transform">
               <img 
                 src={thumbnail} 
                 alt={title} 
@@ -185,22 +185,22 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
               {isPlaying && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-xs">
                   <div className="flex items-end gap-0.5 h-3">
-                    <span className="w-0.5 h-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-0.5 h-full bg-rose-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-0.5 h-full bg-indigo-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="w-0.5 h-full bg-rose-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-0.5 h-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-0.5 h-full bg-rose-300 animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
                 </div>
               )}
             </div>
 
             <div className="min-w-0">
-              <h4 className="text-xs sm:text-sm font-black text-white truncate group-hover:text-indigo-300 transition-colors">
+              <h4 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-rose-300 transition-colors">
                 {title}
               </h4>
               <p className="text-[10px] sm:text-xs text-gray-400 font-semibold truncate flex items-center gap-1.5">
                 <span>{channel}</span>
                 <span>•</span>
-                <span className="font-mono text-indigo-400">{formatTime(playbackTime)} / {formatTime(duration)}</span>
+                <span className="font-mono text-rose-400">{formatTime(playbackTime)} / {formatTime(duration)}</span>
               </p>
             </div>
           </div>
@@ -209,15 +209,15 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={onPrevTrack}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-md transition-all active:scale-90"
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90 cursor-pointer"
               title="Previous Track"
             >
-              <SkipBack size={16} />
+              <SkipBack size={17} />
             </button>
 
             <button
               onClick={onTogglePlay}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-600/30 transition-all active:scale-95 shrink-0"
+              className="w-9 h-9 sm:w-11 sm:h-11 rounded-[16px] sm:rounded-[18px] bg-gradient-to-tr from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white flex items-center justify-center shadow-lg shadow-rose-600/30 transition-all active:scale-90 shrink-0 cursor-pointer"
               title={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause size={18} className="fill-white" /> : <Play size={18} className="fill-white ml-0.5" />}
@@ -225,10 +225,10 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
 
             <button
               onClick={onNextTrack}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90 cursor-pointer"
               title="Next Track"
             >
-              <SkipForward size={16} />
+              <SkipForward size={17} />
             </button>
           </div>
 

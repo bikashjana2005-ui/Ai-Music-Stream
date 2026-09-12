@@ -18,6 +18,7 @@ import {
 import { User as FirebaseUser } from 'firebase/auth';
 import { TabType, SubscribedChannel } from '../types';
 import { AppLogo } from './AppLogo';
+import { JanmashtamiHeaderBadge } from './JanmashtamiEffect';
 
 interface NavbarProps {
   activeTab: TabType;
@@ -38,6 +39,7 @@ interface NavbarProps {
   onOpenShareModal?: () => void;
   onOpenWebView?: (url?: string, title?: string) => void;
   onOpenAndroidModal?: () => void;
+  onOpenJanmashtamiModal?: () => void;
   isDataSaverMode?: boolean;
   onToggleDataSaverMode?: (enabled: boolean) => void;
   isOnline?: boolean;
@@ -61,6 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenShareModal,
   onOpenWebView,
   onOpenAndroidModal,
+  onOpenJanmashtamiModal,
   isDataSaverMode = false,
   onToggleDataSaverMode,
   userName
@@ -93,8 +96,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     <>
       {/* Top Desktop & Mobile Header Bar with Centered App Name: Ai Music Stream */}
       <header className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-md border-b border-gray-200 dark:border-white/10 transition-colors shadow-xs">
-        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-15 relative flex items-center justify-center">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-15 relative flex items-center justify-between sm:justify-center">
           
+          {/* Janmashtami Special Festival Badge (Left on mobile/desktop) */}
+          <div className="sm:absolute sm:left-4 lg:left-6 flex items-center z-10">
+            <JanmashtamiHeaderBadge onOpenModal={onOpenJanmashtamiModal} />
+          </div>
+
           {/* Centered Brand Identity: Ai Music Stream */}
           <div 
             onClick={() => setActiveTab('search')}
@@ -121,17 +129,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  className={`relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer active:scale-95 ${
                     isActive
-                      ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+                      ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
                   }`}
                 >
-                  <Icon size={14} className={isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'} />
+                  <Icon size={15} className={isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'} />
                   <span>{item.label}</span>
                   {item.badge !== null && (
                     <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-red-600/20 text-red-500'
+                      isActive ? 'bg-white/20 text-white' : 'bg-rose-600/20 text-rose-500'
                     }`}>
                       {item.badge}
                     </span>
@@ -144,9 +152,9 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation Dock (Home, Search, Subscriptions, Downloads, You, Settings) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 select-none pb-safe">
-        <nav className="w-full max-w-lg mx-auto h-13.5 px-1 flex items-center justify-around">
+      {/* Android Material Design 3 Expressive Bottom Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#f7f2fa]/95 dark:bg-[#1d1b20]/95 backdrop-blur-xl border-t border-black/5 dark:border-white/5 select-none pb-safe transition-colors shadow-lg">
+        <nav className="w-full max-w-md mx-auto pt-2 pb-1 px-2 flex items-center justify-around">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -156,35 +164,47 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 key={`mobile-nav-${item.id}`}
                 onClick={() => setActiveTab(item.id)}
-                className={`relative flex flex-col items-center justify-center flex-1 py-1 transition-colors cursor-pointer ${
+                className={`relative flex flex-col items-center justify-center flex-1 transition-all duration-200 cursor-pointer active:scale-90 ${
                   isActive
-                    ? 'text-red-600 dark:text-red-500 font-bold'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    ? 'text-zinc-900 dark:text-white font-bold'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
                 }`}
               >
-                <div className="relative flex items-center justify-center">
+                {/* M3 Expressive Pill Indicator behind Icon */}
+                <div className={`relative w-14 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  isActive 
+                    ? 'bg-rose-500/20 dark:bg-rose-500/25 text-rose-600 dark:text-rose-400 shadow-xs scale-105' 
+                    : 'text-zinc-500 dark:text-zinc-400'
+                }`}>
                   {isYouTab ? (
-                    <div className={`w-5.5 h-5.5 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all ${
                       isActive 
-                        ? 'bg-gradient-to-tr from-pink-600 to-red-600 text-white ring-2 ring-red-500 ring-offset-1 ring-offset-[#0f0f0f]' 
-                        : 'bg-gradient-to-tr from-pink-600/80 to-red-600/80 text-white'
+                        ? 'bg-gradient-to-tr from-rose-500 to-red-600 text-white ring-2 ring-rose-500 ring-offset-1 ring-offset-[#1d1b20]' 
+                        : 'bg-gradient-to-tr from-rose-500/80 to-red-600/80 text-white'
                     }`}>
                       {initialLetter}
                     </div>
                   ) : (
-                    <Icon size={19} className={isActive ? 'stroke-[2.4px]' : 'stroke-[1.8px]'} />
+                    <Icon size={20} className={isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'} />
                   )}
                   {item.badge !== null && (
-                    <span className="absolute -top-1 -right-2 px-1 min-w-[14px] h-3.5 bg-red-600 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 px-1 min-w-[14px] h-3.5 bg-rose-600 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-xs">
                       {item.badge}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] tracking-tight mt-0.5">{item.label}</span>
+                {/* M3 Expressive Tab Label */}
+                <span className={`text-[11px] tracking-tight mt-1 transition-colors ${
+                  isActive ? 'text-zinc-950 dark:text-white font-bold' : 'text-zinc-500 dark:text-zinc-400 font-medium'
+                }`}>
+                  {item.label}
+                </span>
               </button>
             );
           })}
         </nav>
+        {/* Android Native Gesture Bar Handle */}
+        <div className="w-28 h-1 bg-zinc-400/40 dark:bg-zinc-600/60 rounded-full mx-auto mb-1.5 mt-0.5 pointer-events-none" />
       </div>
     </>
   );

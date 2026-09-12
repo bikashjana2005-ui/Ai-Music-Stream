@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Download, Heart, ListPlus, MoreVertical, Info, Share2, Music } from 'lucide-react';
+import { Play, Download, Heart, ListPlus, MoreVertical, Info, Share2, Music, Zap } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
+import { YouTubeActionBottomSheet } from './YouTubeActionBottomSheet';
+import { getNetworkStatus } from '../utils/networkOptimizer';
 
 interface YouTubeFeedCardProps {
   track: Track;
@@ -52,6 +54,12 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
     if (!videoId || videoId.length !== 11) {
       return `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop`;
     }
+    const isLowNet = getNetworkStatus().isLowNetwork;
+    if (isLowNet) {
+      if (imgStage === 0) return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+      if (imgStage === 1) return `https://i.ytimg.com/vi/${videoId}/0.jpg`;
+      return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    }
     if (imgStage === 0) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
     if (imgStage === 1) return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
     if (imgStage === 2) return `https://i.ytimg.com/vi/${videoId}/0.jpg`;
@@ -69,10 +77,10 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
 
   return (
     <div className="group flex flex-col w-full text-left transition-all">
-      {/* Thumbnail Container (Full Width, Aspect 16:9, Perfectly Centered) */}
+      {/* Thumbnail Container (Full Width, Aspect 16:9, Perfectly Centered with M3 Expressive Curves) */}
       <div 
         onClick={() => onPlay(track)}
-        className="relative aspect-video w-full sm:rounded-2xl overflow-hidden bg-zinc-900 shadow-md group cursor-pointer border-b sm:border border-white/5 flex items-center justify-center"
+        className="relative aspect-video w-full rounded-[20px] sm:rounded-[24px] overflow-hidden bg-zinc-900 shadow-md group cursor-pointer border border-black/10 dark:border-white/10 flex items-center justify-center active:scale-[0.98] transition-all"
       >
         {imgStage > 3 ? (
           <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center text-white">
@@ -94,6 +102,14 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
             <Play size={22} className="fill-white ml-0.5" />
           </div>
         </div>
+
+        {/* Low Network Indicator Badge Top Left */}
+        {getNetworkStatus().isLowNetwork && (
+          <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-emerald-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-emerald-500/30 shadow-xs">
+            <Zap size={10} className="fill-emerald-400" />
+            <span>240p Fast</span>
+          </div>
+        )}
 
         {/* Duration Badge Bottom Right */}
         <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md text-white text-[11px] font-mono font-medium px-1.5 py-0.5 rounded-md shadow-sm border border-white/10">
@@ -156,97 +172,26 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-            title="Options"
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 rounded-full transition-colors cursor-pointer"
+            title="More actions"
           >
             <MoreVertical size={18} />
           </button>
 
-          {/* Options Dropdown Popover */}
-          {showMenu && (
-            <div className="absolute right-0 top-8 bg-slate-900 dark:bg-zinc-900 border border-gray-700/80 dark:border-white/10 text-white rounded-2xl p-1.5 shadow-2xl z-40 min-w-[180px] animate-fade-in space-y-0.5">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onPlay(track);
-                }}
-                className="w-full px-3 py-2 text-xs font-semibold flex items-center gap-2.5 hover:bg-white/10 rounded-xl transition-colors text-left cursor-pointer"
-              >
-                <Play size={15} className="text-rose-500" />
-                <span>Play Track</span>
-              </button>
-
-              {onToggleFavorite && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    onToggleFavorite(track);
-                  }}
-                  className="w-full px-3 py-2 text-xs font-semibold flex items-center gap-2.5 hover:bg-white/10 rounded-xl transition-colors text-left cursor-pointer"
-                >
-                  <Heart size={15} className={isFavorite ? "fill-rose-500 text-rose-500" : "text-rose-400"} />
-                  <span>{isFavorite ? 'Remove Favorite' : 'Add to Favorite'}</span>
-                </button>
-              )}
-
-              {onOpenAddToPlaylist && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    onOpenAddToPlaylist(track);
-                  }}
-                  className="w-full px-3 py-2 text-xs font-semibold flex items-center gap-2.5 hover:bg-white/10 rounded-xl transition-colors text-left cursor-pointer"
-                >
-                  <ListPlus size={15} className="text-indigo-400" />
-                  <span>Add to Playlist</span>
-                </button>
-              )}
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onDownload(track);
-                }}
-                className="w-full px-3 py-2 text-xs font-semibold flex items-center gap-2.5 hover:bg-white/10 rounded-xl transition-colors text-left cursor-pointer"
-              >
-                <Download size={15} className="text-emerald-400" />
-                <span>Download Video/Audio</span>
-              </button>
-
-              {onOpenMetadata && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    onOpenMetadata(track);
-                  }}
-                  className="w-full px-3 py-2 text-xs font-semibold flex items-center gap-2.5 hover:bg-white/10 rounded-xl transition-colors text-left cursor-pointer"
-                >
-                  <Info size={15} className="text-blue-400" />
-                  <span>YouTube Details</span>
-                </button>
-              )}
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  if (navigator.clipboard) {
-                    navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${videoId}`);
-                    if (onShowToast) onShowToast('YouTube link copied!', 'success');
-                  }
-                }}
-                className="w-full px-3 py-2 text-xs font-semibold flex items-center gap-2.5 hover:bg-white/10 rounded-xl transition-colors text-left cursor-pointer"
-              >
-                <Share2 size={15} className="text-amber-400" />
-                <span>Share Link</span>
-              </button>
-            </div>
-          )}
+          {/* Android YouTube Bottom Sheet Modal */}
+          <YouTubeActionBottomSheet
+            isOpen={showMenu}
+            onClose={() => setShowMenu(false)}
+            track={track}
+            onPlay={onPlay}
+            onDownload={onDownload}
+            isFavorite={isFavorite}
+            onToggleFavorite={onToggleFavorite}
+            onOpenAddToPlaylist={onOpenAddToPlaylist}
+            onOpenMetadata={onOpenMetadata}
+            onOpenChannelDetails={onOpenChannelDetails}
+            onShowToast={onShowToast}
+          />
         </div>
       </div>
     </div>

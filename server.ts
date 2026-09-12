@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
+import { YOUTUBE_SEARCH_DATA } from "./src/data/fallbackTracks";
 
 const app = express();
 const PORT = 3000;
@@ -224,6 +225,7 @@ async function searchYouTubeScrape(query: string, sortByDate?: boolean): Promise
                         views,
                         duration,
                         publishedTime,
+                        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                         aiMoodTags: publishedTime ? `Uploaded ${publishedTime}` : "Original Real-time Audio",
                         genre: "Original YouTube"
                       });
@@ -272,6 +274,7 @@ async function searchYouTubeScrape(query: string, sortByDate?: boolean): Promise
                       views,
                       duration,
                       publishedTime,
+                      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                       aiMoodTags: publishedTime ? `Uploaded ${publishedTime}` : "Real-time Original Video",
                       genre: "Original YouTube"
                     });
@@ -1720,7 +1723,7 @@ app.get("/api/music/autocomplete", async (req, res) => {
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data) && Array.isArray(data[1])) {
-        const result = { suggestions: data[1].slice(0, 8) };
+        const result = { suggestions: data[1].slice(0, 12) };
         setCached(cacheKey, result, 60 * 60 * 1000); // 1 hour cache
         return res.json(result);
       }
@@ -1729,6 +1732,37 @@ app.get("/api/music/autocomplete", async (req, res) => {
   } catch (e) {
     res.json({ suggestions: [] });
   }
+});
+
+// Dedicated Curated YouTube Search Data Endpoint
+app.get("/api/youtube/search-data", (req, res) => {
+  const category = (req.query.category as string) || "all";
+  const query = ((req.query.q as string) || "").toLowerCase().trim();
+  const limit = parseInt(req.query.limit as string, 10) || 60;
+
+  let results = YOUTUBE_SEARCH_DATA;
+
+  if (category && category !== "all") {
+    results = results.filter(t => 
+      (t.genre && t.genre.toLowerCase().includes(category.toLowerCase())) ||
+      (t.aiMoodTags && t.aiMoodTags.toLowerCase().includes(category.toLowerCase()))
+    );
+  }
+
+  if (query) {
+    const tokens = query.split(/\s+/).filter(t => t.length >= 2);
+    results = results.filter(t => {
+      const fullText = `${t.title} ${t.channel} ${t.genre || ''} ${t.aiMoodTags || ''}`.toLowerCase();
+      return tokens.some(tok => fullText.includes(tok));
+    });
+  }
+
+  res.json({
+    tracks: results.slice(0, limit),
+    totalResults: results.length,
+    category,
+    source: "Curated YouTube Search Data"
+  });
 });
 
 // Search Endpoint
@@ -1800,21 +1834,44 @@ app.post("/api/music/search", async (req, res) => {
       scrapedTracks = await searchYouTubeScrape(`${modifiedQuery} official audio full song`);
     }
 
+    // Match against rich YouTube Search Data
+    const searchTokens = modifiedQuery.toLowerCase().split(/\s+/).filter(t => t.length >= 2);
+    const localMatches = YOUTUBE_SEARCH_DATA.filter(track => {
+      const fullText = `${track.title} ${track.channel} ${track.genre || ''} ${track.aiMoodTags || ''}`.toLowerCase();
+      return searchTokens.some(tok => fullText.includes(tok));
+    });
+
     if (scrapedTracks && scrapedTracks.length > 0) {
-      const result = { tracks: scrapedTracks, source: "Real-Time YouTube Scraper", page };
+      // If we have local verified matches that are highly relevant, prepend/merge them
+      const seenIds = new Set(scrapedTracks.map((t: any) => t.id));
+      const combinedTracks = [...scrapedTracks];
+      for (const m of localMatches) {
+        if (!seenIds.has(m.id)) {
+          seenIds.add(m.id);
+          combinedTracks.unshift(m);
+        }
+      }
+      const result = { tracks: combinedTracks, source: "Real-Time YouTube Scraper", page };
       setCached(cacheKey, result, 3 * 60 * 1000);
+      return res.json(result);
+    }
+
+    // If scraping returned no tracks but we have matching curated YouTube search data
+    if (localMatches.length > 0) {
+      const result = { tracks: localMatches, source: "YouTube Verified Search Data", page };
+      setCached(cacheKey, result, 5 * 60 * 1000);
       return res.json(result);
     }
 
     // 3. Fallback to Gemini AI if scraping returns empty
     const ai = getGeminiClient();
     if (!ai) {
-      const filtered = FALLBACK_TRACKS.filter(t => 
+      const filtered = YOUTUBE_SEARCH_DATA.filter(t => 
         t.title.toLowerCase().includes(query.toLowerCase()) || 
         t.channel.toLowerCase().includes(query.toLowerCase()) ||
         t.aiMoodTags.toLowerCase().includes(query.toLowerCase())
       );
-      return res.json({ tracks: filtered.length ? filtered : FALLBACK_TRACKS, source: "Fallback" });
+      return res.json({ tracks: filtered.length ? filtered : YOUTUBE_SEARCH_DATA.slice(0, 15), source: "YouTube Verified Data" });
     }
 
     const prompt = `Search for music matching the query: "${query}".

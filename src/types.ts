@@ -109,3 +109,12 @@ export interface YouTubeMobilePairing {
   activeTrack?: Track | null;
   isPlaying?: boolean;
 }
+
+export interface YouTubeSearchTopic {
+  id: string;
+  title: string;
+  category: string;
+  icon?: string;
+  badge?: string;
+  query: string;
+}

@@ -124,7 +124,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
   });
 
-  const displayHistory = history.length > 0 ? history : SAMPLE_RECENT_HISTORY;
+  const displayHistory = history;
   const initialLetter = (userName.trim()[0] || 'B').toUpperCase();
   const userHandle = userEmail.includes('@') ? `@${userEmail.split('@')[0]}` : `@${userEmail}`;
 
@@ -307,52 +307,70 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         {/* Horizontal Carousel of History Tracks */}
-        <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 py-1">
-          {displayHistory.slice(0, 10).map((item) => (
-            <div
-              key={`hist-${item.id}`}
-              onClick={() => onPlay(item)}
-              className="w-40 sm:w-44 shrink-0 space-y-2 cursor-pointer group"
-            >
-              {/* 16:9 Thumbnail with Duration Tag */}
-              <div className="aspect-video w-full rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/15 relative shadow-sm">
-                <img
-                  src={item.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop'}
-                  alt={item.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                />
-                <div className="absolute inset-0 bg-red-950/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <Play size={18} className="fill-white text-white" />
-                </div>
-                <span className="absolute bottom-1.5 right-1.5 bg-zinc-900/90 text-white text-[10px] font-mono px-1.5 py-0.5 rounded border border-white/10">
-                  {item.duration || '3:30'}
-                </span>
-              </div>
-
-              {/* Title & Channel */}
-              <div className="flex items-start justify-between gap-1">
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-xs font-semibold text-white leading-snug line-clamp-2 group-hover:text-red-400">
-                    {item.title}
-                  </h4>
-                  <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                    {item.channel}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onOpenMetadata) onOpenMetadata(item);
-                  }}
-                  className="p-1 text-zinc-400 hover:text-white rounded-full transition-colors"
+        {displayHistory.length > 0 ? (
+          <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 py-1">
+            {displayHistory.slice(0, 15).map((item) => {
+              const ytid = extractYouTubeId(item.id || item.youtubeUrl || '');
+              const thumbUrl = ytid && ytid.length === 11 
+                ? `https://i.ytimg.com/vi/${ytid}/hqdefault.jpg`
+                : (item.thumbnail && !item.thumbnail.includes('unsplash') ? item.thumbnail : `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
+              return (
+                <div
+                  key={`hist-${item.id}`}
+                  onClick={() => onPlay(item)}
+                  className="w-40 sm:w-44 shrink-0 space-y-2 cursor-pointer group"
                 >
-                  <MoreVertical size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  {/* 16:9 Thumbnail with Duration Tag */}
+                  <div className="aspect-video w-full rounded-xl overflow-hidden bg-zinc-800/90 border border-red-500/15 relative shadow-sm">
+                    <img
+                      src={thumbUrl}
+                      alt={item.title}
+                      onError={(e) => {
+                        if (ytid) {
+                          (e.target as HTMLImageElement).src = `https://i.ytimg.com/vi/${ytid}/mqdefault.jpg`;
+                        }
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                    <div className="absolute inset-0 bg-red-950/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <Play size={18} className="fill-white text-white" />
+                    </div>
+                    <span className="absolute bottom-1.5 right-1.5 bg-zinc-900/90 text-white text-[10px] font-mono px-1.5 py-0.5 rounded border border-white/10">
+                      {item.duration || '3:30'}
+                    </span>
+                  </div>
+
+                  {/* Title & Channel */}
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs font-semibold text-white leading-snug line-clamp-2 group-hover:text-red-400">
+                        {item.title}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                        {item.channel}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onOpenMetadata) onOpenMetadata(item);
+                      }}
+                      className="p-1 text-zinc-400 hover:text-white rounded-full transition-colors"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-5 px-4 rounded-xl bg-zinc-900/40 border border-white/5 text-center">
+            <p className="text-xs text-zinc-400">No watch history yet</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Videos you watch will be saved to your history in real-time with original thumbnails.</p>
+          </div>
+        )}
       </div>
 
       {/* 4. PLAYLISTS / LIBRARY SECTION (MATCHING SCREENSHOT 2 & 3) */}

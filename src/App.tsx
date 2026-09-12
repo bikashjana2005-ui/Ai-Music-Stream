@@ -31,6 +31,9 @@ import { NotificationsModal } from './components/NotificationsModal';
 import { CreateActionModal } from './components/CreateActionModal';
 import { VideoQualitySelectorModal, QualityOptionId } from './components/VideoQualitySelectorModal';
 import { applyAccentTheme } from './utils/accentTheme';
+import { JanmashtamiParticles, JanmashtamiModal } from './components/JanmashtamiEffect';
+import { isJanmashtamiActive } from './utils/janmashtami';
+import { extractYouTubeId } from './utils/youtube';
 
 const TAB_ORDER: TabType[] = ['search', 'subscriptions', 'downloads', 'library', 'settings'];
 
@@ -52,6 +55,14 @@ export default function App() {
   const [tabDirection, setTabDirection] = useState<number>(1);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [isJanmashtamiModalOpen, setIsJanmashtamiModalOpen] = useState<boolean>(false);
+  const [janmashtamiParticlesEnabled, setJanmashtamiParticlesEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aura_janmashtami_particles') !== 'false';
+    } catch {
+      return true;
+    }
+  });
 
   // Tab Navigation History Stack for Device Navigation Bar Back Support
   const tabHistoryRef = useRef<TabType[]>([activeTab]);
@@ -187,7 +198,7 @@ export default function App() {
   };
   const [autoPlayOnSelect, setAutoPlayOnSelect] = useState<boolean>(() => {
     const saved = localStorage.getItem('aura_ai_autoplay_select');
-    return saved ? saved === 'true' : true;
+    return saved ? saved === 'true' : false;
   });
   const [isAutoplayUpNext, setIsAutoplayUpNext] = useState<boolean>(() => {
     try {
@@ -332,13 +343,13 @@ export default function App() {
     setIsAndroidModalOpen(true);
   }, []);
 
-  // Favorites (Liked) state from localStorage
+  // Favorites (Liked) state from localStorage - strictly user-liked only (no auto-liking)
   const [favorites, setFavorites] = useState<Track[]>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_favorites');
-      return saved ? JSON.parse(saved) : DEFAULT_LIKED_TRACKS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return DEFAULT_LIKED_TRACKS;
+      return [];
     }
   });
 
@@ -373,13 +384,29 @@ export default function App() {
     }
   });
 
-  // Watch history state from localStorage
+  // Watch history state from localStorage with accurate YouTube thumbnails
   const [history, setHistory] = useState<Track[]>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_history');
-      return saved ? JSON.parse(saved) : DEFAULT_HISTORY_TRACKS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((t: Track) => {
+            const vid = extractYouTubeId(t.id || (t as any).youtubeUrl || '');
+            const correctThumb = vid && vid.length === 11
+              ? `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
+              : (t.thumbnail || `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`);
+            return {
+              ...t,
+              id: vid || t.id,
+              thumbnail: correctThumb
+            };
+          });
+        }
+      }
+      return [];
     } catch {
-      return DEFAULT_HISTORY_TRACKS;
+      return [];
     }
   });
 
@@ -1246,20 +1273,59 @@ export default function App() {
     setShowVideo(true);
     setIsFullScreenVideo(true);
     setIsOverlayOpen(false);
-    if (currentTrack?.id === track.id) {
-      // Resume playback
-      setIsPlaying(true);
+
+    // Extract clean 11-char YouTube ID and ensure 100% correct YouTube thumbnail
+    const validVideoId = extractYouTubeId(track.id || (track as any).youtubeUrl || '');
+    const correctThumbnail = validVideoId && validVideoId.length === 11
+      ? `https://i.ytimg.com/vi/${validVideoId}/hqdefault.jpg`
+      : (track.thumbnail && !track.thumbnail.includes('unsplash') && !track.thumbnail.includes('picsum')
+          ? track.thumbnail
+          : `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`);
+
+    const trackWithCorrectThumbnail: Track = {
+      ...track,
+      id: validVideoId || track.id,
+      thumbnail: correctThumbnail,
+      addedAt: new Date().toISOString()
+    };
+
+    if (currentTrack?.id === trackWithCorrectThumbnail.id) {
+      // Toggle or keep current track without auto-starting
+      setIsPlaying(false);
     } else {
-      setCurrentTrack(track);
-      setIsPlaying(true);
+      setCurrentTrack(trackWithCorrectThumbnail);
+      setIsPlaying(false);
       setPlaybackTime(0);
       setRealDuration(0);
     }
-    // Record to watch history (deduplicated, latest first)
+
+    // Record to watch history in real-time (deduplicated, latest first) with correct thumbnail
     setHistory((prev) => {
-      const filtered = prev.filter(t => t.id !== track.id);
-      return [track, ...filtered].slice(0, 30);
+      const filtered = prev.filter(t => t.id !== trackWithCorrectThumbnail.id);
+      const updated = [trackWithCorrectThumbnail, ...filtered].slice(0, 50);
+      try {
+        localStorage.setItem('aura_ai_history', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Local history save warning:', err);
+      }
+      return updated;
     });
+
+    // Real-time Cloud History Save to Firestore
+    if (user) {
+      setDoc(doc(db, 'users', user.uid, 'history', trackWithCorrectThumbnail.id), {
+        ...trackWithCorrectThumbnail,
+        userId: user.uid,
+        listenedAt: new Date().toISOString()
+      }, { merge: true }).catch((err) => {
+        console.warn('Real-time cloud history sync warning:', err);
+      });
+    }
+
+    // Dispatch storage event to keep other tabs/views updated in real time
+    try {
+      window.dispatchEvent(new Event('storage'));
+    } catch {}
   };
 
   const handlePlayTrack = (track: Track, forceDirect: boolean = false) => {
@@ -1521,16 +1587,13 @@ export default function App() {
     const idx = list.findIndex(t => t.id === currentTrack.id);
     const nextIdx = (idx + 1) % list.length;
     setCurrentTrack(list[nextIdx]);
-    setIsPlaying(true);
+    setIsPlaying(false);
+    setPlaybackTime(0);
   };
 
   const handleTrackEnded = () => {
-    if (isAutoplayUpNext) {
-      handleNextTrack();
-    } else {
-      setIsPlaying(false);
-      showToast('Video playback completed • Autoplay is OFF', 'info');
-    }
+    setIsPlaying(false);
+    showToast('Video playback completed', 'info');
   };
 
   const handlePrevTrack = () => {
@@ -1539,7 +1602,8 @@ export default function App() {
     const idx = list.findIndex(t => t.id === currentTrack.id);
     const prevIdx = (idx - 1 + list.length) % list.length;
     setCurrentTrack(list[prevIdx]);
-    setIsPlaying(true);
+    setIsPlaying(false);
+    setPlaybackTime(0);
   };
 
   return (
@@ -1574,6 +1638,9 @@ export default function App() {
         />
       )}
 
+      {/* Janmashtami Divine Floating Particles (Active until 6th Sep 2026) */}
+      <JanmashtamiParticles enabled={janmashtamiParticlesEnabled} />
+
       {/* Direct APK & WebAPK Installer Prompt */}
       <PWAInstallBanner showToast={showToast} />
 
@@ -1597,6 +1664,7 @@ export default function App() {
         onOpenShareModal={() => setIsShareModalOpen(true)}
         onOpenWebView={handleOpenWebView}
         onOpenAndroidModal={handleOpenAndroidModal}
+        onOpenJanmashtamiModal={() => setIsJanmashtamiModalOpen(true)}
         isDataSaverMode={isDataSaverMode}
         onToggleDataSaverMode={handleToggleDataSaverMode}
         userName={user?.displayName || 'Bikash Jana'}
@@ -1791,6 +1859,8 @@ export default function App() {
         <GlobalYouTubePlayer
           currentTrack={currentTrack}
           isPlaying={isPlaying}
+          onTogglePlayPause={() => setIsPlaying(prev => !prev)}
+          onSetPlaying={(p) => setIsPlaying(p)}
           volume={volume}
           isMuted={isMuted}
           showVideo={showVideo}
@@ -1995,7 +2065,20 @@ export default function App() {
         isDataSaverActive={isDataSaverMode}
       />
 
-
+      {/* Janmashtami Special Festival Modal (Active until 6th Sep 2026) */}
+      <JanmashtamiModal
+        isOpen={isJanmashtamiModalOpen}
+        onClose={() => setIsJanmashtamiModalOpen(false)}
+        onPlayTrack={handlePlayTrack}
+        particlesOn={janmashtamiParticlesEnabled}
+        onToggleParticles={() => {
+          const next = !janmashtamiParticlesEnabled;
+          setJanmashtamiParticlesEnabled(next);
+          localStorage.setItem('aura_janmashtami_particles', next ? 'true' : 'false');
+          showToast(next ? '✨ Janmashtami floating effects ON' : 'Janmashtami floating effects paused', 'info');
+        }}
+        onShowToast={showToast}
+      />
 
     </div>
   );

@@ -515,11 +515,11 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
         <div className="w-full mt-6 space-y-1.5">
           <div 
             onClick={handleSeek}
-            className="w-full bg-white/15 hover:bg-white/20 rounded-full h-2.5 overflow-hidden cursor-pointer transition-colors relative"
+            className="w-full bg-white/15 hover:bg-white/20 rounded-full h-3 overflow-hidden cursor-pointer transition-colors relative"
             title="Click to seek"
           >
             <div 
-              className="bg-gradient-to-r from-indigo-500 to-violet-500 h-2.5 rounded-full transition-all duration-300"
+              className="bg-gradient-to-r from-rose-500 via-rose-400 to-amber-400 h-3 rounded-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -533,7 +533,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
         <div className="flex items-center justify-between w-full mt-6 px-2">
           <button 
             onClick={() => setIsMuted(!isMuted)} 
-            className="p-2 text-gray-400 hover:text-white transition-colors"
+            className="p-2.5 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/10 active:scale-90"
             title={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted ? <VolumeX size={22} className="text-rose-400" /> : <Volume2 size={22} />}
@@ -542,15 +542,16 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
           <div className="flex items-center gap-6">
             <button 
               onClick={onPrevTrack}
-              className="text-gray-400 hover:text-white transition-colors active:scale-95"
+              className="text-gray-400 hover:text-white transition-colors active:scale-90 p-2 rounded-full hover:bg-white/10"
               title="Previous Track"
             >
               <SkipBack size={26} />
             </button>
 
+            {/* Android M3 Expressive Squircle Play Button */}
             <button 
               onClick={onTogglePlay}
-              className="w-16 h-16 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-full flex items-center justify-center shadow-xl shadow-indigo-600/40 transition-all active:scale-90"
+              className="w-16 h-16 bg-gradient-to-tr from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white rounded-[24px] flex items-center justify-center shadow-xl shadow-rose-600/40 transition-all active:scale-90"
               title={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause size={28} className="fill-current" /> : <Play size={28} className="fill-current ml-1" />}
@@ -558,7 +559,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
 
             <button 
               onClick={onNextTrack}
-              className="text-gray-400 hover:text-white transition-colors active:scale-95"
+              className="text-gray-400 hover:text-white transition-colors active:scale-90 p-2 rounded-full hover:bg-white/10"
               title="Next Track"
             >
               <SkipForward size={26} />
@@ -567,7 +568,7 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
 
           <button 
             onClick={handleShare}
-            className="p-2 text-gray-400 hover:text-white transition-colors"
+            className="p-2.5 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-white/10 active:scale-90"
             title="Share Track"
           >
             <Share2 size={22} />

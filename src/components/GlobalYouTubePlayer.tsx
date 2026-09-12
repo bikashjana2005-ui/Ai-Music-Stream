@@ -4,10 +4,12 @@ import {
   ChevronDown, 
   ChevronUp,
   Maximize2, 
+  Maximize,
   X, 
   PlaySquare, 
   ExternalLink, 
   Settings2, 
+  Settings,
   Globe, 
   GripHorizontal, 
   Scaling, 
@@ -50,7 +52,13 @@ import {
   Heart,
   Smile,
   MoreVertical,
-  Layers
+  Layers,
+  Cast,
+  Subtitles,
+  SkipBack,
+  SkipForward,
+  Bookmark,
+  FolderPlus
 } from 'lucide-react';
 import ReactPlayer from 'react-player/youtube';
 import { db } from '../lib/firebase';
@@ -58,7 +66,9 @@ import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
+import { getNetworkStatus, setLowNetworkMode } from '../utils/networkOptimizer';
 import { YouTubeVideoDescriptionSheet } from './YouTubeVideoDescriptionSheet';
+import { YouTubeFeedCard } from './YouTubeFeedCard';
 
 export type PlayerEngine = 'youtube' | 'youtube-nocookie' | 'invidious' | 'piped' | 'embed';
 
@@ -123,6 +133,8 @@ interface GlobalYouTubePlayerProps {
   darkMode?: boolean;
   isAutoplay?: boolean;
   onToggleAutoplay?: (enabled?: boolean) => void;
+  onTogglePlayPause?: () => void;
+  onSetPlaying?: (playing: boolean) => void;
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -156,16 +168,15 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   downloadedTracks = [],
   darkMode = true,
   isAutoplay = false,
-  onToggleAutoplay
+  onToggleAutoplay,
+  onTogglePlayPause,
+  onSetPlaying
 }) => {
   const playerRef = useRef<ReactPlayer | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const chaptersSectionRef = useRef<HTMLDivElement | null>(null);
   const [showEngineMenu, setShowEngineMenu] = useState<boolean>(false);
   const [showSizePresets, setShowSizePresets] = useState<boolean>(false);
-  const [isBuffering, setIsBuffering] = useState<boolean>(false);
-  const [showBufferIndicator, setShowBufferIndicator] = useState<boolean>(false);
-  const bufferingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isNativeFullScreen, setIsNativeFullScreen] = useState<boolean>(false);
   const [isPlaybackError, setIsPlaybackError] = useState<boolean>(false);
   const [offlinePlayedSeconds, setOfflinePlayedSeconds] = useState<number>(0);
@@ -219,6 +230,49 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   const [isCommentsVisible, setIsCommentsVisible] = useState<boolean>(true);
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({ c1: true });
   const [activeCommentMenuId, setActiveCommentMenuId] = useState<string | null>(null);
+
+  const [showMobileOverlayControls, setShowMobileOverlayControls] = useState<boolean>(true);
+  const [showClosedCaptions, setShowClosedCaptions] = useState<boolean>(false);
+  const [showMobileCommentsSheet, setShowMobileCommentsSheet] = useState<boolean>(false);
+  const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Low Network & Zero-Buffering Engine State
+  const [isPlayerBuffering, setIsPlayerBuffering] = useState<boolean>(false);
+  const bufferingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [lowNetworkModeActive, setLowNetworkModeActive] = useState<boolean>(() => {
+    return getNetworkStatus().isLowNetwork || !!isDataSaverMode;
+  });
+
+  useEffect(() => {
+    const handleNetworkChange = () => {
+      setLowNetworkModeActive(getNetworkStatus().isLowNetwork || !!isDataSaverMode);
+    };
+    window.addEventListener('storage', handleNetworkChange);
+    window.addEventListener('networkModeChanged', handleNetworkChange);
+    return () => {
+      window.removeEventListener('storage', handleNetworkChange);
+      window.removeEventListener('networkModeChanged', handleNetworkChange);
+    };
+  }, [isDataSaverMode]);
+
+  // Auto-hide mobile overlay controls after 3.5s when playing
+  useEffect(() => {
+    if (isPlaying && showMobileOverlayControls) {
+      if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
+      hideControlsTimeoutRef.current = setTimeout(() => {
+        setShowMobileOverlayControls(false);
+      }, 3500);
+    }
+    return () => {
+      if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
+    };
+  }, [isPlaying, showMobileOverlayControls]);
+
+  // Helper to toggle mobile controls
+  const handleToggleMobileControls = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setShowMobileOverlayControls((prev) => !prev);
+  };
 
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -288,6 +342,45 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const totalTrackSeconds = parseDurationToSeconds(currentTrack?.duration);
+  const progressPercent = totalTrackSeconds > 0 ? (currentPlaybackTime / totalTrackSeconds) * 100 : 0;
+
+  const handleSkipBackward = () => {
+    const target = Math.max(0, currentPlaybackTime - 10);
+    if (isOfflineMode) {
+      setOfflinePlayedSeconds(target);
+    } else if (playerRef.current) {
+      playerRef.current.seekTo(target, 'seconds');
+    }
+    setCurrentSeconds(target);
+    onProgress?.(target);
+  };
+
+  const handleSkipForward = () => {
+    const target = Math.min(totalTrackSeconds, currentPlaybackTime + 10);
+    if (isOfflineMode) {
+      setOfflinePlayedSeconds(target);
+    } else if (playerRef.current) {
+      playerRef.current.seekTo(target, 'seconds');
+    }
+    setCurrentSeconds(target);
+    onProgress?.(target);
+  };
+
+  const handleScrubClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const fraction = Math.max(0, Math.min(1, clickX / rect.width));
+    const target = fraction * totalTrackSeconds;
+    if (isOfflineMode) {
+      setOfflinePlayedSeconds(target);
+    } else if (playerRef.current) {
+      playerRef.current.seekTo(target, 'seconds');
+    }
+    setCurrentSeconds(target);
+    onProgress?.(target);
   };
 
   // Offline Audio & Video Progress Timer Driver
@@ -678,11 +771,11 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   let playerBoxClassName = '';
 
   if (isFull) {
-    // YouTube Original Full Player Layout Mode - Always Pure Dark Theme with solid White Border & RGB Visual Effect
+    // YouTube Mobile Full Player Layout Mode - Pure Dark Theme with solid White Border & Inner RGB Visual Effect
     containerClassName = `fixed inset-0 z-[100] w-screen h-screen bg-slate-950 text-slate-100 flex flex-col pointer-events-auto p-0 m-0 overflow-y-auto select-none transition-colors duration-300 dark`;
     playerBoxClassName = isTheaterMode 
-      ? 'relative w-full aspect-video max-h-[88vh] bg-black flex items-center justify-center shadow-2xl border-2 border-white ring-1 ring-white/50 rounded-none sm:rounded-2xl overflow-hidden rgb-video-player-frame'
-      : 'relative w-full aspect-video min-h-[250px] sm:min-h-[360px] md:min-h-[440px] lg:min-h-[500px] xl:min-h-[560px] max-h-[82vh] bg-black flex items-center justify-center shadow-2xl rounded-none sm:rounded-2xl overflow-hidden border-2 border-white ring-1 ring-white/50 rgb-video-player-frame';
+      ? 'relative w-full aspect-video max-h-[88vh] bg-black flex items-center justify-center shadow-2xl border-2 sm:border-[3px] border-white rounded-none sm:rounded-2xl overflow-hidden rgb-video-player-frame'
+      : 'relative w-full aspect-video min-h-[220px] sm:min-h-[340px] md:min-h-[420px] lg:min-h-[480px] xl:min-h-[540px] max-h-[82vh] bg-black flex items-center justify-center shadow-2xl rounded-none sm:rounded-2xl overflow-hidden border-2 sm:border-[3px] border-white rgb-video-player-frame';
   } else if (isHidden) {
     // Background Audio Mode
     containerClassName = 'fixed -top-[9999px] -left-[9999px] w-[320px] h-[180px] pointer-events-none z-[-10] overflow-hidden';
@@ -770,7 +863,7 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
   const getThirdPartyEmbedUrl = () => {
     if (!videoId) return null;
-    const autoplayParam = isPlaying ? 1 : 0;
+    const autoplayParam = 0;
     switch (playerEngine) {
       case 'invidious':
         return `https://yewtu.be/embed/${videoId}?autoplay=${autoplayParam}&dark_mode=true&quality=dash`;
@@ -970,14 +1063,14 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     }
 
     if (playerEngine === 'youtube' || playerEngine === 'youtube-nocookie') {
-      const playerUrl = playerEngine === 'youtube-nocookie' 
-        ? `https://www.youtube-nocookie.com/embed/${videoId}`
-        : `https://www.youtube.com/watch?v=${videoId}`;
+      const playerUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-      // Calculate quality parameter only if user requested specific resolution
+      // Calculate quality parameter: if data saver mode or low resolution is selected, use small/medium for instant buffer-free playback
       let vqParam: string | undefined = undefined;
       const lowerQ = (selectedQuality || '').toLowerCase();
-      if (lowerQ.includes('4k') || lowerQ.includes('2160')) {
+      if (isDataSaverMode || lowNetworkModeActive || lowerQ.includes('saver') || lowerQ.includes('144') || lowerQ.includes('240') || lowerQ.includes('buffer')) {
+        vqParam = 'small';
+      } else if (lowerQ.includes('4k') || lowerQ.includes('2160')) {
         vqParam = 'highres';
       } else if (lowerQ.includes('1080')) {
         vqParam = 'hd1080';
@@ -990,76 +1083,298 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
       }
 
       return (
-        <div className="relative w-full h-full bg-black touch-manipulation">
-          <ReactPlayer
-            ref={playerRef}
-            url={playerUrl}
-            playing={isPlaying}
-            volume={volume / 100}
-            muted={isMuted}
-            playbackRate={playbackSpeed}
-            onEnded={onTrackEnded}
-            onProgress={(state) => onProgress?.(state.playedSeconds)}
-            onDuration={(duration) => onDuration?.(duration)}
-            onBuffer={() => {
-              setIsBuffering(true);
-              if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
-              bufferingTimeoutRef.current = setTimeout(() => {
-                setShowBufferIndicator(true);
-              }, 700);
-            }}
-            onBufferEnd={() => {
-              setIsBuffering(false);
-              setShowBufferIndicator(false);
-              if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
-            }}
-            onReady={() => {
-              setIsBuffering(false);
-              setShowBufferIndicator(false);
-              if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
-              if (isPlaying && playerRef.current) {
-                try {
-                  const internal = playerRef.current.getInternalPlayer();
-                  if (internal && typeof internal.playVideo === 'function') {
-                    internal.playVideo();
+        <div 
+          id="player-container"
+          onClick={handleToggleMobileControls}
+          className="relative w-full h-full bg-black touch-manipulation group/vstage select-none overflow-hidden"
+        >
+          <div id="player" className="w-full h-full">
+            <ReactPlayer
+              ref={playerRef}
+              url={playerUrl}
+              playing={isPlaying}
+              volume={volume / 100}
+              muted={isMuted}
+              playbackRate={playbackSpeed}
+              onEnded={onTrackEnded}
+              onBuffer={() => {
+                setIsPlayerBuffering(true);
+                if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+                bufferingTimeoutRef.current = setTimeout(() => {
+                  setSelectedQuality('240p (Zero Buffer)');
+                  onShowToast?.('⚡ Low connection detected: switched to 240p for zero buffering', 'info');
+                }, 2000);
+              }}
+              onBufferEnd={() => {
+                setIsPlayerBuffering(false);
+                if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
+              }}
+              onProgress={(state) => {
+                onProgress?.(state.playedSeconds);
+                setCurrentSeconds(state.playedSeconds);
+              }}
+              onDuration={(duration) => onDuration?.(duration)}
+              onError={() => setIsPlaybackError(true)}
+              width="100%"
+              height="100%"
+              playsinline={true}
+              controls={false}
+              progressInterval={isDataSaverMode || lowNetworkModeActive ? 1000 : 500}
+              config={{
+                youtube: {
+                  embedOptions: {
+                    host: playerEngine === 'youtube-nocookie' ? 'https://www.youtube-nocookie.com' : 'https://www.youtube.com'
+                  },
+                  playerVars: {
+                    autoplay: 0,
+                    rel: 0,
+                    modestbranding: 1,
+                    enablejsapi: 1,
+                    playsinline: 1,
+                    fs: 0,
+                    controls: 0,
+                    disablekb: 1,
+                    iv_load_policy: 3,
+                    cc_load_policy: 0,
+                    origin: typeof window !== 'undefined' ? window.location.origin : '',
+                    widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
+                    ...(vqParam ? { vq: vqParam } : {})
                   }
-                } catch {
-                  // Ignore browser autoplay policy restrictions
                 }
-              }
-            }}
-            onError={() => setIsPlaybackError(true)}
-            width="100%"
-            height="100%"
-            playsinline={true}
-            controls={true}
-            progressInterval={500}
-            config={{
-              youtube: {
-                playerVars: {
-                  autoplay: isPlaying ? 1 : 0,
-                  rel: 0,
-                  modestbranding: 1,
-                  enablejsapi: 1,
-                  playsinline: 1,
-                  fs: 1,
-                  iv_load_policy: 3,
-                  cc_load_policy: 0,
-                  origin: typeof window !== 'undefined' ? window.location.origin : '',
-                  widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
-                  ...(vqParam ? { vq: vqParam } : {})
-                }
-              }
-            }}
-          />
-          {showBufferIndicator && isPlaying && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none transition-opacity">
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-950/90 text-white border border-white/20 text-xs font-mono font-bold shadow-2xl">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                <span>Buffering Stream...</span>
-              </div>
-            </div>
-          )}
+              }}
+            />
+          </div>
+
+          {/* AUTHENTIC YOUTUBE MOBILE ON-SCREEN HUD OVERLAY */}
+          <AnimatePresence>
+            {(showMobileOverlayControls || !isPlaying) && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0 bg-black/45 backdrop-blur-[0.5px] z-20 flex flex-col justify-between p-3 sm:p-4 pointer-events-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* TOP BAR: Minimize Chevron, Autoplay, Cast, CC, Settings */}
+                <div className="flex items-center justify-between w-full">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFullscreenClick();
+                    }}
+                    className="p-2 text-white hover:text-zinc-200 rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer"
+                    title="Collapse / Minimize Player"
+                  >
+                    <ChevronDown size={24} className="drop-shadow-md stroke-[2.5]" />
+                  </button>
+
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    {/* Autoplay Toggle Switch */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleAutoplay?.(!isAutoplay);
+                      }}
+                      className={`p-1.5 rounded-full flex items-center gap-1 transition-all text-xs font-bold active:scale-95 ${
+                        isAutoplay ? 'text-white' : 'text-zinc-400 hover:text-white'
+                      }`}
+                      title={isAutoplay ? 'Autoplay is ON' : 'Autoplay is OFF'}
+                    >
+                      <div className={`w-7 h-4 rounded-full p-0.5 transition-colors relative flex items-center ${
+                        isAutoplay ? 'bg-white' : 'bg-zinc-700'
+                      }`}>
+                        <div className={`w-3 h-3 rounded-full transition-transform ${
+                          isAutoplay ? 'translate-x-3 bg-zinc-950' : 'translate-x-0 bg-zinc-400'
+                        }`} />
+                      </div>
+                    </button>
+
+                    {/* Low Network Zero-Buffer Toggle */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = !lowNetworkModeActive;
+                        setLowNetworkMode(next);
+                        setLowNetworkModeActive(next);
+                        if (next) {
+                          setSelectedQuality('240p (Zero Buffer)');
+                          onShowToast?.('⚡ Zero Buffer Mode: 240p stream enabled for low connection', 'success');
+                        } else {
+                          setSelectedQuality('Auto');
+                          onShowToast?.('Standard HD video stream restored', 'info');
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
+                        lowNetworkModeActive
+                          ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 shadow-xs'
+                          : 'bg-black/40 text-zinc-300 border border-white/20 hover:text-white'
+                      }`}
+                      title={lowNetworkModeActive ? "Zero-Buffer Mode Active (240p)" : "Enable Zero-Buffer Mode"}
+                    >
+                      <Zap size={11} className={lowNetworkModeActive ? "fill-emerald-400 text-emerald-400" : "text-zinc-400"} />
+                      <span className="hidden sm:inline">{lowNetworkModeActive ? 'Zero Buffer' : 'Data Saver'}</span>
+                    </button>
+
+                    {/* Chromecast / Cast Icon */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShowToast?.('Looking for Chromecast / AirPlay streaming devices...', 'info');
+                      }}
+                      className="p-2 text-white hover:text-zinc-200 rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer"
+                      title="Cast to TV / Speaker"
+                    >
+                      <Cast size={19} className="drop-shadow-md" />
+                    </button>
+
+                    {/* Closed Captions CC Badge */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowClosedCaptions(!showClosedCaptions);
+                        onShowToast?.(showClosedCaptions ? 'Captions turned off' : 'English Captions (CC) turned on', 'info');
+                      }}
+                      className={`px-2 py-0.5 rounded text-xs font-black transition-all active:scale-90 cursor-pointer ${
+                        showClosedCaptions
+                          ? 'bg-white text-zinc-950 shadow-md'
+                          : 'border border-white/80 text-white hover:bg-white/15'
+                      }`}
+                      title="Toggle Subtitles / Captions"
+                    >
+                      CC
+                    </button>
+
+                    {/* Settings / Gear Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowActionMoreMenu(true);
+                      }}
+                      className="p-2 text-white hover:text-zinc-200 rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer"
+                      title="Video Settings & Quality"
+                    >
+                      <Settings size={19} className="drop-shadow-md" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* CENTER CONTROLS: 10s Rewind, Big Play/Pause, 10s Forward */}
+                <div className="flex items-center justify-center gap-8 sm:gap-14 w-full my-auto">
+                  {/* Rewind 10s */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSkipBackward();
+                    }}
+                    className="flex flex-col items-center justify-center p-3 text-white/90 hover:text-white rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer group"
+                    title="Rewind 10 seconds"
+                  >
+                    <RotateCcw size={26} className="group-hover:-rotate-12 transition-transform drop-shadow" />
+                    <span className="text-[10px] font-black mt-0.5 tracking-tighter font-mono">10</span>
+                  </button>
+
+                  {/* Big Play / Pause Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onTogglePlayPause) {
+                        onTogglePlayPause();
+                      } else if (onSetPlaying) {
+                        onSetPlaying(!isPlaying);
+                      }
+                    }}
+                    className="p-4 sm:p-5 rounded-full bg-black/65 hover:bg-black/85 text-white border border-white/20 shadow-2xl backdrop-blur-md transition-all active:scale-90 cursor-pointer hover:scale-105 flex items-center justify-center"
+                    title={isPlaying ? 'Pause Video' : 'Play Video'}
+                  >
+                    {isPlayerBuffering ? (
+                      <div className="w-8 h-8 border-3 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                    ) : isPlaying ? (
+                      <Pause size={32} className="fill-white drop-shadow-lg" />
+                    ) : (
+                      <Play size={32} className="fill-white ml-1 drop-shadow-lg" />
+                    )}
+                  </button>
+
+                  {/* Forward 10s */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSkipForward();
+                    }}
+                    className="flex flex-col items-center justify-center p-3 text-white/90 hover:text-white rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer group"
+                    title="Skip forward 10 seconds"
+                  >
+                    <RotateCcw size={26} className="scale-x-[-1] group-hover:rotate-12 transition-transform drop-shadow" />
+                    <span className="text-[10px] font-black mt-0.5 tracking-tighter font-mono">10</span>
+                  </button>
+                </div>
+
+                {/* BOTTOM BAR: Time Display, Scrubber, Fullscreen */}
+                <div className="w-full space-y-1 pt-1">
+                  {/* Closed Captions Preview (when enabled) */}
+                  {showClosedCaptions && (
+                    <div className="flex justify-center pb-1 pointer-events-none">
+                      <span className="px-3 py-1 bg-black/85 text-white text-xs font-semibold rounded-md border border-white/15 backdrop-blur-sm shadow-md">
+                        ♪ [{decodeHtmlEntities(currentTrack?.title || 'Audio Stream')}] ♪
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Scrub Slider Bar */}
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleScrubClick(e);
+                    }}
+                    className="w-full h-3 flex items-center cursor-pointer relative group/scrub"
+                  >
+                    <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden relative group-hover/scrub:h-1.5 transition-all">
+                      <div 
+                        className="h-full bg-rose-600 rounded-full relative"
+                        style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+                      />
+                    </div>
+                    {/* Scrub Thumb Knob */}
+                    <div 
+                      className="absolute w-3.5 h-3.5 rounded-full bg-rose-600 shadow-md border-2 border-white pointer-events-none -translate-x-1/2 scale-100 group-hover/scrub:scale-125 transition-transform"
+                      style={{ left: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+                    />
+                  </div>
+
+                  {/* Time & Fullscreen Row */}
+                  <div className="flex items-center justify-between text-xs font-mono font-bold text-white drop-shadow">
+                    <div className="flex items-center gap-1.5">
+                      <span>{formatTime(currentPlaybackTime)}</span>
+                      <span className="text-zinc-400">/</span>
+                      <span className="text-zinc-300">{currentTrack?.duration || '3:30'}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFullscreenClick();
+                      }}
+                      className="p-1 text-white hover:text-zinc-200 transition-transform active:scale-90 cursor-pointer"
+                      title="Toggle Fullscreen"
+                    >
+                      <Maximize2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       );
     }
@@ -1201,6 +1516,8 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 <div className="absolute -inset-2.5 rgb-video-ambient-glow rounded-3xl blur-2xl opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
                 <div className={playerBoxClassName}>
+                  {/* Animated RGB Visual Effect strictly on the INSIDE of the White Border */}
+                  <div className="rgb-video-inner-border pointer-events-none" />
                   {renderVideoStage(false)}
                 </div>
               </div>
@@ -1692,11 +2009,13 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
 
                       <div className="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
                         {[
-                          { id: 'Auto (Buffer-Free)', label: 'Auto (Buffer-Free Streaming)', desc: 'Adaptive bitrate • No buffering lag', badge: 'Recommended' },
+                          { id: '240p (Zero Buffer)', label: '240p Zero Buffer Mode', desc: 'Ultra-low data • Instant buffer-free playback on 2G/3G', badge: 'Zero Lag' },
+                          { id: 'Auto (Buffer-Free)', label: 'Auto (Buffer-Free Streaming)', desc: 'Adaptive bitrate • Smooth playback', badge: 'Recommended' },
                           { id: '1080p HD', label: '1080p Full HD', desc: 'Highest clarity for fast networks' },
                           { id: '720p HD', label: '720p HD', desc: 'Crisp balanced stream' },
                           { id: '480p SD', label: '480p Standard', desc: 'Smooth on standard mobile data' },
                           { id: '360p Data Saver', label: '360p Data Saver', desc: 'Instant playback • Minimum data' },
+                          { id: '144p (Data Saver)', label: '144p Ultra Low Bitrate', desc: 'Extreme data saver for very weak signal' },
                         ].map((q) => {
                           const isSelected = selectedQuality === q.id || (q.id.startsWith('Auto') && selectedQuality.startsWith('Auto'));
                           return (
@@ -1829,384 +2148,209 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                 onShowToast={onShowToast}
               />
 
-              {/* AUTHENTIC YOUTUBE COMMENTS SECTION */}
-              <div className="space-y-4 pt-4 border-t border-white/10">
-                {/* Comments Header with Total Count, Sort Dropdown & Close/Open Toggle */}
-                <div className="flex items-center justify-between pb-2 border-b border-white/10 flex-wrap gap-2">
-                  <div className="flex items-center gap-4">
-                    <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                      <MessageSquare size={18} className="text-rose-500" />
-                      <span>{comments.length + 1840} Comments</span>
-                    </h3>
-
-                    {/* YouTube "Sort by" Button */}
-                    {isCommentsVisible && (
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setShowSortMenu(!showSortMenu)}
-                          className="flex items-center gap-1.5 text-xs font-extrabold text-slate-300 hover:text-white px-2.5 py-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                        >
-                          <ListFilter size={15} />
-                          <span>Sort by</span>
-                        </button>
-
-                        {showSortMenu && (
-                          <div className="absolute left-0 top-full mt-1 w-44 bg-slate-950 border border-white/20 rounded-xl shadow-2xl p-1 z-50 text-xs">
-                            <button
-                              type="button"
-                              onClick={() => { setCommentSort('top'); setShowSortMenu(false); }}
-                              className={`w-full text-left px-3 py-2 rounded-lg font-bold transition-colors ${commentSort === 'top' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
-                            >
-                              Top comments
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setCommentSort('newest'); setShowSortMenu(false); }}
-                              className={`w-full text-left px-3 py-2 rounded-lg font-bold transition-colors ${commentSort === 'newest' ? 'bg-rose-600 text-white' : 'text-slate-300 hover:bg-white/10'}`}
-                            >
-                              Newest first
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+              {/* AUTHENTIC YOUTUBE COMMENTS CARD & BOTTOM SHEET */}
+              <div className="space-y-3 pt-2">
+                {/* Mobile Preview Comments Card (Tapping opens YouTube Comments Bottom Sheet) */}
+                <div 
+                  onClick={() => setShowMobileCommentsSheet(true)}
+                  className="p-3.5 bg-zinc-900/95 hover:bg-zinc-850 rounded-2xl border border-white/10 space-y-2 cursor-pointer transition-all group shadow-xl active:scale-[0.99]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm text-white">Comments</span>
+                      <span className="text-xs text-zinc-400 font-semibold">{comments.length > 0 ? comments.length + 1840 : 2}</span>
+                    </div>
+                    {/* Pagination Indicator Dots */}
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                    </div>
                   </div>
 
-                  {/* Open/Close Comments Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCommentsVisible(!isCommentsVisible)}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/15 rounded-full text-xs font-bold text-slate-200 transition-all active:scale-95 cursor-pointer shadow-xs"
-                    title={isCommentsVisible ? "Close Comments" : "Open Comments"}
-                  >
-                    <span>{isCommentsVisible ? 'Close Comments' : 'Open Comments'}</span>
-                    {isCommentsVisible ? <ChevronUp size={14} className="text-rose-400" /> : <ChevronDown size={14} className="text-rose-400" />}
-                  </button>
+                  {/* Initial user prompt row matching YouTube mobile screenshot */}
+                  <div className="flex items-center gap-2.5 pt-0.5 text-xs">
+                    {/* Circular Initial Avatar B (Pink/Magenta) */}
+                    <div className="w-6 h-6 rounded-full bg-pink-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] shadow-sm ring-1 ring-white/10">
+                      B
+                    </div>
+                    <span className="text-zinc-400 font-normal text-xs flex-1">
+                      Comment...
+                    </span>
+                  </div>
                 </div>
 
-                {!isCommentsVisible ? (
-                  <div 
-                    onClick={() => setIsCommentsVisible(true)}
-                    className="p-3.5 bg-zinc-900/95 hover:bg-zinc-850 rounded-2xl border border-white/10 space-y-2 cursor-pointer transition-all group shadow-xl active:scale-[0.99]"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs sm:text-sm text-white">Comments</span>
-                        <span className="text-xs text-zinc-400 font-semibold">191</span>
-                      </div>
-                      {/* Pagination Indicator Dots */}
-                      <div className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                      </div>
-                    </div>
+                {/* YOUTUBE MOBILE COMMENTS BOTTOM SHEET MODAL */}
+                <AnimatePresence>
+                  {showMobileCommentsSheet && (
+                    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                      {/* Dark Backdrop */}
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowMobileCommentsSheet(false)}
+                        className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
+                      />
 
-                    <div className="flex items-start gap-2.5 pt-0.5 text-xs">
-                      {/* Avatar Circle */}
-                      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] shadow-sm">
-                        {comments[0]?.author ? comments[0].author[0].toUpperCase() : 'e'}
-                      </div>
-                      <p className="text-zinc-300 font-normal text-xs line-clamp-2 leading-tight min-w-0 flex-1">
-                        {comments[0]?.text || "Jio, Airtel and Vi planning 12-15% recharge price hike... Meanwhile users: 'Bhai ab 5G lene..."}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* YOUTUBE AUTHENTIC ADD COMMENT FORM */}
-                    <form onSubmit={handleAddComment} className="flex gap-3 pt-1">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-rose-500 via-indigo-600 to-purple-600 flex items-center justify-center font-black text-white shrink-0 text-xs shadow-md ring-2 ring-white/10">
-                        You
-                      </div>
+                      {/* Bottom Sheet Box */}
+                      <motion.div
+                        initial={{ y: '100%', opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: '100%', opacity: 0 }}
+                        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative w-full max-w-lg bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 max-h-[85vh] flex flex-col text-white"
+                      >
+                        {/* Drag Indicator Bar */}
+                        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2 shrink-0" />
 
-                      <div className="flex-1 space-y-2">
-                        <input
-                          type="text"
-                          value={newCommentInput}
-                          onChange={(e) => setNewCommentInput(e.target.value)}
-                          onFocus={() => setIsCommentFocused(true)}
-                          placeholder="Add a comment to YouTube video..."
-                          className="w-full bg-transparent border-b border-white/20 focus:border-white px-0 py-2 text-xs sm:text-sm font-normal text-white placeholder-slate-500 focus:outline-none transition-colors"
-                        />
+                        {/* Comments Header */}
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-800 shrink-0">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                              <span>Comments</span>
+                              <span className="text-xs text-zinc-400 font-semibold">{comments.length > 0 ? comments.length + 1840 : 2}</span>
+                            </h3>
 
-                        {(isCommentFocused || newCommentInput.trim().length > 0) && (
-                          <div className="flex items-center justify-between pt-1 animate-fade-in">
-                            <button
-                              type="button"
-                              className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition-colors cursor-pointer"
-                              title="Add emoji"
-                            >
-                              <Smile size={18} />
-                            </button>
-
-                            <div className="flex items-center gap-2">
+                            {/* Sort Dropdown */}
+                            <div className="relative">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setNewCommentInput('');
-                                  setIsCommentFocused(false);
-                                }}
-                                className="px-3.5 py-1.5 text-xs font-extrabold text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer"
+                                onClick={() => setShowSortMenu(!showSortMenu)}
+                                className="flex items-center gap-1 text-xs font-bold text-zinc-300 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
                               >
-                                Cancel
+                                <ListFilter size={14} />
+                                <span>Sort</span>
                               </button>
+
+                              {showSortMenu && (
+                                <div className="absolute left-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1 z-50 text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setCommentSort('top'); setShowSortMenu(false); }}
+                                    className={`w-full text-left px-3 py-2 rounded-lg font-bold transition-colors ${commentSort === 'top' ? 'bg-rose-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                                  >
+                                    Top comments
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setCommentSort('newest'); setShowSortMenu(false); }}
+                                    className={`w-full text-left px-3 py-2 rounded-lg font-bold transition-colors ${commentSort === 'newest' ? 'bg-rose-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
+                                  >
+                                    Newest first
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowMobileCommentsSheet(false)}
+                            className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+
+                        {/* Add Comment Input Form */}
+                        <form onSubmit={handleAddComment} className="flex gap-2.5 py-3 border-b border-zinc-800 shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center font-black text-white shrink-0 text-xs shadow-md">
+                            B
+                          </div>
+
+                          <div className="flex-1 flex items-center gap-2 bg-zinc-900 rounded-full px-3 py-1.5 border border-zinc-800 focus-within:border-zinc-600">
+                            <input
+                              type="text"
+                              value={newCommentInput}
+                              onChange={(e) => setNewCommentInput(e.target.value)}
+                              placeholder="Add a comment..."
+                              className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
+                            />
+                            {newCommentInput.trim() && (
                               <button
                                 type="submit"
-                                disabled={!newCommentInput.trim()}
-                                className="px-4 py-1.5 bg-white text-slate-950 hover:bg-slate-200 disabled:bg-white/10 disabled:text-slate-500 rounded-full text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                                className="p-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shrink-0"
                               >
                                 <Send size={12} />
-                                <span>Comment</span>
                               </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </form>
-
-                    {/* YOUTUBE AUTHENTIC COMMENTS LIST */}
-                    <div className="space-y-4 pt-3">
-                      {comments.map((cmt) => (
-                        <div key={cmt.id} className="flex gap-3 text-xs group/cmt">
-                          {/* User Avatar */}
-                          <img
-                            src={cmt.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'}
-                            alt={cmt.author}
-                            className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-white/10"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop';
-                            }}
-                          />
-
-                          {/* Comment Content Column */}
-                          <div className="min-w-0 flex-1 space-y-1">
-                            {/* Pinned Badge */}
-                            {cmt.isPinned && (
-                              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 pb-0.5">
-                                <Pin size={13} className="text-slate-300 rotate-45 fill-slate-300" />
-                                <span>Pinned by <strong className="text-slate-200">@{cmt.pinnedBy || cmt.author}</strong></span>
-                              </div>
-                            )}
-
-                            {/* Author Handle, Badges & Time */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`font-black text-xs ${
-                                cmt.author === currentTrack?.channel 
-                                  ? 'bg-slate-800 text-slate-100 px-2 py-0.5 rounded-full border border-white/10' 
-                                  : 'text-slate-100'
-                              }`}>
-                                @{cmt.author}
-                              </span>
-
-                              {cmt.isVerified && (
-                                <CheckCircle2 size={13} className="text-slate-400 fill-slate-700" title="Verified Creator" />
-                              )}
-
-                              <span className="text-[11px] text-slate-400 font-medium">{cmt.timeAgo}</span>
-                            </div>
-
-                            {/* Comment Text */}
-                            <p className="text-xs sm:text-sm text-slate-200 font-normal leading-relaxed whitespace-pre-line">
-                              {cmt.text}
-                            </p>
-
-                            {/* Comment Action Toolbar (Like, Dislike, Heart, Reply, 3-Dots) */}
-                            <div className="flex items-center gap-4 pt-1 text-slate-400 text-xs">
-                              {/* Like Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleCommentLike(cmt.id)}
-                                className={`flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer ${
-                                  cmt.userLiked ? 'text-white font-black' : ''
-                                }`}
-                                title="Like comment"
-                              >
-                                <ThumbsUp size={14} className={cmt.userLiked ? 'fill-white text-white' : ''} />
-                                <span className="text-xs font-semibold">
-                                  {cmt.likes > 0 ? (cmt.likes >= 1000 ? `${(cmt.likes/1000).toFixed(1)}K` : cmt.likes) : ''}
-                                </span>
-                              </button>
-
-                              {/* Dislike Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleCommentDislike(cmt.id)}
-                                className={`flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer ${
-                                  cmt.userDisliked ? 'text-white font-black' : ''
-                                }`}
-                                title="Dislike comment"
-                              >
-                                <ThumbsDown size={14} className={cmt.userDisliked ? 'fill-white text-white' : ''} />
-                              </button>
-
-                              {/* Creator Heart Badge */}
-                              {cmt.creatorHeart && (
-                                <div 
-                                  className="relative flex items-center justify-center cursor-pointer group/heart" 
-                                  title={`Hearted by @${currentTrack?.channel || 'Creator'}`}
-                                >
-                                  <img
-                                    src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-                                    alt="Creator Heart"
-                                    className="w-4 h-4 rounded-full object-cover ring-1 ring-white/30"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = cmt.avatar;
-                                    }}
-                                  />
-                                  <Heart size={10} className="text-rose-500 fill-rose-500 absolute -bottom-1 -right-1" />
-                                </div>
-                              )}
-
-                              {/* Reply Button */}
-                              <button
-                                type="button"
-                                onClick={() => setReplyingToId(replyingToId === cmt.id ? null : cmt.id)}
-                                className="hover:text-white font-bold text-xs text-slate-300 transition-colors cursor-pointer"
-                              >
-                                Reply
-                              </button>
-
-                              {/* 3-Dots Menu */}
-                              <div className="relative ml-auto">
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveCommentMenuId(activeCommentMenuId === cmt.id ? null : cmt.id)}
-                                  className="p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer opacity-80 group-hover/cmt:opacity-100"
-                                  title="Comment options"
-                                >
-                                  <MoreVertical size={14} />
-                                </button>
-
-                                {activeCommentMenuId === cmt.id && (
-                                  <div className="absolute right-0 top-full mt-1 w-36 bg-slate-950 border border-white/20 rounded-xl shadow-2xl p-1 z-50 text-xs">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        navigator.clipboard.writeText(cmt.text);
-                                        setActiveCommentMenuId(null);
-                                        onShowToast?.('Comment copied!', 'info');
-                                      }}
-                                      className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-white/10 rounded-lg font-medium cursor-pointer"
-                                    >
-                                      Copy text
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveCommentMenuId(null);
-                                        onShowToast?.('Comment reported for review', 'info');
-                                      }}
-                                      className="w-full text-left px-3 py-1.5 text-rose-400 hover:bg-white/10 rounded-lg font-medium cursor-pointer"
-                                    >
-                                      Report
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Inline Reply Form */}
-                            {replyingToId === cmt.id && (
-                              <div className="flex gap-2.5 pt-2 mt-2 border-t border-white/10 animate-fade-in">
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-500 to-indigo-600 flex items-center justify-center font-black text-white shrink-0 text-[10px]">
-                                  You
-                                </div>
-                                <div className="flex-1 space-y-2">
-                                  <input
-                                    type="text"
-                                    value={replyInputText}
-                                    onChange={(e) => setReplyInputText(e.target.value)}
-                                    placeholder={`Reply to @${cmt.author}...`}
-                                    className="w-full bg-transparent border-b border-white/20 focus:border-white px-0 py-1 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
-                                  />
-                                  <div className="flex items-center justify-end gap-2 pt-0.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => setReplyingToId(null)}
-                                      className="px-3 py-1 text-xs font-bold text-slate-400 hover:text-white cursor-pointer"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAddReply(cmt.id)}
-                                      disabled={!replyInputText.trim()}
-                                      className="px-3.5 py-1 bg-white text-slate-950 hover:bg-slate-200 disabled:bg-white/10 disabled:text-slate-500 rounded-full text-xs font-black transition-all cursor-pointer disabled:cursor-not-allowed"
-                                    >
-                                      Reply
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Nested Replies Drawer & Toggle */}
-                            {cmt.replies && cmt.replies.length > 0 && (
-                              <div className="pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedReplies(prev => ({ ...prev, [cmt.id]: !prev[cmt.id] }))}
-                                  className="flex items-center gap-2 text-rose-400 hover:bg-rose-500/10 px-3 py-1 rounded-full text-xs font-extrabold transition-colors cursor-pointer"
-                                >
-                                  {expandedReplies[cmt.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                  <span>{expandedReplies[cmt.id] ? 'Hide' : 'Show'} {cmt.replies.length} {cmt.replies.length === 1 ? 'reply' : 'replies'}</span>
-                                </button>
-
-                                {expandedReplies[cmt.id] && (
-                                  <div className="mt-2.5 pl-3 sm:pl-4 border-l-2 border-white/10 space-y-3 animate-fade-in">
-                                    {cmt.replies.map((reply) => (
-                                      <div key={reply.id} className="flex gap-2.5 items-start text-xs">
-                                        <img
-                                          src={reply.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'}
-                                          alt={reply.author}
-                                          className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-white/10"
-                                        />
-                                        <div className="min-w-0 flex-1 space-y-1">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="font-bold text-white text-xs">@{reply.author}</span>
-                                            {reply.isVerified && (
-                                              <CheckCircle2 size={12} className="text-slate-400 fill-slate-700" />
-                                            )}
-                                            <span className="text-[10px] text-slate-400 font-normal">{reply.timeAgo}</span>
-                                          </div>
-                                          <p className="text-slate-200 text-xs font-normal leading-relaxed">{reply.text}</p>
-                                          
-                                          <div className="flex items-center gap-3 pt-0.5 text-slate-400 text-[11px]">
-                                            <button 
-                                              type="button"
-                                              className="flex items-center gap-1 hover:text-white cursor-pointer"
-                                            >
-                                              <ThumbsUp size={12} />
-                                              <span>{reply.likes || ''}</span>
-                                            </button>
-                                            <button 
-                                              type="button"
-                                              className="flex items-center gap-1 hover:text-white cursor-pointer"
-                                            >
-                                              <ThumbsDown size={12} />
-                                            </button>
-                                            <button 
-                                              type="button"
-                                              onClick={() => setReplyingToId(cmt.id)}
-                                              className="hover:text-white font-bold cursor-pointer"
-                                            >
-                                              Reply
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
                             )}
                           </div>
+                        </form>
+
+                        {/* Comments Scrollable List */}
+                        <div className="space-y-4 py-3 overflow-y-auto custom-scrollbar flex-1 pr-1">
+                          {comments.map((cmt) => (
+                            <div key={cmt.id} className="flex gap-3 text-xs group/cmt">
+                              {/* User Avatar */}
+                              <img
+                                src={cmt.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'}
+                                alt={cmt.author}
+                                className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-white/10"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop';
+                                }}
+                              />
+
+                              <div className="min-w-0 flex-1 space-y-1">
+                                {cmt.isPinned && (
+                                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 pb-0.5">
+                                    <Pin size={12} className="text-zinc-300 rotate-45 fill-zinc-300" />
+                                    <span>Pinned by <strong className="text-zinc-200">@{cmt.pinnedBy || cmt.author}</strong></span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-xs text-zinc-200">
+                                    @{cmt.author}
+                                  </span>
+                                  <span className="text-[11px] text-zinc-500">{cmt.timeAgo}</span>
+                                </div>
+
+                                <p className="text-xs text-zinc-200 font-normal leading-relaxed whitespace-pre-line">
+                                  {cmt.text}
+                                </p>
+
+                                <div className="flex items-center gap-4 pt-1 text-zinc-400">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleCommentLike(cmt.id)}
+                                    className={`flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer ${
+                                      cmt.userLiked ? 'text-rose-400 font-bold' : ''
+                                    }`}
+                                  >
+                                    <ThumbsUp size={13} className={cmt.userLiked ? 'fill-rose-400 text-rose-400' : ''} />
+                                    <span className="text-xs">
+                                      {cmt.likes > 0 ? (cmt.likes >= 1000 ? `${(cmt.likes/1000).toFixed(1)}K` : cmt.likes) : ''}
+                                    </span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleCommentDislike(cmt.id)}
+                                    className={`flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer ${
+                                      cmt.userDisliked ? 'text-zinc-200 font-bold' : ''
+                                    }`}
+                                  >
+                                    <ThumbsDown size={13} className={cmt.userDisliked ? 'fill-zinc-200 text-zinc-200' : ''} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setReplyingToId(replyingToId === cmt.id ? null : cmt.id)}
+                                    className="hover:text-white font-bold text-xs text-zinc-300 transition-colors cursor-pointer"
+                                  >
+                                    Reply
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </motion.div>
                     </div>
-                  </>
-                )}
+                  )}
+                </AnimatePresence>
               </div>
 
               </div>
@@ -2377,51 +2521,23 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
                     ))}
                   </div>
                 ) : recommendations.length > 0 ? (
-                  <div className="space-y-2.5 max-h-[750px] overflow-y-auto pr-1 no-scrollbar">
+                  <div className="space-y-4 max-h-[850px] overflow-y-auto pr-1 no-scrollbar pt-1">
                     {recommendations.map((recTrack) => (
-                      <div
-                        key={`yt-full-rec-${recTrack.id}`}
-                        onClick={() => {
-                          if (onPlayTrack) onPlayTrack(recTrack);
+                      <YouTubeFeedCard
+                        key={`yt-feed-rec-${recTrack.id}`}
+                        track={recTrack}
+                        onPlay={(trk) => {
+                          if (onPlayTrack) onPlayTrack(trk);
                         }}
-                        className="flex gap-3 p-2 bg-slate-900/60 hover:bg-slate-800 border border-white/5 hover:border-white/15 rounded-xl cursor-pointer transition-all group shadow-xs"
-                      >
-                        <div className="relative w-28 h-16 rounded-lg overflow-hidden bg-black shrink-0 shadow-sm">
-                          <img
-                            src={`https://i.ytimg.com/vi/${recTrack.id}/hqdefault.jpg`}
-                            alt={recTrack.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
-                            }}
-                          />
-                          <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 rounded text-[9px] font-mono font-bold text-white">
-                            {recTrack.duration || '3:30'}
-                          </div>
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors flex items-center justify-center">
-                            <Play size={16} className="fill-white text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug group-hover:text-rose-300 transition-colors">
-                            {decodeHtmlEntities(recTrack.title)}
-                          </h4>
-                          
-                          <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium truncate">
-                            <Youtube size={11} className="text-rose-500 shrink-0" />
-                            <span className="truncate">{decodeHtmlEntities(recTrack.channel)}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2 text-[9px] text-slate-400 font-mono">
-                            <span>{recTrack.views || '420K views'}</span>
-                            <span>•</span>
-                            <span className="px-1.5 py-0.2 bg-slate-800 text-slate-300 rounded font-sans font-extrabold text-[9px]">
-                              {recTrack.genre || 'Music'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                        onDownload={(trk) => {
+                          if (onDownloadTrack) onDownloadTrack(trk);
+                        }}
+                        isPlayingCurrent={currentTrack?.id === recTrack.id}
+                        onOpenAddToPlaylist={(trk) => {
+                          if (onOpenAddToPlaylist) onOpenAddToPlaylist(trk);
+                        }}
+                        onShowToast={onShowToast}
+                      />
                     ))}
                   </div>
                 ) : (

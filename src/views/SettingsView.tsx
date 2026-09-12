@@ -55,6 +55,8 @@ import { PlayerEngine } from '../components/GlobalYouTubePlayer';
 import { logoutUser, loginWithGoogle } from '../lib/firebase';
 import { CloudflareConfig, YouTubeChannelProfile } from '../types';
 import { getSavedCloudflareConfig, saveCloudflareConfig, measureCloudflareLatency } from '../utils/cloudflare';
+import { MorPankhIcon } from '../components/JanmashtamiEffect';
+import { isJanmashtamiActive } from '../utils/janmashtami';
 
 interface SettingsViewProps {
   darkMode: boolean;
@@ -879,6 +881,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               >
                 Apply Custom
               </button>
+            </div>
+
+            {/* Janmashtami Special Festival Effect (Active until 6th September 2026) */}
+            <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-br from-[#0c1e36] via-[#111c2a] to-[#1e1509] border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center shrink-0">
+                  <MorPankhIcon size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-white flex items-center gap-1">
+                      <span>श्रीकृष्ण जन्माष्टमी विशेष</span>
+                      <span>🪈</span>
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      Active until 6 Sep 2026
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-300 block mt-0.5">
+                    Divine peacock feathers, golden sparkles & Krishna bhajans
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = localStorage.getItem('aura_janmashtami_particles') !== 'false';
+                    const next = !current;
+                    localStorage.setItem('aura_janmashtami_particles', String(next));
+                    window.dispatchEvent(new Event('storage'));
+                    onShowToast(next ? '✨ Janmashtami particles active' : 'Janmashtami particles paused', 'info');
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all cursor-pointer active:scale-95"
+                >
+                  Toggle Particles
+                </button>
+              </div>
             </div>
 
           </div>

@@ -273,16 +273,16 @@
 
 .rgb-video-player-frame {
   position: relative;
-  isolation: isolate;
+  border: 3px solid #ffffff;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 255, 255, 0.3);
 }
 
-/* RGB Radiant Outline Effect surrounding the White Border */
-.rgb-video-player-frame::before {
-  content: '';
+/* RGB Radiant Effect positioned strictly INSIDE the white border */
+.rgb-video-inner-border {
   position: absolute;
-  inset: -3.5px;
+  inset: 0;
   border-radius: inherit;
-  padding: 3.5px;
+  border: 3.5px solid transparent;
   background: linear-gradient(
     115deg,
     #ff0055,
@@ -294,17 +294,18 @@
     #9900ff,
     #ff0099,
     #ff0055
-  );
+  ) border-box;
   background-size: 300% 300%;
-  animation: rgb-rainbow-flow 7s ease infinite;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  animation: rgb-rainbow-flow 6s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
   z-index: 25;
+  box-shadow: inset 0 0 10px rgba(255, 0, 100, 0.6), inset 0 0 18px rgba(0, 229, 255, 0.45);
 }
 
-/* Luminous RGB Ambient Glow Layer */
+/* Luminous RGB Ambient Glow Layer Behind Player */
 .rgb-video-ambient-glow {
   background: linear-gradient(
     135deg,
@@ -316,5 +317,161 @@
   );
   background-size: 250% 250%;
   animation: rgb-rainbow-flow 8s ease infinite, rgb-ambient-pulse 4s ease-in-out infinite;
+}
+
+/* Authentic YouTube IFrame Player Container */
+#player-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+#player {
+  width: 100%;
+  height: 100%;
+}
+
+/* ==========================================================================
+   KRISHNA JANMASHTAMI CELEBRATION EFFECTS (Active until 6th Sep 2026)
+   ========================================================================== */
+
+@keyframes janmashtami-fall {
+  0% {
+    transform: translate3d(0, -60px, 0) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(24px, 45vh, 0) rotate(18deg);
+    opacity: 0.9;
+  }
+  80% {
+    transform: translate3d(-18px, 80vh, 0) rotate(-12deg);
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate3d(12px, 108vh, 0) rotate(35deg);
+    opacity: 0;
+  }
+}
+
+@keyframes divine-shimmer-pulse {
+  0%, 100% {
+    opacity: 0.7;
+    filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.6));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 14px rgba(6, 182, 212, 0.85)) drop-shadow(0 0 20px rgba(245, 158, 11, 0.7));
+  }
+}
+
+@keyframes mor-pankh-sway {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(6deg) scale(1.05);
+  }
+}
+
+.animate-janmashtami-particle {
+  animation-name: janmashtami-fall;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+.janmashtami-glow-border {
+  border-image: linear-gradient(135deg, #0284c7, #10b981, #f59e0b, #ec4899) 1;
+}
+
+.janmashtami-header-glow {
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0.15), rgba(245, 158, 11, 0.18), rgba(16, 185, 129, 0.15));
+}
+
+/* ==========================================================================
+   ANDROID MATERIAL DESIGN 3 EXPRESSIVE SYSTEM (Material You / Android 15 & 16)
+   ========================================================================== */
+
+:root {
+  --m3-surface: #fdf8fd;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #f7f2fa;
+  --m3-surface-container: #f3edf7;
+  --m3-surface-container-high: #ece6f0;
+  --m3-surface-container-highest: #e6e0e9;
+  --m3-primary: #e11d48;
+  --m3-primary-container: #ffe1e7;
+  --m3-on-primary-container: #3b0713;
+}
+
+.dark {
+  --m3-surface: #141218;
+  --m3-surface-container-lowest: #0f0d13;
+  --m3-surface-container-low: #1d1b20;
+  --m3-surface-container: #211f26;
+  --m3-surface-container-high: #2b2930;
+  --m3-surface-container-highest: #36343b;
+  --m3-primary: #fb7185;
+  --m3-primary-container: #4c0519;
+  --m3-on-primary-container: #ffe4e6;
+}
+
+/* Expressive Shape System */
+.rounded-m3-xs { border-radius: 8px; }
+.rounded-m3-sm { border-radius: 12px; }
+.rounded-m3-md { border-radius: 16px; }
+.rounded-m3-lg { border-radius: 20px; }
+.rounded-m3-xl { border-radius: 24px; }
+.rounded-m3-2xl { border-radius: 28px; }
+.rounded-m3-3xl { border-radius: 32px; }
+.rounded-m3-full { border-radius: 9999px; }
+
+/* Material 3 Expressive Tonal Surfaces */
+.bg-m3-surface { background-color: var(--m3-surface); }
+.bg-m3-surface-container-lowest { background-color: var(--m3-surface-container-lowest); }
+.bg-m3-surface-container-low { background-color: var(--m3-surface-container-low); }
+.bg-m3-surface-container { background-color: var(--m3-surface-container); }
+.bg-m3-surface-container-high { background-color: var(--m3-surface-container-high); }
+.bg-m3-surface-container-highest { background-color: var(--m3-surface-container-highest); }
+
+.bg-m3-primary-container { background-color: var(--m3-primary-container); }
+.text-m3-on-primary-container { color: var(--m3-on-primary-container); }
+
+/* Material 3 Expressive Elevation & Tactile Motion */
+.m3-elevation-1 {
+  box-shadow: 0 1px 3px 1px rgba(0, 0, 0, 0.12), 0 1px 2px 0 rgba(0, 0, 0, 0.24);
+}
+
+.m3-elevation-2 {
+  box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.14), 0 1px 2px 0 rgba(0, 0, 0, 0.24);
+}
+
+.m3-elevation-3 {
+  box-shadow: 0 4px 12px 3px rgba(0, 0, 0, 0.16), 0 1px 3px 0 rgba(0, 0, 0, 0.28);
+}
+
+.m3-expressive-bounce {
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.m3-expressive-bounce:active {
+  transform: scale(0.94);
+}
+
+/* Android Bottom Gesture Navigation Pill */
+.m3-android-gesture-bar {
+  width: 134px;
+  height: 4px;
+  border-radius: 9999px;
+  background-color: rgba(160, 160, 175, 0.4);
+  margin-left: auto;
+  margin-right: auto;
 }
 
