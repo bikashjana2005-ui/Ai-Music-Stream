@@ -140,7 +140,7 @@ export const CreateActionModal: React.FC<CreateActionModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white">Sync YouTube Account</h4>
-                    <p className="text-[10px] text-gray-400">Import your Google subs</p>
+                    <p className="text-[10px] text-gray-400">Import your subscriptions</p>
                   </div>
                 </button>
               )}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Download, Heart, ListPlus, MoreVertical, Info, Share2, Music, Zap } from 'lucide-react';
+import { Play, Download, Heart, ListPlus, MoreVertical, Info, Share2, Music, Zap, Tv } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
 import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
@@ -91,13 +91,14 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
             src={getThumb()} 
             alt={title} 
             onError={() => setImgStage(prev => prev + 1)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
             loading="lazy" 
+            decoding="async"
           />
         )}
 
         {/* Hover / Playing Play Overlay */}
-        <div className={`absolute inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-300 ${isPlayingCurrent ? 'opacity-100 bg-black/50' : 'opacity-0 group-hover:opacity-100'}`}>
+        <div className={`absolute inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-150 ${isPlayingCurrent ? 'opacity-100 bg-black/50' : 'opacity-0 group-hover:opacity-100'}`}>
           <div className="p-3.5 bg-rose-600 text-white rounded-full shadow-2xl scale-95 group-hover:scale-105 transition-transform flex items-center justify-center">
             <Play size={22} className="fill-white ml-0.5" />
           </div>
@@ -110,6 +111,15 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
             <span>240p Fast</span>
           </div>
         )}
+
+        {/* Watch Video Badge Top Right */}
+        <div 
+          className="absolute top-2 right-2 bg-black/80 hover:bg-rose-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md backdrop-blur-md flex items-center gap-1 border border-white/15 shadow-sm transition-all"
+          title="Play in Video Player"
+        >
+          <Tv size={11} className="text-rose-400 group-hover:text-white" />
+          <span>Watch</span>
+        </div>
 
         {/* Duration Badge Bottom Right */}
         <div className="absolute bottom-2 right-2 bg-black/85 backdrop-blur-md text-white text-[11px] font-mono font-medium px-1.5 py-0.5 rounded-md shadow-sm border border-white/10">

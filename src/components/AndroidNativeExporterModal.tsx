@@ -45,7 +45,6 @@ dependencies:
     sdk: flutter
   firebase_core: ^2.27.0
   firebase_auth: ^4.17.8
-  google_sign_in: ^6.2.1
   webview_flutter: ^4.7.0
   cupertino_icons: ^1.0.6
 

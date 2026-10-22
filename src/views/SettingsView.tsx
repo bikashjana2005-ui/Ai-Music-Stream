@@ -51,9 +51,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
 import { ACCENT_PRESETS } from '../utils/accentTheme';
-import { PlayerEngine } from '../components/GlobalYouTubePlayer';
-import { logoutUser, loginWithGoogle } from '../lib/firebase';
-import { CloudflareConfig, YouTubeChannelProfile } from '../types';
+import { logoutUser, DEFAULT_TARGET_YOUTUBE_EMAIL, getTargetYouTubeEmail } from '../lib/firebase';
+import { CloudflareConfig, YouTubeChannelProfile, PlayerEngine } from '../types';
 import { getSavedCloudflareConfig, saveCloudflareConfig, measureCloudflareLatency } from '../utils/cloudflare';
 import { MorPankhIcon } from '../components/JanmashtamiEffect';
 import { isJanmashtamiActive } from '../utils/janmashtami';
@@ -111,7 +110,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   setYoutubeApiKey,
   audioQuality,
   setAudioQuality,
-  videoQuality = '1080p',
+  videoQuality = '144p',
   setVideoQuality,
   autoPlayOnSelect,
   setAutoPlayOnSelect,
@@ -133,7 +132,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   subscriptionsCount = 0,
   playlistsCount = 0,
   historyCount = 0,
-  playerEngine = 'youtube',
+  playerEngine = 'nocookie',
   onChangePlayerEngine,
   isDataSaverMode = false,
   onToggleDataSaverMode
@@ -304,31 +303,114 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     { id: 'app', label: 'System', icon: <Smartphone size={14} /> },
   ];
 
+  const savedMobileUser = (() => {
+    try {
+      const raw = localStorage.getItem('aura_mobile_auth');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const displayName = user?.displayName || savedMobileUser?.displayName || (user?.email ? user.email.split('@')[0] : 'Bikash Jana');
+  const userEmail = user?.email || (savedMobileUser?.phoneNumber ? `Mobile: ${savedMobileUser.phoneNumber}` : (getTargetYouTubeEmail() || 'bikashjana2005@gmail.com'));
+  const initialLetter = (displayName.trim()[0] || 'B').toUpperCase();
+
   return (
-    <div className="space-y-4 w-full max-w-4xl mx-auto animate-fade-in pb-32 select-none px-2 sm:px-4 pt-2">
-      {/* SEARCH & SEGMENTED FILTER PILLS */}
-      <div className="space-y-2">
+    <div className="space-y-4 w-full max-w-3xl mx-auto animate-fade-in pb-32 select-none px-2 sm:px-4 pt-1">
+      {/* 1. TOP PROFILE & ACCOUNT SYNC BANNER (iOS Liquid Glass Card) */}
+      <div className="ios-glass-card rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-rose-600 via-red-600 to-amber-500 text-white flex items-center justify-center text-lg font-black shadow-md ring-2 ring-white/30 dark:ring-white/20 shrink-0">
+            {initialLetter}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate">
+                {displayName}
+              </h2>
+              {savedMobileUser?.verified ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-[10px] font-bold flex items-center gap-1">
+                  <ShieldCheck size={11} />
+                  Verified OTP
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 text-[10px] font-black uppercase tracking-wider">
+                  Cloud Sync
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-600 dark:text-zinc-400 truncate mt-0.5">
+              {userEmail}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {(user || savedMobileUser) ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  localStorage.removeItem('aura_mobile_auth');
+                  localStorage.removeItem('aura_mobile_verified');
+                } catch {}
+                await logoutUser();
+                onShowToast('Signed out of account', 'info');
+              }}
+              className="px-3.5 py-1.5 rounded-full ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-rose-500 text-xs font-semibold transition-all active:scale-95 duration-75 flex items-center gap-1.5 cursor-pointer"
+            >
+              <LogOut size={13} />
+              <span>Sign out</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onOpenAuthModal && onOpenAuthModal()}
+              className="px-4 py-2 rounded-full bg-gradient-to-r from-rose-600 to-red-600 text-white text-xs font-bold shadow-md shadow-rose-600/30 hover:brightness-110 active:scale-95 duration-75 flex items-center gap-1.5"
+            >
+              <LogIn size={14} />
+              <span>Connect Account</span>
+            </button>
+          )}
+
+          {onSyncYouTubeAll && (
+            <button
+              type="button"
+              onClick={() => onSyncYouTubeAll()}
+              disabled={isYouTubeSyncing}
+              className="w-8 h-8 rounded-full ios-glass-button flex items-center justify-center text-slate-700 dark:text-zinc-200 transition-all active:scale-95 duration-75"
+              title="Sync All YouTube Data"
+            >
+              <RefreshCw size={14} className={isYouTubeSyncing ? 'animate-spin text-rose-500' : ''} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. SEARCH & SETTINGS CATEGORIES TABS (iOS Liquid Glass Pills) */}
+      <div className="space-y-2.5">
         {/* Search Bar */}
         <div className="relative">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search settings..."
-            className="w-full bg-zinc-900/90 text-white text-xs pl-9 pr-8 py-2.5 rounded-xl border border-red-500/20 shadow-xs focus:outline-none focus:ring-1 focus:ring-red-500 font-medium placeholder:text-zinc-500"
+            placeholder="Search YouTube settings..."
+            className="w-full bg-white/45 dark:bg-black/35 backdrop-blur-xl text-slate-900 dark:text-white text-xs pl-9 pr-8 py-2.5 rounded-full border border-black/5 dark:border-white/12 shadow-xs focus:outline-none focus:ring-1 focus:ring-rose-500 font-medium placeholder:text-slate-500 dark:placeholder:text-zinc-400"
           />
-          <Search size={15} className="absolute left-3 top-3 text-zinc-400" />
+          <Search size={15} className="absolute left-3.5 top-3 text-slate-500 dark:text-zinc-400" />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2.5 text-xs text-zinc-400 hover:text-white"
+              className="absolute right-3 top-2.5 text-xs text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
             >
               ✕
             </button>
           )}
         </div>
 
-        {/* Segmented Filter Pills */}
+        {/* Category Filter Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !searchQuery;
@@ -339,10 +421,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   setActiveTab(tab.id);
                   setSearchQuery('');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 duration-75 ${
                   isActive
-                    ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold shadow-md shadow-red-600/30'
-                    : 'bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 border border-red-500/15'
+                    ? 'ios-glass-pill-active font-bold shadow-sm'
+                    : 'ios-glass-pill text-slate-700 dark:text-zinc-300'
                 }`}
               >
                 {tab.icon}
@@ -353,24 +435,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* GROUPED SETTINGS CARDS */}
-      <div className="space-y-3.5">
+      {/* 3. GROUPED SETTINGS CARDS */}
+      <div className="space-y-4">
 
         {/* ----------------------------------------------------------------------- */}
-        {/* GROUP: VIDEO QUALITY PREFERENCES (Screenshot 1) */}
+        {/* GROUP: VIDEO QUALITY PREFERENCES (iOS Liquid Glass Card) */}
         {/* ----------------------------------------------------------------------- */}
         {showVideoQuality && (
-          <div className="bg-zinc-900/90 rounded-2xl p-4 sm:p-5 border border-red-500/20 shadow-lg shadow-red-950/10 space-y-4 text-white">
-            <div className="flex items-center justify-between border-b border-red-500/15 pb-3">
+          <div className="ios-glass-card rounded-3xl p-4 sm:p-5 space-y-4 shadow-sm text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between border-b border-black/5 dark:border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-red-600/15 text-red-500 flex items-center justify-center border border-red-500/20">
+                <div className="w-8 h-8 rounded-full bg-rose-500/15 text-rose-500 flex items-center justify-center border border-rose-500/20 shadow-xs">
                   <Tv size={17} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                     Video quality preferences
                   </h2>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-slate-600 dark:text-zinc-400">
                     Select your default streaming quality for all videos. You can change streaming quality in player options for single videos.
                   </p>
                 </div>
@@ -379,7 +461,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* Sub-section 1: VIDEO QUALITY ON MOBILE NETWORKS */}
             <div className="space-y-2">
-              <span className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase block pt-1">
+              <span className="text-[11px] font-bold tracking-wider text-slate-600 dark:text-zinc-400 uppercase block pt-1">
                 Video quality on mobile networks
               </span>
               <div className="space-y-1.5">
@@ -393,15 +475,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div
                       key={`mob-qual-${item.id}`}
                       onClick={() => handleSelectMobileQuality(item.id as any)}
-                      className={`p-3 rounded-xl bg-zinc-850/80 border flex items-center justify-between cursor-pointer hover:bg-zinc-800 transition-all select-none ${
-                        isSelected ? 'border-red-500/60 bg-red-950/20' : 'border-red-500/10'
+                      className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all select-none ${
+                        isSelected 
+                          ? 'border-rose-500/60 bg-rose-500/15 dark:bg-rose-500/20 shadow-xs' 
+                          : 'border-black/5 dark:border-white/10 bg-white/40 dark:bg-white/[0.04] hover:bg-white/60 dark:hover:bg-white/[0.08]'
                       }`}
                     >
                       <div className="space-y-0.5 pr-3">
-                        <span className="text-xs font-bold text-white block">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block">
                           {item.title}
                         </span>
-                        <span className="text-[11px] text-zinc-400 block">
+                        <span className="text-[11px] text-slate-600 dark:text-zinc-400 block">
                           {item.desc}
                         </span>
                       </div>
@@ -453,20 +537,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
 
         {/* ----------------------------------------------------------------------- */}
-        {/* GROUP: DATA SAVING (Screenshot 2) */}
+        {/* GROUP: DATA SAVING (iOS Liquid Glass Card) */}
         {/* ----------------------------------------------------------------------- */}
         {showDataSaving && (
-          <div className="bg-zinc-900/90 rounded-2xl p-4 sm:p-5 border border-red-500/20 shadow-lg shadow-red-950/10 space-y-4 text-white">
-            <div className="flex items-center justify-between border-b border-red-500/15 pb-3">
+          <div className="ios-glass-card rounded-3xl p-4 sm:p-5 space-y-4 shadow-sm text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between border-b border-black/5 dark:border-white/10 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-red-600/15 text-red-500 flex items-center justify-center border border-red-500/20">
+                <div className="w-8 h-8 rounded-full bg-rose-500/15 text-rose-500 flex items-center justify-center border border-rose-500/20 shadow-xs">
                   <Gauge size={17} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white">
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
                     Data saving
                   </h2>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-slate-600 dark:text-zinc-400">
                     Control bandwidth, stream packet reduction, and background Wi-Fi usage
                   </p>
                 </div>
@@ -476,26 +560,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {/* Main Data Saving Mode Toggle */}
             <div 
               onClick={() => handleToggleMainDataSaving(!dataSavingMode)}
-              className="p-3.5 rounded-xl bg-zinc-850/80 border border-red-500/15 flex items-center justify-between cursor-pointer hover:bg-zinc-800 transition-all select-none"
+              className="p-3.5 rounded-2xl bg-white/40 dark:bg-white/[0.04] border border-black/5 dark:border-white/10 flex items-center justify-between cursor-pointer hover:bg-white/60 dark:hover:bg-white/[0.08] transition-all select-none"
             >
               <div className="space-y-0.5 pr-3">
-                <span className="text-xs font-bold text-white block">
+                <span className="text-xs font-bold text-slate-900 dark:text-white block">
                   Data saving mode
                 </span>
-                <span className="text-[11px] text-zinc-400 block">
+                <span className="text-[11px] text-slate-600 dark:text-zinc-400 block">
                   Automatically adjusts settings to save mobile data
                 </span>
               </div>
               <div className={`w-10 h-5.5 rounded-full transition-colors p-0.5 shrink-0 flex items-center ${
-                dataSavingMode ? 'bg-gradient-to-r from-red-600 to-rose-600 justify-end shadow-xs' : 'bg-zinc-700 justify-start'
+                dataSavingMode ? 'bg-gradient-to-r from-rose-600 to-red-600 justify-end shadow-xs' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'
               }`}>
-                <div className={`w-4.5 h-4.5 rounded-full shadow-xs ${dataSavingMode ? 'bg-white' : 'bg-zinc-400'}`} />
+                <div className={`w-4.5 h-4.5 rounded-full shadow-xs ${dataSavingMode ? 'bg-white' : 'bg-white dark:bg-zinc-400'}`} />
               </div>
             </div>
 
             {/* Sub-section: DEFAULT SETTINGS */}
             <div className="space-y-2 pt-1">
-              <span className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase block pt-1">
+              <span className="text-[11px] font-bold tracking-wider text-slate-600 dark:text-zinc-400 uppercase block pt-1">
                 Default settings
               </span>
               <div className="space-y-1.5">
@@ -1052,7 +1136,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-white">
-                    Google Account & Sync
+                    Cloud Account & Sync
                   </h2>
                   <p className="text-[11px] text-zinc-400">
                     Sync your favorites, custom playlists and YouTube subscriptions in real time
@@ -1062,7 +1146,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             {/* YouTube Mobile & Account Synchronization Panel */}
-            <div className="p-3.5 rounded-xl bg-zinc-850/80 border border-red-500/15 space-y-3">
+            <div className="p-3.5 rounded-xl bg-zinc-855/80 border border-red-500/15 space-y-3">
+              {/* TARGET YOUTUBE ACCOUNT HIGHLIGHT */}
+              <div className="p-3 rounded-xl bg-gradient-to-r from-red-600/15 via-rose-500/10 to-transparent border border-red-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33 2.78 2.78 0 0 0 1.94 2c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.33 29 29 0 0 0-.46-5.33z"/><polygon fill="#e11d48" points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-white">Target Account</span>
+                      {user?.email && user.email !== 'bikashjana2005@gmail.com' ? (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 font-mono">
+                          {user.email}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="text-[10px] text-zinc-400 block">
+                      Direct YouTube synchronization for subscriptions, liked songs & playlists
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onOpenAuthModal && onOpenAuthModal()}
+                  className="px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="white" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
+                  <span>Connect Account</span>
+                </button>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-red-600 to-rose-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
@@ -1188,6 +1301,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
+            {/* Mobile & OTP Verified Account Card */}
+            <div className="p-3.5 rounded-xl bg-zinc-855/80 border border-emerald-500/25 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black text-sm flex items-center justify-center shadow-sm shrink-0">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-bold text-white">
+                      {savedMobileUser?.displayName || 'Mobile & OTP Login'}
+                    </span>
+                    <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <CheckCircle2 size={10} />
+                      {savedMobileUser?.verified ? 'VERIFIED OTP' : 'FAST SMS'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400 block font-mono">
+                    {savedMobileUser?.phoneNumber || 'Login with Name + Mobile + Verified OTP'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onOpenAuthModal && onOpenAuthModal()}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Smartphone size={13} />
+                <span>{savedMobileUser?.verified ? 'Switch Mobile Profile' : 'Login with Mobile OTP'}</span>
+              </button>
+            </div>
+
             {user ? (
               <div className="p-3.5 rounded-xl bg-zinc-850/80 border border-red-500/15 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -1202,15 +1347,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     />
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-red-600 to-rose-600 text-white font-black text-sm flex items-center justify-center shadow-sm">
-                      {user.displayName?.[0] || 'B'}
+                      {user.displayName?.[0] || user.email?.[0]?.toUpperCase() || 'U'}
                     </div>
                   )}
                   <div>
                     <span className="text-xs font-bold text-white block">
-                      {user.displayName || 'Bikash Jana'}
+                      {user.displayName || (user.isAnonymous ? 'Guest User' : 'Connected Account')}
                     </span>
                     <span className="text-[11px] text-rose-400 font-mono">
-                      {user.email || 'bikashjana908@gmail.com'}
+                      {user.email || (user.isAnonymous ? 'Offline Guest Mode' : 'Cloud Sync Active')}
                     </span>
                   </div>
                 </div>
@@ -1219,7 +1364,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <button
                     onClick={async () => {
                       await logoutUser();
-                      onShowToast('Signed out of Google Account', 'info');
+                      onShowToast('Signed out of account', 'info');
                     }}
                     className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
                   >
@@ -1230,23 +1375,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             ) : (
               <div className="p-4 rounded-xl bg-zinc-850/80 border border-red-500/15 text-center space-y-2">
                 <p className="text-xs text-zinc-300 font-medium">
-                  Sign in with Google to synchronize your favorites, playlists, and subscriptions.
+                  Sign in to synchronize your favorites, playlists, and subscriptions across devices.
                 </p>
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     if (onOpenAuthModal) onOpenAuthModal();
-                    else {
-                      try {
-                        await loginWithGoogle();
-                        onShowToast('Signed in with Google', 'success');
-                      } catch (e: any) {
-                        onShowToast(e.message || 'Could not sign in', 'error');
-                      }
-                    }
                   }}
                   className="px-4 py-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/30 cursor-pointer"
                 >
-                  Sign In with Google
+                  Sign In / Connect Account
                 </button>
               </div>
             )}

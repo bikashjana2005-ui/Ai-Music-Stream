@@ -1,0 +1,136 @@
+--- src/views/SearchView.tsx
++++ src/views/SearchView.tsx
+@@ -608,12 +608,12 @@
+   const isResultsMode = hasSubmitted && query.trim().length > 0;
+ 
+   return (
+-    <div className="space-y-4 animate-fade-in pb-28 w-full max-w-full mx-auto relative">
++    <div className={`space-y-4 animate-fade-in pb-28 w-full max-w-full mx-auto relative ${isSearchingMode ? 'bg-white !text-black min-h-screen' : ''}`}>
+       {/* YouTube Top Search Bar Header (Modern Android Material 3 Design) */}
+-      <div ref={searchContainerRef} className="sticky top-0 z-30 pt-1.5 pb-2 bg-[#0f0f0f] border-b border-white/5">
++      <div ref={searchContainerRef} className={`sticky top-0 z-30 pt-1.5 pb-2 ${isSearchingMode ? 'bg-white border-b border-zinc-200' : 'bg-[#0f0f0f] border-b border-white/5'}`}>
+         <div className="flex items-center gap-2 sm:gap-2.5">
+           
+           {/* Back Navigation Arrow (Clears search & returns to Discovery) */}
+           <button
+             type="button"
+             onClick={handleBackToDiscovery}
+-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#f1f1f1] hover:bg-white/10 active:bg-white/20 transition-all shrink-0 cursor-pointer"
++            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${isSearchingMode ? 'text-black hover:bg-zinc-100' : 'text-[#f1f1f1] hover:bg-white/10 active:bg-white/20'}`}
+             title="Back"
+           >
+             <ArrowLeft size={22} />
+           </button>
+ 
+           {/* Main Search Input Container */}
+           <form onSubmit={handleSubmit} className="relative flex-1">
+             <div className="relative flex items-center">
+               <input
+                 ref={inputRef}
+                 type="text"
+                 value={query}
+                 onChange={(e) => {
+                   setQuery(e.target.value);
+                   setFocusedSuggestionIndex(-1);
+                   setShowDropdown(true);
+                 }}
+                 onFocus={() => {
+                   setIsInputFocused(true);
+                   setShowDropdown(true);
+                 }}
+                 onKeyDown={handleKeyDown}
+                 placeholder="Search YouTube"
+-                className="w-full bg-[#222222] text-[#f1f1f1] pl-4 pr-20 py-2 sm:py-2.5 rounded-full border border-transparent focus:border-zinc-500 focus:outline-none font-normal text-[15px] shadow-xs placeholder:text-[#888888] transition-all"
++                className={`w-full pl-2 pr-12 py-2 sm:py-2.5 focus:outline-none font-normal text-[17px] transition-all ${isSearchingMode ? 'bg-white text-black placeholder:text-zinc-500' : 'bg-[#222222] text-[#f1f1f1] rounded-full border border-transparent focus:border-zinc-500 shadow-xs placeholder:text-[#888888]'}`}
+               />
+ 
+               {/* Right side inner controls (Clear & Search Submit) */}
+               <div className="absolute right-2 flex items-center gap-1">
+                 {query && (
+                   <button
+                     type="button"
+                     onClick={() => {
+                       setQuery('');
+                       setSearchResults([]);
+                       setHasSubmitted(false);
+                       setShowDropdown(true);
+                       inputRef.current?.focus();
+                     }}
+-                    className="p-1.5 text-zinc-400 hover:text-white rounded-full transition-colors cursor-pointer"
++                    className={`p-1.5 rounded-full transition-colors cursor-pointer ${isSearchingMode ? 'text-zinc-400 hover:text-black' : 'text-zinc-400 hover:text-white'}`}
+                     title="Clear search"
+                   >
+                     <X size={18} />
+                   </button>
+                 )}
+               </div>
+             </div>
+           </form>
+ 
+           {/* Standalone Circular Voice Search Mic Button (Modern Android YouTube) */}
+           <button
+             type="button"
+             onClick={() => setShowVoiceModal(true)}
+-            className="w-10 h-10 rounded-full flex items-center justify-center bg-[#222222] text-[#f1f1f1] hover:bg-[#383838] active:scale-95 transition-all shrink-0 cursor-pointer"
++            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${isSearchingMode ? 'bg-zinc-100 text-black hover:bg-zinc-200' : 'bg-[#222222] text-[#f1f1f1] hover:bg-[#383838] active:scale-95'}`}
+             title="Search with your voice"
+           >
+-            <Mic size={20} className="text-white" />
++            <Mic size={20} className={isSearchingMode ? "text-black" : "text-white"} />
+           </button>
+         </div>
+       </div>
+ 
+       {/* VIEW SWITCHER: Suggestions View VS Search Results VS Discovery Hub */}
+       {isSearchingMode ? (
+-        <div className="animate-fade-in" />
++        <div className="animate-fade-in bg-white min-h-screen pt-2">
++          <h2 className="px-4 py-3 text-[19px] font-medium text-black">
++            You may like
++          </h2>
++          <div className="flex flex-col">
++            {[
++              { term: 'star jalsha', type: 'AI recommendation of keywords', img: 'https://images.unsplash.com/photo-1517230878791-4d28214057c2?w=100&h=60&fit=crop' },
++              { term: 'sun bangla', type: 'AI recommendation of keywords', img: 'https://images.unsplash.com/photo-1493225457124-a1a2a5f529db?w=100&h=60&fit=crop' },
++              { term: 'saregama music', type: 'AI recommendation of keywords', img: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&h=60&fit=crop' },
++              { term: 'wwe raw', type: 'AI recommendation of keywords', img: 'https://images.unsplash.com/photo-1552072092-7f9b8d63efcb?w=100&h=60&fit=crop' },
++              { term: 'squirmy and grubs', type: 'AI recommendation of keywords', img: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=100&h=60&fit=crop' },
++              { term: 'hootie frutti by katseye', type: 'AI recommendation of keywords' },
++              { term: 'wrap me in plastic (slowed down version)', type: 'AI recommendation of keywords' },
++              { term: 'david by celia', type: 'AI recommendation of keywords' },
++              { term: 'zelda direct', type: 'AI recommendation of keywords' }
++            ].map((item, idx) => (
++              <div
++                key={`ai-rec-${idx}`}
++                onClick={() => handleSelectTerm(item.term)}
++                className="flex items-center justify-between px-4 py-3.5 hover:bg-zinc-100 active:bg-zinc-200 cursor-pointer transition-colors group"
++              >
++                <div className="flex items-center gap-4 min-w-0 flex-1">
++                  <Search size={22} className="text-black shrink-0" strokeWidth={1.5} />
++                  <div className="flex flex-col flex-1 min-w-0 pr-4">
++                    <span className="text-[17px] font-normal text-black truncate">
++                      {item.term}
++                    </span>
++                    <span className="text-[13px] text-zinc-500 truncate">
++                      {item.type}
++                    </span>
++                  </div>
++                </div>
++                <div className="flex items-center gap-4 shrink-0">
++                  {item.img && (
++                    <img src={item.img} alt="" className="w-16 h-10 object-cover rounded-sm border border-zinc-200" />
++                  )}
++                  <button
++                    type="button"
++                    onClick={(e) => handleAppendTerm(item.term, e)}
++                    className="p-1 text-black hover:text-zinc-600 transition-colors"
++                    title="Insert into search"
++                  >
++                    <ArrowUpLeft size={22} strokeWidth={1.5} />
++                  </button>
++                </div>
++              </div>
++            ))}
++          </div>
++        </div>
+       ) : isResultsMode ? (

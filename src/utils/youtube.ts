@@ -1,19 +1,54 @@
+import { Track } from '../types';
+
 /**
  * Helper to safely extract clean 11-character YouTube video ID
  */
 export const extractYouTubeId = (idOrUrl: string): string => {
   if (!idOrUrl) return "";
   const trimmed = idOrUrl.trim();
-  if (/^[\w-]{11}$/.test(trimmed)) return trimmed;
   
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  // Exact 11-char YouTube ID (standard YouTube IDs are base64-style 11 chars: [a-zA-Z0-9_-]{11})
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed) && !trimmed.startsWith('UC') && !trimmed.includes('__')) {
+    return trimmed;
+  }
+  
+  // Standard YouTube URL formats (watch?v=, youtu.be/, embed/, shorts/)
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = trimmed.match(regExp);
   if (match && match[2] && match[2].length === 11) {
     return match[2];
   }
 
-  const match11 = trimmed.match(/[\w-]{11}/);
-  return match11 ? match11[0] : "";
+  // Common YouTube URL query param ?v=
+  try {
+    if (trimmed.includes('?v=') || trimmed.includes('&v=')) {
+      const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      const v = url.searchParams.get('v');
+      if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+    }
+  } catch {}
+
+  // If input contains an 11-char token that matches YouTube ID structure
+  const tokenMatch = trimmed.match(/[a-zA-Z0-9_-]{11}/);
+  if (tokenMatch && !trimmed.includes(' ') && !tokenMatch[0].startsWith('UC') && !tokenMatch[0].includes('__')) {
+    return tokenMatch[0];
+  }
+
+  return "";
+};
+
+/**
+ * Checks if a given track is present in the favorites/liked list,
+ * safely comparing both exact ID and clean extracted 11-char YouTube ID.
+ */
+export const isTrackLiked = (track: Track | null | undefined, favorites: Track[]): boolean => {
+  if (!track || !favorites || favorites.length === 0) return false;
+  const trackYtId = extractYouTubeId(track.id || track.youtubeUrl || '');
+  return favorites.some(f => {
+    if (f.id === track.id) return true;
+    const fYtId = extractYouTubeId(f.id || f.youtubeUrl || '');
+    return !!(trackYtId && fYtId && trackYtId === fYtId);
+  });
 };
 
 /**

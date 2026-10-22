@@ -68,11 +68,10 @@ export const DEFAULT_LIKED_TRACKS: Track[] = [
     duration: "23:19",
     publishedTime: "2 days ago",
     aiMoodTags: "Experiment • Fun • Gems",
-    genre: "Entertainment",
-    thumbnail: "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=800&auto=format&fit=crop"
+    genre: "Entertainment"
   },
   {
-    id: "fG246bTq7pM_snake",
+    id: "zP44r_M8F7o",
     title: "Bablu Got Bitten By Snake 😭 | बबलू को सांप ने काटा",
     channel: "Crazy XYZ",
     views: "2.9M views",
@@ -82,7 +81,7 @@ export const DEFAULT_LIKED_TRACKS: Track[] = [
     genre: "Entertainment"
   },
   {
-    id: "kite_2026_xyz",
+    id: "jT9EwUuXg9E",
     title: "2026 New Kite Flying Challenge | Kite Stash",
     channel: "Crazy XYZ",
     views: "1.8M views",
@@ -92,7 +91,7 @@ export const DEFAULT_LIKED_TRACKS: Track[] = [
     genre: "Entertainment"
   },
   {
-    id: "VAdGW7QDJiU",
+    id: "BddP6PYo2gs",
     title: "Kesariya - Brahmāstra | Arijit Singh, Pritam | Ranbir Kapoor, Alia Bhatt",
     channel: "Sony Music India",
     views: "520M views",
@@ -102,7 +101,7 @@ export const DEFAULT_LIKED_TRACKS: Track[] = [
     genre: "Hindi"
   },
   {
-    id: "g6fnFALEseE",
+    id: "ElZfdU54Cp8",
     title: "Apna Bana Le - Bhediya | Varun Dhawan, Kriti Sanon | Arijit Singh, Sachin-Jigar",
     channel: "Zee Music Company",
     views: "430M views",
@@ -112,7 +111,7 @@ export const DEFAULT_LIKED_TRACKS: Track[] = [
     genre: "Hindi"
   },
   {
-    id: "WcOqJtWfW9I",
+    id: "VAdGW7QDJiU",
     title: "Chaleya - Jawan | Shah Rukh Khan, Nayanthara | Arijit Singh, Shilpa Rao",
     channel: "T-Series",
     views: "380M views",
@@ -125,40 +124,37 @@ export const DEFAULT_LIKED_TRACKS: Track[] = [
 
 export const DEFAULT_HISTORY_TRACKS: Track[] = [
   {
-    id: "crazy_prank_bablu",
+    id: "o9qL5768sGE",
     title: "Crazy Prank On Bablu Gifting E-Rickshaw 🤣 | OL...",
     channel: "Crazy XYZ",
     views: "369K views",
     duration: "25:57",
     publishedTime: "Today",
     aiMoodTags: "Prank • Funny • Vlog",
-    genre: "Entertainment",
-    thumbnail: "https://images.unsplash.com/photo-1517524008697-84bbe3c3fd98?w=800&auto=format&fit=crop"
+    genre: "Entertainment"
   },
   {
-    id: "apk_phone_build_ai",
+    id: "d0A_O_tK1d4",
     title: "Build Android App in Google AI Studio Using Just Your Ph...",
     channel: "N-Educate",
     views: "11K views",
     duration: "10:59",
     publishedTime: "Today",
     aiMoodTags: "Tutorial • Android • AI",
-    genre: "Technology",
-    thumbnail: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop"
+    genre: "Technology"
   },
   {
-    id: "promo_man_sundar",
+    id: "e-ORhEE9VVg",
     title: "Aakhir Do Din Baad Kiski Shaadi Hone...",
     channel: "मन सुंदर",
     views: "89K views",
     duration: "0:20",
     publishedTime: "Yesterday",
     aiMoodTags: "Promo • Drama • Shorts",
-    genre: "Shorts",
-    thumbnail: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop"
+    genre: "Shorts"
   },
   {
-    id: "anger_then_lost",
+    id: "hLPy0y4_Z1c",
     title: "Anger - Then Lost | Full Episode Story",
     channel: "Crazy XYZ",
     views: "1.2M views",
@@ -168,20 +164,20 @@ export const DEFAULT_HISTORY_TRACKS: Track[] = [
     genre: "Entertainment"
   },
   {
-    id: "VAdGW7QDJiU",
-    title: "Kesariya - Brahmāstra | Arijit Singh, Pritam",
+    id: "LgmxMuW6Fsc",
+    title: "Deva Deva - Brahmāstra | Arijit Singh, Pritam | Amitabh Bachchan, Ranbir Kapoor",
     channel: "Sony Music India",
-    views: "520M views",
-    duration: "4:28",
-    publishedTime: "Yesterday",
-    aiMoodTags: "Hindi • Romantic",
+    views: "210M views",
+    duration: "4:38",
+    publishedTime: "1 year ago",
+    aiMoodTags: "Devotional • Energy • Melody",
     genre: "Hindi"
   }
 ];
 
 export const DEFAULT_TRACKS: Track[] = [
   {
-    id: "BddP6PYo2gs",
+    id: "l_iY5lO9BwI",
     title: "Census | जनगणनाय उत्तर दिते हवे 33टि प्रश्नेर? कौन कौन প্রশ্ন? कौन कौन নথি?",
     channel: "Kolkata TV",
     views: "32K views",
@@ -201,7 +197,7 @@ export const DEFAULT_TRACKS: Track[] = [
     genre: "Podcasts"
   },
   {
-    id: "ElZfdU54Cp8",
+    id: "k4YRWT_Aldo",
     title: "'Dola Re' पर Shreya और Kavita Ji का Iconic Duet | Indian Idol S14 Grand Finale",
     channel: "SET India",
     views: "803K views",
@@ -211,7 +207,7 @@ export const DEFAULT_TRACKS: Track[] = [
     genre: "Hindi"
   },
   {
-    id: "H7Z-64y9418",
+    id: "Xj92p6s5t9I",
     title: "Man Sundar || 6 August || Badi Nani Poonam ka asli chahera aagaya samne",
     channel: "Khtti Mithi Takraar",
     views: "74K views",
@@ -221,47 +217,47 @@ export const DEFAULT_TRACKS: Track[] = [
     genre: "News"
   },
   {
-    id: "VAdGW7QDJiU",
-    title: "Kesariya - Brahmāstra | Arijit Singh, Pritam | Ranbir Kapoor, Alia Bhatt",
-    channel: "Sony Music India",
-    views: "520M views",
-    duration: "4:28",
-    publishedTime: "1 year ago",
-    aiMoodTags: "Hindi • Romantic • Melody",
-    genre: "Hindi"
-  },
-  {
-    id: "22Rk5t5oQ1g",
-    title: "Mon Majhi Re - Boss | Jeet, Subhashree | Arijit Singh Hits",
+    id: "H7Z-64y9418",
+    title: "Tomake Chai - Gangster | Yash, Mimi | Arijit Singh Hits",
     channel: "SVF Bangla",
-    views: "85M views",
-    duration: "4:15",
+    views: "62M views",
+    duration: "4:02",
     publishedTime: "2 years ago",
     aiMoodTags: "Bengali • Romantic • Soulful",
     genre: "Bengali"
   },
   {
+    id: "22Rk5t5oQ1g",
+    title: "Egiye De - Shudhu Tomari Jonyo | Soham, Subhashree | Arijit Singh Hits",
+    channel: "SVF Bangla",
+    views: "48M views",
+    duration: "4:35",
+    publishedTime: "2 years ago",
+    aiMoodTags: "Bengali • Sweet • Acoustic",
+    genre: "Bengali"
+  },
+  {
     id: "g6fnFALEseE",
-    title: "Apna Bana Le - Bhediya | Varun Dhawan, Kriti Sanon | Arijit Singh, Sachin-Jigar",
-    channel: "Zee Music Company",
-    views: "430M views",
-    duration: "4:21",
-    publishedTime: "1 year ago",
-    aiMoodTags: "Hindi • Heartfelt • Acoustic",
+    title: "Raataan Lambiyan - Shershaah | Sidharth, Kiara | Jubin Nautiyal, Asees Kaur",
+    channel: "Sony Music India",
+    views: "890M views",
+    duration: "3:50",
+    publishedTime: "2 years ago",
+    aiMoodTags: "Hindi • Soulful • Love",
     genre: "Hindi"
   },
   {
     id: "WcOqJtWfW9I",
-    title: "Chaleya - Jawan | Shah Rukh Khan, Nayanthara | Arijit Singh, Shilpa Rao",
-    channel: "T-Series",
-    views: "380M views",
-    duration: "3:20",
-    publishedTime: "6 months ago",
-    aiMoodTags: "Hindi • Groovy • Romantic",
-    genre: "Hindi"
+    title: "Tumi Jake Bhalobasho - Praktan | Iman Chakraborty",
+    channel: "Windows Music",
+    views: "35M views",
+    duration: "4:50",
+    publishedTime: "3 years ago",
+    aiMoodTags: "Bengali • Classical • Melodious",
+    genre: "Bengali"
   },
   {
-    id: "RLzC55ai0eo",
+    id: "3tmd-ClpJxA",
     title: "FINALLY MY LAST DAY VLOG is here 🥳🥳🥳 #main #vlog",
     channel: "Nancy Roy",
     views: "48K views",
@@ -530,7 +526,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "bg_bengali_anupam",
+    id: "pX22G0R6XdQ",
     title: "Amake Amar Moto Thakte Dao - Autograph | Anupam Roy",
     channel: "SVF • Anupam Roy Official",
     views: "42M views",
@@ -543,7 +539,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
 
   // --- 3. Punjabi Bangers & Urban Hits ---
   {
-    id: "goat_diljit_punjabi",
+    id: "cl0a3i2wFcc",
     title: "G.O.A.T. - Diljit Dosanjh | Official Music Video | Famous",
     channel: "Diljit Dosanjh • Punjabi Hits",
     views: "320M views",
@@ -554,7 +550,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "lover_diljit_moon",
+    id: "mH_LFkWxpI0",
     title: "Lover - Diljit Dosanjh | MoonChild Era | Intense",
     channel: "Diljit Dosanjh • Pop Punjabi",
     views: "190M views",
@@ -565,7 +561,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "295_sidhu_moosewala",
+    id: "n_FCrCQ6-98",
     title: "295 - Sidhu Moose Wala | The Kidd | Moosetape",
     channel: "Sidhu Moose Wala • Punjabi Legend",
     views: "780M views",
@@ -576,7 +572,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "brown_munde_ap",
+    id: "VNs_cCtdbPc",
     title: "Brown Munde - AP Dhillon, Gurinder Gill, Shinda Kahlon | Gminxr",
     channel: "Run-Up Records • AP Dhillon",
     views: "640M views",
@@ -587,7 +583,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "excuses_ap_dhillon",
+    id: "vX2cDW8LUWk",
     title: "Excuses - AP Dhillon, Gurinder Gill | Intense",
     channel: "Run-Up Records • AP Dhillon",
     views: "410M views",
@@ -598,7 +594,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "softly_karan_aujla",
+    id: "cWMxCE2HTag",
     title: "Softly - Karan Aujla | Ikky | Making Memories",
     channel: "Karan Aujla • Ikky",
     views: "210M views",
@@ -609,7 +605,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "winning_speech_aujla",
+    id: "2Vv-BfVoq4g",
     title: "Winning Speech - Karan Aujla | Mxrci | Street Anthem",
     channel: "Karan Aujla • Punjabi Rap",
     views: "140M views",
@@ -655,7 +651,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "hukum_jailer_anirudh",
+    id: "1F3hm63N14k",
     title: "Hukum - Thalaivar Alappara | Jailer | Rajinikanth | Anirudh Ravichander",
     channel: "Sun TV • Anirudh",
     views: "210M views",
@@ -666,7 +662,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "arabic_kuthu_beast",
+    id: "KUN5Uf9mObQ",
     title: "Arabic Kuthu - Halamithi Habibo | Beast | Thalapathy Vijay | Anirudh",
     channel: "Sun TV • Anirudh Ravichander",
     views: "470M views",
@@ -677,7 +673,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "butta_bomma_telugu",
+    id: "2mDCVzruYzQ",
     title: "Butta Bomma - Ala Vaikunthapurramuloo | Allu Arjun, Pooja Hegde | Thaman S",
     channel: "Aditya Music • Armaan Malik",
     views: "850M views",
@@ -780,7 +776,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "choo_lo_local_train",
+    id: "s4ZyV8U_x3A",
     title: "Choo Lo - The Local Train | Aalas Ka Pedh",
     channel: "The Local Train • Indian Indie Rock",
     views: "220M views",
@@ -791,7 +787,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "kun_faya_kun_rockstar",
+    id: "T94PHkuydcw",
     title: "Kun Faya Kun - Rockstar | Ranbir Kapoor | A.R. Rahman, Mohit Chauhan, Javed Ali",
     channel: "T-Series • A.R. Rahman",
     views: "480M views",
@@ -802,7 +798,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "iktara_lofi_flip",
+    id: "fSS_R91Nimw",
     title: "Iktara - Wake Up Sid | Lofi Chill Flip | Kavita Seth, Amit Trivedi",
     channel: "Sony Music India • Lofi Mixes",
     views: "48M views",
@@ -813,7 +809,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "desi_midnight_lofi_mix",
+    id: "kJQP7kiw5Fk",
     title: "Midnight Indian Lofi Chill Beats | 1 Hour Nonstop Study / Sleep Session",
     channel: "Chill Desi Beats • Lofi Station",
     views: "34M views",
@@ -848,7 +844,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "trakin_top5_tech",
+    id: "Z1BCujX3pw8",
     title: "Top 5 Best Smartphones in India (2026 Edition) - Don't Buy Before This!",
     channel: "Trakin Tech • Tech Reviews",
     views: "1.2M views",
@@ -859,7 +855,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "tech_guruji_ai",
+    id: "EJe48eBqQo4",
     title: "AI Revolution 2026: Everything Changing in India!",
     channel: "Technical Guruji",
     views: "890K views",
@@ -870,7 +866,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "dola_re_idol_grand",
+    id: "7Cr55ZqK3aY",
     title: "'Dola Re' पर Shreya और Kavita Ji का Iconic Duet | Indian Idol S14 Grand Finale",
     channel: "SET India • Indian Idol",
     views: "810K views",
@@ -927,7 +923,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "chaiyya_chaiyya_dilse",
+    id: "PQmrmVs10X8",
     title: "Chaiyya Chaiyya - Dil Se | Shah Rukh Khan, Malaika Arora | A.R. Rahman",
     channel: "Venus • A.R. Rahman, Sukhwinder",
     views: "380M views",
@@ -984,7 +980,7 @@ export const YOUTUBE_SEARCH_DATA: Track[] = [
     isOfficial: true
   },
   {
-    id: "blinding_lights_weeknd",
+    id: "4NRXx6U8ABQ",
     title: "Blinding Lights - The Weeknd | After Hours",
     channel: "The Weeknd • Synthwave",
     views: "1.1B views",

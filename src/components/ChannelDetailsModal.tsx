@@ -397,9 +397,9 @@ export const ChannelDetailsModal: React.FC<ChannelDetailsModalProps> = ({
               </div>
             ) : displayTracks.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {displayTracks.map((track) => (
+                {displayTracks.map((track, idx) => (
                   <TrackCard
-                    key={`ch-modal-track-${track.id}`}
+                    key={`ch-modal-track-${track.id || idx}-${idx}`}
                     track={track}
                     onPlay={onPlay}
                     onDownload={onDownload}

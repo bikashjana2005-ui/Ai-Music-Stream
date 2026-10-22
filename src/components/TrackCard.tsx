@@ -58,7 +58,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
     return (
       <div 
         onClick={() => onPlay(track)}
-        className={`group flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl sm:rounded-3xl border transition-all duration-300 cursor-pointer active:scale-[0.99] backdrop-blur-xl ${
+        className={`group flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl sm:rounded-3xl border transition-all duration-180 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer hover:sm:-translate-y-0.5 active:scale-[0.985] will-change-transform backdrop-blur-xl ${
           isPlayingCurrent 
             ? 'bg-indigo-500/15 dark:bg-indigo-950/60 border-indigo-500/40 dark:border-indigo-500/50 shadow-md ring-2 ring-indigo-500/30' 
             : 'bg-white/70 dark:bg-slate-800/60 border-white/70 dark:border-white/10 hover:border-indigo-500/40 dark:hover:border-indigo-400/40 hover:bg-white/95 dark:hover:bg-slate-800/90 hover:shadow-lg'
@@ -75,12 +75,13 @@ export const TrackCard: React.FC<TrackCardProps> = ({
               src={getThumb()} 
               alt={title} 
               onError={() => setImgStage(prev => prev + 1)}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
               loading="lazy" 
+              decoding="async"
             />
           )}
           
-          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-300 ${isPlayingCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-150 ${isPlayingCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-600/40">
               <Play size={16} className="fill-white ml-0.5" />
             </div>
@@ -185,7 +186,7 @@ export const TrackCard: React.FC<TrackCardProps> = ({
   return (
     <div 
       onClick={() => onPlay(track)}
-      className={`group flex flex-col p-3 rounded-3xl border transition-all duration-300 cursor-pointer active:scale-[0.98] backdrop-blur-xl h-full justify-between ${
+      className={`group flex flex-col p-3 rounded-3xl border transition-all duration-180 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer hover:sm:-translate-y-1 active:scale-[0.985] will-change-transform backdrop-blur-xl h-full justify-between ${
         isPlayingCurrent 
           ? 'bg-indigo-500/15 dark:bg-indigo-950/60 border-indigo-500/40 dark:border-indigo-500/50 shadow-lg ring-2 ring-indigo-500/30' 
           : 'bg-white/70 dark:bg-slate-800/60 border-white/70 dark:border-white/10 hover:border-indigo-500/40 dark:hover:border-indigo-400/40 hover:bg-white/95 dark:hover:bg-slate-800/90 hover:shadow-xl'
@@ -203,12 +204,13 @@ export const TrackCard: React.FC<TrackCardProps> = ({
               src={getThumb()} 
               alt={title} 
               onError={() => setImgStage(prev => prev + 1)}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
               loading="lazy" 
+              decoding="async"
             />
           )}
           
-          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-300 ${isPlayingCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-150 ${isPlayingCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-600/40 scale-90 group-hover:scale-100 transition-transform">
               <Play size={20} className="fill-white ml-0.5" />
             </div>

@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { 
   ArrowLeft, Search, MoreVertical, Play, Download, X, 
   Trash2, Music2, Check, ListPlus, Info, Share2, Tv,
-  Pause, RotateCcw, Filter
+  Pause, RotateCcw, Filter, RefreshCw
 } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
+import { getTargetYouTubeEmail } from '../lib/firebase';
 
 interface YouTubeHistoryProps {
   historyTracks: Track[];
@@ -18,6 +19,8 @@ interface YouTubeHistoryProps {
   onOpenMetadata?: (track: Track) => void;
   onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onBack?: () => void;
+  onSyncYouTubeHistory?: () => Promise<void>;
+  isSyncing?: boolean;
 }
 
 export const YouTubeHistory: React.FC<YouTubeHistoryProps> = ({
@@ -30,7 +33,9 @@ export const YouTubeHistory: React.FC<YouTubeHistoryProps> = ({
   onOpenAddToPlaylist,
   onOpenMetadata,
   onShowToast,
-  onBack
+  onBack,
+  onSyncYouTubeHistory,
+  isSyncing = false
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'videos' | 'shorts' | 'podcasts' | 'music'>('all');
@@ -312,6 +317,17 @@ export const YouTubeHistory: React.FC<YouTubeHistoryProps> = ({
                     <Trash2 size={15} /> Clear all watch history
                   </button>
                 )}
+                {onSyncYouTubeHistory && (
+                  <button
+                    onClick={() => {
+                      setShowTopMenu(false);
+                      onSyncYouTubeHistory();
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs font-semibold hover:bg-rose-500/10 dark:hover:bg-rose-500/20 flex items-center gap-2.5 text-rose-600 dark:text-rose-400 cursor-pointer"
+                  >
+                    <RefreshCw size={15} className={isSyncing ? "animate-spin" : ""} /> Real-time Sync YouTube History
+                  </button>
+                )}
                 <button
                   onClick={() => onShowToast('Watch history is active', 'info')}
                   className="w-full px-4 py-2.5 text-left text-xs font-semibold hover:bg-slate-100 dark:hover:bg-white/10 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 cursor-pointer"
@@ -324,11 +340,26 @@ export const YouTubeHistory: React.FC<YouTubeHistoryProps> = ({
         </div>
       </div>
 
-      {/* 2. HUGE TITLE: "History" */}
-      <div className="mb-4">
-        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-          History
-        </h1>
+      {/* 2. TITLE & REAL-TIME SYNC HEADER */}
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+            History
+          </h1>
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+            Real-time synced with YouTube account ({getTargetYouTubeEmail()})
+          </p>
+        </div>
+        {onSyncYouTubeHistory && (
+          <button
+            onClick={onSyncYouTubeHistory}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-xs transition-all disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
+            <span>{isSyncing ? "Syncing..." : "Sync History"}</span>
+          </button>
+        )}
       </div>
 
       {/* 3. SEARCH WATCH HISTORY BAR */}

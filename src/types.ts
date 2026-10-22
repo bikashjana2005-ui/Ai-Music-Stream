@@ -24,6 +24,7 @@ export interface Track {
   channelId?: string;
   thumbnail?: string;
   artist?: string;
+  youtubeUrl?: string;
 }
 
 export interface YouTubeVideoMetadata {
@@ -58,7 +59,21 @@ export interface Playlist {
   createdAt: number;
 }
 
-export type TabType = 'home' | 'subscriptions' | 'library' | 'downloads' | 'settings' | 'search';
+export interface RealtimeComment {
+  id: string;
+  videoId: string;
+  userId?: string;
+  userName: string;
+  userAvatar?: string;
+  text: string;
+  timestamp: number;
+  likes: number;
+  isOwner?: boolean;
+}
+
+export type TabType = 'home' | 'shorts' | 'subscriptions' | 'library' | 'downloads' | 'settings' | 'search';
+
+export type PlayerEngine = 'youtube' | 'nocookie' | 'invidious' | 'piped' | 'embed' | 'youtube-nocookie';
 
 export interface DownloadConfig {
   format: 'mp3' | 'mp4';

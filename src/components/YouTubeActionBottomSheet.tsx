@@ -67,6 +67,7 @@ export const YouTubeActionBottomSheet: React.FC<YouTubeActionBottomSheetProps> =
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={onClose}
             className="fixed inset-0 bg-black/75 backdrop-blur-xs"
           />
@@ -76,8 +77,8 @@ export const YouTubeActionBottomSheet: React.FC<YouTubeActionBottomSheetProps> =
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-            className="relative w-full max-w-lg bg-[#1f1f1f] text-[#f1f1f1] rounded-t-[28px] border-t border-white/10 shadow-2xl overflow-hidden pb-8 z-10 select-none"
+            transition={{ type: 'spring', damping: 30, stiffness: 380 }}
+            className="relative w-full max-w-lg bg-[#1f1f1f] text-[#f1f1f1] rounded-t-[28px] border-t border-white/10 shadow-2xl overflow-hidden pb-8 z-10 select-none transform-gpu"
           >
             {/* Native Android Drag Handle */}
             <div className="w-full flex justify-center pt-3 pb-2">

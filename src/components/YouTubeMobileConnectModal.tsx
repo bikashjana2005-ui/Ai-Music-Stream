@@ -21,7 +21,13 @@ import {
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { YouTubeChannelProfile, Track } from '../types';
-import { createMobilePairCode, checkMobilePairCode, sendMobilePairSync } from '../lib/firebase';
+import { 
+  createMobilePairCode, 
+  checkMobilePairCode, 
+  sendMobilePairSync,
+  DEFAULT_TARGET_YOUTUBE_EMAIL,
+  getTargetYouTubeEmail
+} from '../lib/firebase';
 
 interface YouTubeMobileConnectModalProps {
   isOpen: boolean;
@@ -68,6 +74,16 @@ export const YouTubeMobileConnectModal: React.FC<YouTubeMobileConnectModalProps>
   const [activeTab, setActiveTab] = useState<'sync' | 'pair' | 'profile'>('sync');
   const [mobileDeviceName, setMobileDeviceName] = useState<string>('Android YouTube Client');
   const [isPaired, setIsPaired] = useState<boolean>(false);
+
+  // Sync Library
+  const handleConnectTargetAccount = async () => {
+    try {
+      await onSyncAll();
+      onShowToast('Cloud library sync complete!', 'success');
+    } catch (e: any) {
+      onShowToast('Could not complete sync. Please verify connection.', 'error');
+    }
+  };
 
   // Generate pairing code
   const handleGeneratePairCode = async () => {
@@ -179,6 +195,32 @@ export const YouTubeMobileConnectModal: React.FC<YouTubeMobileConnectModalProps>
           
           {activeTab === 'sync' && (
             <div className="space-y-4">
+              {/* TARGET ACCOUNT BANNER */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-red-600/15 via-rose-500/10 to-amber-500/10 border border-red-500/25 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-red-600 to-rose-600 text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33 2.78 2.78 0 0 0 1.94 2c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.33 29 29 0 0 0-.46-5.33z"/><polygon fill="#e11d48" points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-black text-slate-900 dark:text-white truncate">YouTube Account</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-600 dark:text-red-400">Sync</span>
+                    </div>
+                    <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate block">
+                      Connect to sync playlists, liked videos and history
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={handleConnectTargetAccount}
+                  disabled={isSyncing}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+                  <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+                </button>
+              </div>
+
               {/* One-Click Sync All Master Card */}
               <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-500/10 via-pink-500/5 to-transparent border border-rose-500/20 space-y-3">
                 <div className="flex items-center justify-between">
@@ -191,7 +233,7 @@ export const YouTubeMobileConnectModal: React.FC<YouTubeMobileConnectModalProps>
                         One-Click Full Sync
                       </h3>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Synchronizes everything from your Google & YouTube account
+                        Synchronizes everything from your personal music library
                       </p>
                     </div>
                   </div>
@@ -311,7 +353,7 @@ export const YouTubeMobileConnectModal: React.FC<YouTubeMobileConnectModalProps>
               <div className="p-3 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30 flex items-start gap-2.5">
                 <ShieldCheck size={16} className="text-blue-500 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Your YouTube data is synced directly through Google OAuth and encrypted in your personal Firestore database (<code className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">users/{user?.uid || 'current'}</code>).
+                  Your music data is synchronized and securely encrypted in your personal Firestore database (<code className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">users/{user?.uid || 'current'}</code>).
                 </p>
               </div>
             </div>

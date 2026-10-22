@@ -13,7 +13,6 @@ import {
   Heart,
   Share2,
   Disc,
-  Video,
   ChevronDown,
   Music,
   ListPlus,
@@ -21,7 +20,8 @@ import {
   Globe,
   ExternalLink,
   Zap,
-  Info
+  Info,
+  Tv
 } from 'lucide-react';
 import { Track } from '../types';
 import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
@@ -55,7 +55,8 @@ interface AudioPlayerOverlayProps {
   onChangePlayerEngine?: (engine: PlayerEngine) => void;
   isDataSaverMode?: boolean;
   onToggleDataSaverMode?: (enabled: boolean) => void;
-  onToggleFullScreen?: () => void;
+  onOpenStandardWebPlayer?: () => void;
+  onOpenVideo?: () => void;
 }
 
 export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
@@ -86,7 +87,8 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
   onChangePlayerEngine,
   isDataSaverMode = false,
   onToggleDataSaverMode,
-  onToggleFullScreen
+  onOpenStandardWebPlayer,
+  onOpenVideo
 }) => {
   const [internalTime, setInternalTime] = useState(0);
   const currentTime = playbackTime || internalTime;
@@ -346,6 +348,17 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
               <span>{isDataSaverMode ? 'Saver ON' : 'Data Saver'}</span>
             </button>
           )}
+
+          {onOpenVideo && (
+            <button
+              onClick={onOpenVideo}
+              className="px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white shadow-md active:scale-95 cursor-pointer border border-rose-500/30"
+              title="Watch Video in Full Video Player"
+            >
+              <Tv size={13} />
+              <span>Watch Video</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 relative">
@@ -377,37 +390,6 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
                 >
                   <span>YouTube NoCookie</span>
                 </button>
-                <button
-                  onClick={() => { onChangePlayerEngine?.('invidious'); setShowEngineDropdown(false); }}
-                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'invidious' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                >
-                  <span>Invidious (3rd Party)</span>
-                </button>
-                <button
-                  onClick={() => { onChangePlayerEngine?.('piped'); setShowEngineDropdown(false); }}
-                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'piped' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                >
-                  <span>Piped (3rd Party)</span>
-                </button>
-                <button
-                  onClick={() => { onChangePlayerEngine?.('embed'); setShowEngineDropdown(false); }}
-                  className={`w-full text-left px-3 py-2 rounded-xl flex items-center justify-between font-medium ${playerEngine === 'embed' ? 'bg-indigo-600 text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
-                >
-                  <span>Direct IFrame</span>
-                </button>
-
-                {videoId && (
-                  <div className="border-t border-white/10 mt-1 pt-1">
-                    <a
-                      href={`https://yewtu.be/watch?v=${videoId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full text-left px-3 py-1.5 rounded-xl text-[11px] text-gray-400 hover:text-white hover:bg-white/5 flex items-center gap-1.5 font-medium"
-                    >
-                      <ExternalLink size={12} /> Open in Invidious Web
-                    </a>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -419,18 +401,6 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
               title="Add to Playlist"
             >
               <ListPlus size={20} />
-            </button>
-          )}
-
-          {onToggleFullScreen && (
-            <button
-              onClick={() => {
-                onToggleFullScreen();
-              }}
-              className="p-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 rounded-full text-white shadow-lg shadow-rose-600/30 transition-all active:scale-90 flex items-center justify-center border border-rose-400/40"
-              title="Launch Full Video Player Mode"
-            >
-              <Video size={20} />
             </button>
           )}
 
@@ -475,6 +445,21 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
           <div className="absolute top-2 right-2 text-white/40">
             <Disc size={28} className={`transition-transform duration-1000 ${isPlaying ? 'animate-spin-slow' : ''}`} />
           </div>
+
+          {/* Quick Watch Video in Full Player Button */}
+          {onOpenVideo && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenVideo();
+              }}
+              className="absolute top-3 left-3 bg-black/70 hover:bg-rose-600 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur-md border border-white/20 shadow-lg flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer z-10"
+              title="Watch Video in Full Video Player"
+            >
+              <Tv size={13} className="text-rose-400 group-hover:text-white" />
+              <span>Watch Video</span>
+            </button>
+          )}
 
           {/* Equalizer Wave Overlay */}
           {isPlaying && (
@@ -636,11 +621,11 @@ export const AudioPlayerOverlay: React.FC<AudioPlayerOverlayProps> = ({
             </div>
           ) : relatedRecommendations.length > 0 ? (
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1 no-scrollbar">
-              {relatedRecommendations.map((recTrack) => {
+              {relatedRecommendations.map((recTrack, rIdx) => {
                 const isCurrent = recTrack.id === track.id;
                 return (
                   <div
-                    key={`overlay-rec-${recTrack.id}`}
+                    key={`overlay-rec-${recTrack.id || rIdx}-${rIdx}`}
                     onClick={() => onPlayTrack ? onPlayTrack(recTrack) : null}
                     className={`flex items-center gap-3 p-2.5 rounded-xl transition-all cursor-pointer group ${
                       isCurrent ? 'bg-rose-600/30 border border-rose-500/50' : 'bg-white/5 hover:bg-white/15'

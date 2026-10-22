@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for redesigning the full video player to match the provided mobile screenshot and updating the mini video player to strictly display the user's real last-played video without default fallbacks.",
+  "updatedAt":  "2026-10-22T09:56:38.554356798Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

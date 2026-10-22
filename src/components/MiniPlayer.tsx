@@ -1,57 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Play, 
-  Pause, 
-  SkipForward, 
-  SkipBack, 
-  Maximize2, 
-  X, 
-  Video, 
-  VideoOff, 
-  Volume2, 
-  VolumeX, 
-  Scaling, 
-  ChevronUp, 
-  ChevronDown,
-  Sparkles,
-  GripHorizontal,
-  Minus,
-  Plus
-} from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Heart, X, Music, Tv } from 'lucide-react';
 import { Track } from '../types';
-import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
+import { decodeHtmlEntities, extractYouTubeId } from '../utils/youtube';
 
-interface MiniPlayerProps {
+export interface MiniPlayerProps {
   currentTrack: Track | null;
   isPlaying: boolean;
   onTogglePlay: () => void;
-  onNextTrack: () => void;
-  onPrevTrack: () => void;
-  onOpenOverlay: () => void;
-  onCloseTrack: () => void;
-  playbackTime: number;
-  realDuration: number;
-  onSeek: (seconds: number) => void;
-  volume: number;
-  setVolume: (v: number) => void;
-  isMuted: boolean;
-  setIsMuted: (m: boolean) => void;
-  showVideo: boolean;
-  onToggleShowVideo: () => void;
-  onShowToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onNextTrack?: () => void;
+  onPrevTrack?: () => void;
+  onOpenOverlay?: () => void;
+  onOpenVideo?: () => void;
+  onClose?: () => void;
+  playbackTime?: number;
+  realDuration?: number;
+  isFavorite?: boolean;
+  onToggleFavorite?: (track: Track) => void;
+  onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
-
-// Preset Figures for Mini Player dimensions (Height in px, Width in px)
-const FIGURE_PRESETS = [
-  { label: 'Compact', height: 52, width: 440, figureTag: '52×440' },
-  { label: 'Standard', height: 68, width: 620, figureTag: '68×620' },
-  { label: 'Large', height: 88, width: 780, figureTag: '88×780' },
-  { label: 'Expanded', height: 110, width: 920, figureTag: '110×920' },
-];
-
-// Scale Factor Figures
-const SCALE_FIGURES = [0.8, 1.0, 1.25, 1.5];
 
 export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   currentTrack,
@@ -60,385 +27,152 @@ export const MiniPlayer: React.FC<MiniPlayerProps> = ({
   onNextTrack,
   onPrevTrack,
   onOpenOverlay,
-  onCloseTrack,
-  playbackTime,
-  realDuration,
-  onSeek,
-  volume,
-  setVolume,
-  isMuted,
-  setIsMuted,
-  showVideo,
-  onToggleShowVideo,
-  onShowToast
+  onOpenVideo,
+  onClose,
+  playbackTime = 0,
+  realDuration = 0,
+  isFavorite = false,
+  onToggleFavorite
 }) => {
-  const [showFigureControls, setShowFigureControls] = useState<boolean>(false);
-  const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  if (!currentTrack) return null;
 
-  // Height and Width figures state saved in localStorage
-  const [heightFigure, setHeightFigure] = useState<number>(() => {
-    const saved = localStorage.getItem('aura_mini_height');
-    return saved ? parseInt(saved, 10) : 68;
-  });
+  const title = decodeHtmlEntities(currentTrack.title || 'Unknown Track');
+  const artist = decodeHtmlEntities(currentTrack.artist || currentTrack.channel || 'Artist');
+  const videoId = extractYouTubeId(currentTrack.id || (currentTrack as any).youtubeUrl || '');
+  const thumb = currentTrack.thumbnail || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '');
 
-  const [widthFigure, setWidthFigure] = useState<number>(() => {
-    const saved = localStorage.getItem('aura_mini_width');
-    return saved ? parseInt(saved, 10) : 620;
-  });
-
-  const [scaleFigure, setScaleFigure] = useState<number>(() => {
-    const saved = localStorage.getItem('aura_mini_scale');
-    return saved ? parseFloat(saved) : 1.0;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('aura_mini_height', String(heightFigure));
-    localStorage.setItem('aura_mini_width', String(widthFigure));
-    localStorage.setItem('aura_mini_scale', String(scaleFigure));
-  }, [heightFigure, widthFigure, scaleFigure]);
-
-  // Reset dismissal when track changes
-  useEffect(() => {
-    if (currentTrack) {
-      setIsDismissed(false);
-    }
-  }, [currentTrack?.id]);
-
-  if (!currentTrack || isDismissed) return null;
-
-  const videoId = extractYouTubeId(currentTrack.id);
-  const title = decodeHtmlEntities(currentTrack.title);
-  const channel = decodeHtmlEntities(currentTrack.channel);
-  const thumbnail = currentTrack.thumbnail || (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop');
-
-  const duration = realDuration || 220;
-  const progressPercent = Math.min(100, Math.max(0, (playbackTime / duration) * 100));
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const handleApplyPreset = (h: number, w: number, tag: string) => {
-    setHeightFigure(h);
-    setWidthFigure(w);
-    onShowToast(`Mini Player figure set to ${tag} (${h}px height)`, 'info');
-  };
-
-  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const pct = Math.max(0, Math.min(1, clickX / rect.width));
-    onSeek(Math.floor(pct * duration));
-  };
+  const progressPercent = realDuration > 0 ? Math.min(100, Math.max(0, (playbackTime / realDuration) * 100)) : 0;
 
   return (
-    <motion.div
-      initial={{ y: 80, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 80, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 350, damping: 28 }}
-      className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-40 pointer-events-auto px-2 w-full flex justify-center"
-      style={{ maxWidth: '100%' }}
-    >
-      <div 
-        className="relative bg-[#1e1a22]/95 dark:bg-[#1a1720]/95 border border-white/15 dark:border-white/10 backdrop-blur-3xl backdrop-saturate-200 rounded-[24px] sm:rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.6)] text-white flex flex-col justify-between overflow-hidden transition-all duration-300 ring-1 ring-white/5"
-        style={{
-          width: `${Math.min(window.innerWidth - 16, widthFigure * scaleFigure)}px`,
-          height: `${heightFigure * scaleFigure}px`,
-        }}
+    <AnimatePresence>
+      <motion.div
+        aria-label="Music Mini Player Bar"
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 80, opacity: 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+        className="fixed z-40 bottom-[64px] sm:bottom-0 left-0 right-0 max-w-7xl mx-auto px-2 sm:px-4 pb-2 sm:pb-3 pointer-events-none select-none"
       >
-        {/* Top Mini Progress Bar Slider */}
-        <div 
-          onClick={handleSeekClick}
-          className="w-full h-1.5 bg-white/10 cursor-pointer relative group shrink-0"
-          title="Click to seek"
+        <div
+          onClick={onOpenOverlay}
+          className="pointer-events-auto relative flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 rounded-2xl sm:rounded-3xl bg-white/80 dark:bg-[#121320]/80 backdrop-blur-3xl border border-black/10 dark:border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.4)] text-gray-900 dark:text-white cursor-pointer group hover:border-red-500/40 transition-all overflow-hidden"
         >
-          <div 
-            className="h-full bg-gradient-to-r from-rose-500 via-rose-400 to-amber-400 rounded-r-full transition-all duration-200"
-            style={{ width: `${progressPercent}%` }}
-          />
-          <div 
-            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-            style={{ left: `calc(${progressPercent}% - 7px)` }}
-          />
-        </div>
+          {/* Top Progress Bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-black/5 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-red-600 to-rose-500 transition-all duration-300 shadow-[0_0_8px_rgba(244,63,94,0.6)]"
+              style={{ width: `${progressPercent || 0}%` }}
+            />
+          </div>
 
-        {/* Main Content Row inside Mini Player */}
-        <div className="flex-1 px-3 sm:px-4 py-1.5 flex items-center justify-between gap-2.5 min-w-0">
-          
-          {/* Left Track Info & Artwork */}
-          <div 
-            onClick={onOpenOverlay}
-            className="flex items-center gap-3 min-w-0 cursor-pointer group flex-1"
-          >
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-[16px] sm:rounded-[18px] overflow-hidden bg-slate-800 border border-white/15 shrink-0 shadow-md group-hover:scale-105 transition-transform">
-              <img 
-                src={thumbnail} 
-                alt={title} 
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200&auto=format&fit=crop';
-                }}
-              />
-              {isPlaying && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-xs">
-                  <div className="flex items-end gap-0.5 h-3">
-                    <span className="w-0.5 h-full bg-rose-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-0.5 h-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-0.5 h-full bg-rose-300 animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
+          {/* Left: Thumbnail & Song Info */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden bg-zinc-800 shrink-0 shadow-md">
+              {thumb ? (
+                <img
+                  src={thumb}
+                  alt={title}
+                  className={`w-full h-full object-cover transition-transform duration-500 ${
+                    isPlaying ? 'scale-105' : 'scale-100 opacity-90'
+                  }`}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400">
+                  <Music className="w-5 h-5" />
                 </div>
+              )}
+              {isPlaying && (
+                <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
               )}
             </div>
 
-            <div className="min-w-0">
-              <h4 className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-rose-300 transition-colors">
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white truncate leading-tight group-hover:text-red-500 transition-colors">
                 {title}
               </h4>
-              <p className="text-[10px] sm:text-xs text-gray-400 font-semibold truncate flex items-center gap-1.5">
-                <span>{channel}</span>
-                <span>•</span>
-                <span className="font-mono text-rose-400">{formatTime(playbackTime)} / {formatTime(duration)}</span>
+              <p className="text-[11px] sm:text-xs text-gray-500 dark:text-zinc-400 truncate mt-0.5">
+                {artist}
               </p>
             </div>
           </div>
 
-          {/* Center Playback Controls */}
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            <button
-              onClick={onPrevTrack}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90 cursor-pointer"
-              title="Previous Track"
-            >
-              <SkipBack size={17} />
-            </button>
-
-            <button
-              onClick={onTogglePlay}
-              className="w-9 h-9 sm:w-11 sm:h-11 rounded-[16px] sm:rounded-[18px] bg-gradient-to-tr from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white flex items-center justify-center shadow-lg shadow-rose-600/30 transition-all active:scale-90 shrink-0 cursor-pointer"
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause size={18} className="fill-white" /> : <Play size={18} className="fill-white ml-0.5" />}
-            </button>
-
-            <button
-              onClick={onNextTrack}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-all active:scale-90 cursor-pointer"
-              title="Next Track"
-            >
-              <SkipForward size={17} />
-            </button>
-          </div>
-
-          {/* Right Action Buttons & Figure Adjuster Trigger */}
-          <div className="flex items-center gap-1 shrink-0">
-            
-            {/* Toggle Video Stream */}
-            <button
-              onClick={onToggleShowVideo}
-              className={`p-1.5 rounded-xl transition-all hidden xs:flex items-center gap-1 text-xs font-bold ${
-                showVideo 
-                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
-                  : 'text-gray-400 hover:text-white hover:bg-white/10'
-              }`}
-              title={showVideo ? "Hide Video Stream" : "Show Floating Video"}
-            >
-              {showVideo ? <Video size={15} /> : <VideoOff size={15} />}
-            </button>
-
-            {/* Mini Player Size Figures Dropdown Toggle */}
-            <div className="relative">
+          {/* Right: Controls */}
+          <div
+            className="flex items-center gap-1 sm:gap-2 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {onToggleFavorite && (
               <button
-                onClick={() => setShowFigureControls(!showFigureControls)}
-                className={`px-2 py-1 rounded-xl text-[11px] font-mono font-black transition-all flex items-center gap-1 border ${
-                  showFigureControls 
-                    ? 'bg-amber-500/30 text-amber-200 border-amber-400/50' 
-                    : 'bg-white/10 hover:bg-white/20 text-gray-200 border-white/15'
+                type="button"
+                onClick={() => onToggleFavorite(currentTrack)}
+                className={`p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all cursor-pointer ${
+                  isFavorite ? 'text-red-500' : 'text-zinc-400 hover:text-white'
                 }`}
-                title="Resize Mini Player using Figures"
+                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               >
-                <Scaling size={13} className="text-amber-400" />
-                <span className="hidden sm:inline">{heightFigure}px</span>
-                <ChevronUp size={12} className={`transition-transform ${showFigureControls ? 'rotate-180' : ''}`} />
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500' : ''}`} />
               </button>
+            )}
 
-              {/* Figure Size Control Panel Popover */}
-              {showFigureControls && (
-                <div className="absolute right-0 bottom-full mb-2 w-72 bg-slate-900 border border-white/20 rounded-2xl shadow-2xl p-3 z-50 text-xs text-white backdrop-blur-2xl space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <span className="font-black text-amber-400 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
-                      <Scaling size={14} /> Mini Player Figures
-                    </span>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {heightFigure}px H × {widthFigure}px W
-                    </span>
-                  </div>
+            {onPrevTrack && (
+              <button
+                type="button"
+                onClick={onPrevTrack}
+                className="hidden xs:flex p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+                title="Previous track"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+            )}
 
-                  {/* Figure Height Presets */}
-                  <div className="space-y-1.5">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Height Figure Presets</div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {FIGURE_PRESETS.map((preset) => (
-                        <button
-                          key={preset.label}
-                          onClick={() => handleApplyPreset(preset.height, preset.width, preset.figureTag)}
-                          className={`px-2.5 py-1.5 rounded-xl text-left font-semibold text-[11px] flex justify-between items-center transition-all ${
-                            heightFigure === preset.height 
-                              ? 'bg-indigo-600 text-white font-bold ring-1 ring-indigo-400' 
-                              : 'bg-white/5 hover:bg-white/15 text-gray-300'
-                          }`}
-                        >
-                          <span>{preset.label}</span>
-                          <span className="font-mono text-[10px] opacity-75">{preset.height}px</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Numerical Figure Inputs */}
-                  <div className="space-y-2 pt-1 border-t border-white/10">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exact Numeric Figures (px)</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-0.5">
-                        <label className="text-[9px] text-gray-400 font-bold block">Height (px)</label>
-                        <input
-                          type="number"
-                          min="48"
-                          max="160"
-                          value={heightFigure}
-                          onChange={(e) => setHeightFigure(parseInt(e.target.value, 10) || 48)}
-                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
-                        />
-                      </div>
-                      <div className="space-y-0.5">
-                        <label className="text-[9px] text-gray-400 font-bold block">Width (px)</label>
-                        <input
-                          type="number"
-                          min="300"
-                          max="1200"
-                          value={widthFigure}
-                          onChange={(e) => setWidthFigure(parseInt(e.target.value, 10) || 300)}
-                          className="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Height Figure Stepper */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      <span>Height Slider</span>
-                      <span className="font-mono text-amber-300">{heightFigure} px</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setHeightFigure(prev => Math.max(48, prev - 8))}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-gray-200 transition-all"
-                        title="Decrease height"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input 
-                        type="range" 
-                        min="48" 
-                        max="140" 
-                        step="4"
-                        value={heightFigure}
-                        onChange={(e) => setHeightFigure(parseInt(e.target.value, 10))}
-                        className="flex-1 accent-indigo-500 cursor-pointer"
-                      />
-                      <button
-                        onClick={() => setHeightFigure(prev => Math.min(140, prev + 8))}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-gray-200 transition-all"
-                        title="Increase height"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Width Figure Stepper */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      <span>Exact Width Figure</span>
-                      <span className="font-mono text-amber-300">{widthFigure} px</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setWidthFigure(prev => Math.max(340, prev - 40))}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-gray-200 transition-all"
-                        title="Decrease width"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <input 
-                        type="range" 
-                        min="340" 
-                        max="1020" 
-                        step="20"
-                        value={widthFigure}
-                        onChange={(e) => setWidthFigure(parseInt(e.target.value, 10))}
-                        className="flex-1 accent-indigo-500 cursor-pointer"
-                      />
-                      <button
-                        onClick={() => setWidthFigure(prev => Math.min(1020, prev + 40))}
-                        className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-gray-200 transition-all"
-                        title="Increase width"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Scale Multiplier Figures */}
-                  <div className="space-y-1">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Scale Factor Figures</div>
-                    <div className="flex items-center gap-1.5">
-                      {SCALE_FIGURES.map((factor) => (
-                        <button
-                          key={factor}
-                          onClick={() => {
-                            setScaleFigure(factor);
-                            onShowToast(`Mini Player scale figure: ${factor}x`, 'info');
-                          }}
-                          className={`flex-1 py-1 rounded-xl text-[11px] font-mono font-bold transition-all ${
-                            scaleFigure === factor
-                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
-                              : 'bg-white/10 hover:bg-white/20 text-gray-300'
-                          }`}
-                        >
-                          {factor}x
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+            <button
+              type="button"
+              onClick={onTogglePlay}
+              className="p-2.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-90 text-white shadow-lg shadow-red-600/30 transition-all cursor-pointer"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause className="w-4 h-4 fill-white" />
+              ) : (
+                <Play className="w-4 h-4 fill-white ml-0.5" />
               )}
-            </div>
-
-            {/* Expand Fullscreen Overlay */}
-            <button
-              onClick={onOpenOverlay}
-              className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-sm active:scale-90"
-              title="Expand Full Player"
-            >
-              <Maximize2 size={15} />
             </button>
 
-            {/* Dismiss Mini Player */}
-            <button
-              onClick={() => setIsDismissed(true)}
-              className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded-xl transition-all"
-              title="Close Mini Player"
-            >
-              <X size={15} />
-            </button>
+            {onNextTrack && (
+              <button
+                type="button"
+                onClick={onNextTrack}
+                className="p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+                title="Next track"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
+            )}
+
+            {onOpenVideo && (
+              <button
+                type="button"
+                onClick={onOpenVideo}
+                className="p-2 rounded-full text-rose-400 hover:text-white hover:bg-rose-600/30 active:scale-95 transition-all cursor-pointer"
+                title="Open Third-Party Full Video Player"
+              >
+                <Tv className="w-4 h-4" />
+              </button>
+            )}
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+                title="Close player"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };

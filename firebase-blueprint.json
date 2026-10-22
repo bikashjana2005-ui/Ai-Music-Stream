@@ -107,6 +107,46 @@
         }
       },
       "required": ["id", "name", "userId"]
+    },
+    "HistoryTrack": {
+      "title": "HistoryTrack",
+      "description": "Track recorded in user real-time YouTube watch history",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "YouTube Video ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Video or song title"
+        },
+        "channel": {
+          "type": "string",
+          "description": "Channel name or artist"
+        },
+        "thumbnail": {
+          "type": "string",
+          "description": "Thumbnail URL"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duration string"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User ID"
+        },
+        "email": {
+          "type": "string",
+          "description": "Connected YouTube email"
+        },
+        "listenedAt": {
+          "type": "string",
+          "description": "Timestamp when played"
+        }
+      },
+      "required": ["id", "title", "userId"]
     }
   },
   "firestore": {
@@ -127,6 +167,12 @@
         "$ref": "#/entities/Playlist"
       },
       "description": "User's custom music playlists"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": {
+        "$ref": "#/entities/HistoryTrack"
+      },
+      "description": "User's real-time watch history"
     },
     "/users/{userId}/activity/{activityId}": {
       "schema": {

@@ -2,113 +2,106 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { AppLogo } from './AppLogo';
 import { RakhiLogoEffect } from './RakhiLogoEffect';
-import { isRakshaBandhanToday } from '../utils/festivalUtils';
+import { DurgaPujaLogoEffect } from './DurgaPujaLogoEffect';
+import { LaxmiPujaLogoEffect } from './LaxmiPujaLogoEffect';
+import { isRakshaBandhanToday, isDurgaPujaActive, isLaxmiPujaActive } from '../utils/festivalUtils';
 
 export const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
-  const [progress, setProgress] = useState(0);
   const isRakhiDay = isRakshaBandhanToday();
+  const isDurgaPuja = isDurgaPujaActive();
+  const isLaxmiPuja = isLaxmiPujaActive();
+  const [hasCompleted, setHasCompleted] = useState(false);
+
+  const handleFinish = () => {
+    if (hasCompleted) return;
+    setHasCompleted(true);
+    onCompleteRef.current();
+  };
 
   useEffect(() => {
-    // Fill progress bar smoothly
-    const progressTimer = setTimeout(() => {
-      setProgress(100);
-    }, 50);
-
-    // Call onComplete after display duration (allow festive animation to shine)
-    const displayDuration = isRakhiDay ? 1800 : 1350;
+    // Ultra-fast logo presentation with 320ms presentation & immediate transition
     const completeTimer = setTimeout(() => {
-      onCompleteRef.current();
-    }, displayDuration);
+      handleFinish();
+    }, 320);
 
     return () => {
-      clearTimeout(progressTimer);
       clearTimeout(completeTimer);
     };
-  }, [isRakhiDay]);
+  }, []);
 
   return (
     <motion.div
       initial={{ opacity: 1 }}
       exit={{ 
-        opacity: 0, 
-        scale: 1.04, 
-        transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } 
+        opacity: 0,
+        scale: 1.02,
+        transition: { duration: 0.1, ease: 'easeOut' } 
       }}
-      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white text-slate-900 overflow-hidden pointer-events-none select-none"
+      onClick={handleFinish}
+      className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white dark:bg-[#090d16] overflow-hidden select-none cursor-pointer"
     >
+      {/* Subtle Ambient Radial Backlight */}
+      <div className={`absolute w-72 h-72 sm:w-88 sm:h-88 rounded-full blur-3xl pointer-events-none -translate-y-6 ${
+        isLaxmiPuja 
+          ? 'bg-gradient-to-r from-amber-500/30 via-yellow-400/35 to-rose-600/25' 
+          : 'bg-rose-600/15 dark:bg-rose-600/20'
+      }`} />
+
       <motion.div
-        initial={{ scale: 0.85, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 1.05, opacity: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 flex flex-col items-center justify-center px-6 text-center"
+        initial={{ scale: 0.92, opacity: 0, y: 4 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 1.02, opacity: 0 }}
+        transition={{ duration: 0.12, ease: 'easeOut' }}
+        className="flex flex-col items-center justify-center text-center relative z-10 px-4"
       >
-        {/* Centered Animated App Logo (with Rakhi adornment on Raksha Bandhan) */}
-        <motion.div 
-          initial={{ scale: 0.7, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.05 }}
-          className="relative"
-        >
-          {isRakhiDay ? (
+        {/* Centered App Logo with Glow and Festive Effects */}
+        <div className="relative rounded-2xl shadow-2xl shadow-rose-600/25 flex items-center justify-center mb-5 sm:mb-6">
+          {isLaxmiPuja ? (
+            <LaxmiPujaLogoEffect>
+              <AppLogo size={104} className="sm:w-28 sm:h-28" glow={true} />
+            </LaxmiPujaLogoEffect>
+          ) : isDurgaPuja ? (
+            <DurgaPujaLogoEffect>
+              <AppLogo size={104} className="sm:w-28 sm:h-28" glow={true} />
+            </DurgaPujaLogoEffect>
+          ) : isRakhiDay ? (
             <RakhiLogoEffect>
-              <div className="relative rounded-full shadow-2xl shadow-amber-600/30">
-                <AppLogo size={110} className="sm:w-32 sm:h-32" />
-              </div>
+              <AppLogo size={104} className="sm:w-28 sm:h-28" glow={true} />
             </RakhiLogoEffect>
           ) : (
-            <div className="relative rounded-full shadow-2xl shadow-black/10">
-              <AppLogo size={110} className="sm:w-32 sm:h-32" />
-            </div>
+            <AppLogo size={104} className="sm:w-28 sm:h-28" glow={true} />
           )}
-        </motion.div>
+        </div>
 
-        {/* Brand Name */}
-        <motion.h1
-          initial={{ y: 8, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.15 }}
-          className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-6"
-        >
-          Ai Music Stream
-        </motion.h1>
-
-        {/* Raksha Bandhan Festive Greeting Badge (Only for Today) */}
-        {isRakhiDay && (
-          <motion.div
-            initial={{ opacity: 0, y: 6, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.22 }}
-            className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-500/15 via-rose-500/15 to-amber-500/15 border border-amber-500/30 shadow-xs"
-          >
-            <span className="text-amber-500 text-xs">✨</span>
-            <span className="text-xs font-bold bg-gradient-to-r from-amber-600 via-rose-600 to-amber-600 bg-clip-text text-transparent tracking-wide">
-              Happy Raksha Bandhan
+        {/* Application Name: Ai Music Stream */}
+        <div className="space-y-1 flex flex-col items-center mt-2">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5 leading-tight">
+            <span className="bg-gradient-to-r from-red-600 via-rose-500 to-rose-600 bg-clip-text text-transparent">
+              Ai
             </span>
-            <span className="text-amber-500 text-xs">✨</span>
-          </motion.div>
-        )}
+            <span>Music Stream</span>
+          </h1>
+          <p className="text-[11px] sm:text-xs font-semibold tracking-wider text-slate-500 dark:text-zinc-400 uppercase">
+            Instant Music & Video
+          </p>
+        </div>
 
-        {/* Minimal Progress Line */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.25 }}
-          className="w-40 sm:w-48 h-1 bg-slate-100 rounded-full overflow-hidden mt-6"
-        >
-          <div 
-            className={`h-full rounded-full transition-all duration-[1200ms] ease-out ${
-              isRakhiDay ? 'bg-gradient-to-r from-amber-500 via-rose-500 to-amber-500' : 'bg-slate-900'
-            }`}
-            style={{ width: `${progress}%` }}
+        {/* Rapid Micro Loader Line (Fills in 220ms for ultra-fast launch) */}
+        <div className="w-28 sm:w-36 h-1 bg-slate-200 dark:bg-white/10 rounded-lg overflow-hidden mt-4">
+          <motion.div 
+            initial={{ width: '0%' }}
+            animate={{ width: '100%' }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="h-full bg-gradient-to-r from-red-600 to-rose-500 rounded-lg shadow-xs"
           />
-        </motion.div>
+        </div>
       </motion.div>
     </motion.div>
   );
 };
+
 
 
 

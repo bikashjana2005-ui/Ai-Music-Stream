@@ -195,10 +195,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   return (
-    <div className="w-full bg-[#0f0f0f] text-white min-h-screen pb-24 select-none">
+    <div className="w-full bg-transparent text-gray-900 dark:text-white min-h-screen pb-24 select-none">
       
-      {/* 1. HORIZONTALLY SCROLLABLE FILTER PILLS WITH EXPLORE COMPASS */}
-      <div className="sticky top-13 z-30 bg-[#0f0f0f]/95 backdrop-blur-md border-b border-[#272727] px-3 sm:px-4 py-2 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar shadow-xs">
+      {/* 1. HORIZONTALLY SCROLLABLE FILTER PILLS WITH EXPLORE COMPASS (iOS Liquid Glass) */}
+      <div className="sticky top-16 z-30 bg-white/75 dark:bg-[#11121d]/75 backdrop-blur-2xl border-b border-black/5 dark:border-white/10 px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
           {/* Explore Compass Icon Button */}
           <button
@@ -206,10 +206,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               handleSelectCategory('crazy_xyz');
               onShowToast('Exploring Trending YouTube Experiments & Challenges', 'info');
             }}
-            className="w-8.5 h-8.5 rounded-lg bg-[#272727] text-white hover:bg-[#383838] flex items-center justify-center shrink-0 transition-colors cursor-pointer active:scale-95"
+            className="w-8.5 h-8.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-800 dark:text-white hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/15 flex items-center justify-center shrink-0 transition-all cursor-pointer active:scale-95 shadow-xs backdrop-blur-md"
             title="Explore Trending"
           >
-            <Compass size={18} />
+            <Compass size={17} />
           </button>
 
           {/* Category Pills */}
@@ -219,10 +219,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 key={pill.id}
                 onClick={() => handleSelectCategory(pill.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all shrink-0 whitespace-nowrap cursor-pointer active:scale-95 ${
+                className={`px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all shrink-0 whitespace-nowrap cursor-pointer active:scale-95 border ${
                   isSelected
-                    ? 'bg-white text-black font-semibold shadow-xs'
-                    : 'bg-[#272727] text-white hover:bg-[#383838]'
+                    ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold shadow-[0_4px_16px_rgba(244,63,94,0.35),inset_0_1px_1px_rgba(255,255,255,0.4)] border-rose-400/40'
+                    : 'bg-white/70 dark:bg-white/10 text-gray-700 dark:text-zinc-300 hover:bg-white/90 dark:hover:bg-white/20 border-black/5 dark:border-white/15 backdrop-blur-md shadow-xs'
                 }`}
               >
                 {pill.label}
@@ -235,7 +235,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <button
           onClick={handleRefreshFeed}
           disabled={loading}
-          className="w-8 h-8 rounded-lg bg-[#272727] hover:bg-[#383838] text-gray-300 hover:text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer ml-1"
+          className="w-8.5 h-8.5 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20 border border-black/5 dark:border-white/15 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center justify-center shrink-0 transition-all cursor-pointer ml-1 active:scale-95 shadow-xs backdrop-blur-md"
           title="Refresh Feed"
         >
           <RefreshCw size={15} className={loading ? "animate-spin text-red-500" : ""} />
@@ -247,13 +247,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-3 sm:p-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={`feed-skel-${i}`} className="space-y-3 bg-[#181818]/60 p-2 rounded-2xl border border-white/5">
-                <div className="aspect-video w-full bg-[#272727] animate-pulse rounded-xl" />
+              <div key={`feed-skel-${i}`} className="space-y-3 bg-white/40 dark:bg-[#181926]/40 p-2.5 rounded-3xl border border-black/5 dark:border-white/10 backdrop-blur-xl shadow-xs">
+                <div className="aspect-video w-full bg-black/10 dark:bg-white/10 animate-pulse rounded-2xl" />
                 <div className="flex items-start gap-3 px-1 pt-1">
-                  <div className="w-10 h-10 rounded-full bg-[#272727] animate-pulse shrink-0" />
+                  <div className="w-10 h-10 rounded-full bg-black/10 dark:bg-white/10 animate-pulse shrink-0" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-[#272727] animate-pulse rounded w-4/5" />
-                    <div className="h-3 bg-[#272727] animate-pulse rounded w-1/2" />
+                    <div className="h-4 bg-black/10 dark:bg-white/10 animate-pulse rounded-full w-4/5" />
+                    <div className="h-3 bg-black/10 dark:bg-white/10 animate-pulse rounded-full w-1/2" />
                   </div>
                 </div>
               </div>
@@ -261,10 +261,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 sm:gap-y-8 px-0 sm:px-4">
-              {feedTracks.map((track) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 sm:gap-y-8 px-2 sm:px-4">
+              {feedTracks.map((track, idx) => (
                 <YouTubeFeedCard
-                  key={`home-feed-${track.id}`}
+                  key={`home-feed-${track.id || idx}-${idx}`}
                   track={track}
                   onPlay={onPlay}
                   onDownload={onDownload}
@@ -284,7 +284,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <button
                 onClick={handleLoadMore}
                 disabled={loadingMore}
-                className="px-6 py-2.5 rounded-full bg-[#272727] hover:bg-[#383838] active:scale-95 text-sm font-bold text-white flex items-center gap-2 border border-white/10 shadow-md transition-all cursor-pointer"
+                className="px-6 py-2.5 rounded-full bg-white/70 dark:bg-white/10 hover:bg-white/90 dark:hover:bg-white/20 active:scale-95 text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 border border-black/10 dark:border-white/15 backdrop-blur-xl shadow-md transition-all cursor-pointer"
               >
                 {loadingMore ? (
                   <>

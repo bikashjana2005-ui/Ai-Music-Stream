@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, fetchYouTubeChannelProfile, fetchYouTubeUserPlaylists, fetchYouTubeLikedVideos, fetchYouTubeWatchHistory, fetchYouTubeSyncAll, handleGoogleRedirectResult, loginAnonymously, loginWithGoogle } from './lib/firebase';
-import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack, YouTubeChannelProfile } from './types';
+import { auth, db, testFirebaseConnection, handleFirestoreError, OperationType, fetchYouTubeUserSubscriptions, fetchYouTubeChannelProfile, fetchYouTubeUserPlaylists, fetchYouTubeLikedVideos, fetchYouTubeWatchHistory, fetchYouTubeSyncAll, loginAnonymously, getConnectedYouTubeEmail, getYouTubeAccessToken, getTargetYouTubeEmail } from './lib/firebase';
+import { TabType, Track, Playlist, SubscribedChannel, DownloadedTrack, YouTubeChannelProfile, PlayerEngine } from './types';
 import { DEFAULT_TRACKS, DEFAULT_CHANNELS, DEFAULT_LIKED_TRACKS, DEFAULT_HISTORY_TRACKS } from './data/fallbackTracks';
 import { Navbar } from './components/Navbar';
-import { AudioPlayerOverlay } from './components/AudioPlayerOverlay';
-import { GlobalYouTubePlayer, PlayerEngine } from './components/GlobalYouTubePlayer';
 import { DownloadModal } from './components/DownloadModal';
 import { AddToPlaylistModal } from './components/AddToPlaylistModal';
 import { ShareAppModal } from './components/ShareAppModal';
@@ -18,7 +16,6 @@ import { YouTubeMetadataModal } from './components/YouTubeMetadataModal';
 import { YouTubeMobileConnectModal } from './components/YouTubeMobileConnectModal';
 import { Toast } from './components/Toast';
 import { SubscriptionsView } from './views/SubscriptionsView';
-import { HomeView } from './views/HomeView';
 import { SearchView } from './views/SearchView';
 import { LibraryView } from './views/LibraryView';
 import { SettingsView } from './views/SettingsView';
@@ -30,26 +27,48 @@ import { AndroidNativeExporterModal } from './components/AndroidNativeExporterMo
 import { NotificationsModal } from './components/NotificationsModal';
 import { CreateActionModal } from './components/CreateActionModal';
 import { VideoQualitySelectorModal, QualityOptionId } from './components/VideoQualitySelectorModal';
+import { GlobalYouTubePlayer } from './components/GlobalYouTubePlayer';
+import { VideoMiniPlayer } from './components/VideoMiniPlayer';
+import { YouTubeStandardWebPlayer } from './components/YouTubeStandardWebPlayer';
+import { MobileAuthModal } from './components/MobileAuthModal';
 import { applyAccentTheme } from './utils/accentTheme';
 import { JanmashtamiParticles, JanmashtamiModal } from './components/JanmashtamiEffect';
+import { LaxmiPujaParticles, LaxmiPujaModal } from './components/LaxmiPujaEffect';
 import { isJanmashtamiActive } from './utils/janmashtami';
-import { extractYouTubeId } from './utils/youtube';
+import { extractYouTubeId, isTrackLiked } from './utils/youtube';
+import { getChannelAvatar } from './utils/channelLogos';
+import { Play, Tv, Maximize2 } from 'lucide-react';
 
-const TAB_ORDER: TabType[] = ['search', 'subscriptions', 'downloads', 'library', 'settings'];
+const TAB_ORDER: TabType[] = ['subscriptions', 'search', 'library', 'settings', 'downloads'];
 
 export default function App() {
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [showMobileAuth, setShowMobileAuth] = useState<boolean>(false);
+  const [mobileAuthUser, setMobileAuthUser] = useState<any>(() => {
+    try {
+      const raw = localStorage.getItem('aura_mobile_auth');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const handleCompleteSplash = useCallback(() => {
     setShowSplash(false);
+    // User instruction: Always do not show the login screen
+    setShowMobileAuth(false);
+    setIsAuthModalOpen(false);
   }, []);
   const [pendingQualityTrack, setPendingQualityTrack] = useState<Track | null>(null);
   const [activeTab, setActiveTabState] = useState<TabType>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_last_active_tab');
-      if (saved === 'home') return 'search';
-      return (saved as TabType) || 'search';
+      if (saved && ['subscriptions', 'search', 'library', 'settings', 'downloads'].includes(saved)) {
+        return saved as TabType;
+      }
+      return 'subscriptions';
     } catch {
-      return 'search';
+      return 'subscriptions';
     }
   });
   const [tabDirection, setTabDirection] = useState<number>(1);
@@ -59,6 +78,14 @@ export default function App() {
   const [janmashtamiParticlesEnabled, setJanmashtamiParticlesEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('aura_janmashtami_particles') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [isLaxmiPujaModalOpen, setIsLaxmiPujaModalOpen] = useState<boolean>(false);
+  const [laxmiPujaParticlesEnabled, setLaxmiPujaParticlesEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aura_laxmi_particles') !== 'false';
     } catch {
       return true;
     }
@@ -86,8 +113,12 @@ export default function App() {
     });
   }, []);
 
-  // Save activeTab to localStorage
+  // Save activeTab to localStorage & migrate legacy home/shorts
   useEffect(() => {
+    if (activeTab === 'home' || activeTab === 'shorts') {
+      setActiveTabState('subscriptions');
+      return;
+    }
     localStorage.setItem('aura_ai_last_active_tab', activeTab);
   }, [activeTab]);
 
@@ -136,13 +167,17 @@ export default function App() {
     return saved ? saved === 'dark' : true;
   });
 
-  // Liquid Glass Accent Theme State
+  // Liquid Glass Accent Theme State - Default to Application Main Theme (Ai Music Red & Rose)
   const [accentThemeId, setAccentThemeId] = useState<string>(() => {
-    return localStorage.getItem('aura_ai_accent_theme') || 'indigo';
+    const saved = localStorage.getItem('aura_ai_accent_theme');
+    if (saved && saved !== 'indigo') return saved;
+    return 'rose';
   });
 
   const [customAccentHex, setCustomAccentHex] = useState<string>(() => {
-    return localStorage.getItem('aura_ai_custom_accent_hex') || '#6366f1';
+    const saved = localStorage.getItem('aura_ai_custom_accent_hex');
+    if (saved && saved !== '#6366f1') return saved;
+    return '#ef4444';
   });
 
   // Apply accent theme dynamically
@@ -163,12 +198,12 @@ export default function App() {
 
   // Audio Quality state
   const [audioQuality, setAudioQuality] = useState<string>(() => {
-    return localStorage.getItem('aura_ai_audio_quality') || '320';
+    return localStorage.getItem('aura_ai_audio_quality') || '128';
   });
 
-  // Video Quality state
+  // Video Quality state - Default to 144p lowest data saver
   const [videoQuality, setVideoQuality] = useState<string>(() => {
-    return localStorage.getItem('aura_ai_video_quality') || '1080p';
+    return localStorage.getItem('aura_ai_video_quality') || '144p';
   });
 
   const handleSetVideoQuality = (quality: string) => {
@@ -176,34 +211,41 @@ export default function App() {
     localStorage.setItem('aura_ai_video_quality', quality);
   };
 
-  // Data Saver / Low Bandwidth Mode state
+  // Data Saver / Low Bandwidth Mode state - Default to true for lowest data consumption
   const [isDataSaverMode, setIsDataSaverMode] = useState<boolean>(() => {
-    return localStorage.getItem('aura_data_saver_mode') === 'true';
+    return localStorage.getItem('aura_data_saver_mode') !== 'false';
   });
 
   const handleToggleDataSaverMode = (enabled: boolean) => {
     setIsDataSaverMode(enabled);
     localStorage.setItem('aura_data_saver_mode', String(enabled));
     if (enabled) {
-      setShowVideo(true); // Keep low-bandwidth audio+video stream active
+      setShowVideo(false); // Pure audio stream active without video player
       setAudioQuality('128');
       setVideoQuality('144p');
-      showToast("⚡ Data Saver Mode ON — Low-bandwidth Audio+Video stream active (144p video & 128kbps audio)", "success");
+      showToast("⚡ Data Saver Mode ON — Low-bandwidth Audio stream active (128kbps audio)", "success");
     } else {
-      setShowVideo(true);
+      setShowVideo(false);
       setAudioQuality('320');
       setVideoQuality('1080p');
-      showToast("Data Saver Mode OFF — Full HD Video & 320kbps Audio restored", "info");
+      showToast("Data Saver Mode OFF — High Fidelity 320kbps Audio restored", "info");
     }
   };
   const [autoPlayOnSelect, setAutoPlayOnSelect] = useState<boolean>(() => {
     const saved = localStorage.getItem('aura_ai_autoplay_select');
     return saved ? saved === 'true' : false;
   });
+
+  const handleSetAutoPlayOnSelect = (val: boolean) => {
+    setAutoPlayOnSelect(val);
+    try {
+      localStorage.setItem('aura_ai_autoplay_select', String(val));
+    } catch {}
+  };
   const [isAutoplayUpNext, setIsAutoplayUpNext] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('aura_autoplay_upnext');
-      return saved === 'true'; // Defaults to false (Stop automatic upnext video playback)
+      return saved !== null ? saved === 'true' : false; // Default to false (Stop automatic video play)
     } catch {
       return false;
     }
@@ -222,7 +264,34 @@ export default function App() {
   const [subscriptions, setSubscriptions] = useState<SubscribedChannel[]>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_subscriptions');
-      return saved ? JSON.parse(saved) : DEFAULT_CHANNELS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const seen = new Set<string>();
+          const cleaned: SubscribedChannel[] = [];
+          for (let i = 0; i < parsed.length; i++) {
+            const item = parsed[i];
+            if (!item || !item.name) continue;
+            const validId = item.id && item.id !== 'undefined'
+              ? item.id
+              : `ch-${(item.name || 'ch').toLowerCase().replace(/[^a-z0-9]/g, '-') || i}-${i}`;
+            if (!seen.has(validId) && !seen.has((item.name || '').toLowerCase())) {
+              seen.add(validId);
+              seen.add((item.name || '').toLowerCase());
+              cleaned.push({
+                ...item,
+                id: validId,
+                name: item.name,
+                handle: item.handle || `@${item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                avatar: item.avatar || getChannelAvatar(item.name),
+                subscribers: item.subscribers || '1M subscribers',
+              });
+            }
+          }
+          if (cleaned.length > 0) return cleaned;
+        }
+      }
+      return DEFAULT_CHANNELS;
     } catch {
       return DEFAULT_CHANNELS;
     }
@@ -241,14 +310,37 @@ export default function App() {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_last_played_track');
-      return saved ? JSON.parse(saved) : DEFAULT_TRACKS[0];
+      if (saved) return JSON.parse(saved);
+      const savedHist = localStorage.getItem('aura_ai_history');
+      if (savedHist) {
+        const parsed = JSON.parse(savedHist);
+        if (parsed.length > 0) return parsed[0];
+      }
+      return DEFAULT_TRACKS[0];
     } catch {
       return DEFAULT_TRACKS[0];
     }
   });
+
+  // Dedicated last played video state to guarantee the mini player always displays the last played video
+  const [lastPlayedVideo, setLastPlayedVideo] = useState<Track | null>(() => {
+    try {
+      const saved = localStorage.getItem('aura_ai_last_played_track');
+      if (saved) return JSON.parse(saved);
+      const savedHist = localStorage.getItem('aura_ai_history');
+      if (savedHist) {
+        const parsed = JSON.parse(savedHist);
+        if (parsed.length > 0) return parsed[0];
+      }
+      return DEFAULT_TRACKS[0];
+    } catch {
+      return DEFAULT_TRACKS[0];
+    }
+  });
+
+  const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isOverlayOpen, setIsOverlayOpen] = useState<boolean>(false);
-  const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('aura_ai_volume');
@@ -264,8 +356,9 @@ export default function App() {
       return false;
     }
   });
-  const [showVideo, setShowVideo] = useState<boolean>(true);
-  const [isFullScreenVideo, setIsFullScreenVideo] = useState<boolean>(false);
+  const [showVideo, setShowVideo] = useState<boolean>(false);
+  const [isFullVideoPlayerOpen, setIsFullVideoPlayerOpen] = useState<boolean>(false);
+  const [isVideoMiniPlayerOpen, setIsVideoMiniPlayerOpen] = useState<boolean>(false);
   const [playerEngine, setPlayerEngine] = useState<PlayerEngine>(() => {
     return (localStorage.getItem('aura_player_engine') as PlayerEngine) || 'youtube-nocookie';
   });
@@ -273,7 +366,9 @@ export default function App() {
   const handleChangePlayerEngine = (engine: PlayerEngine) => {
     setPlayerEngine(engine);
     localStorage.setItem('aura_player_engine', engine);
-    showToast(`Switched player engine to ${engine.toUpperCase()}`, 'info');
+    const domain = (engine === 'youtube-nocookie' || engine === 'nocookie') ? 'nocookie' : 'standard';
+    localStorage.setItem('aura_player_domain', domain);
+    showToast(`Switched player engine to ${engine.toUpperCase()} (YouTube NoCookie)`, 'info');
   };
 
   // Real-time playback time & duration from YouTube video stream
@@ -289,27 +384,46 @@ export default function App() {
   const [seekToSeconds, setSeekToSeconds] = useState<number | null>(null);
 
   const handleProgress = useCallback((playedSec: number) => {
-    setPlaybackTime(Math.floor(playedSec));
+    const sec = Math.floor(playedSec);
+    queueMicrotask(() => {
+      setPlaybackTime(sec);
+    });
   }, []);
 
   const handleDuration = useCallback((durationSec: number) => {
     const totalSecs = Math.floor(durationSec);
-    setRealDuration(totalSecs);
-    if (totalSecs > 0) {
-      const hrs = Math.floor(totalSecs / 3600);
-      const mins = Math.floor((totalSecs % 3600) / 60);
-      const secs = totalSecs % 60;
-      const formatted = hrs > 0
-        ? `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
-        : `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-      setCurrentTrack((prev) => prev ? { ...prev, duration: formatted } : null);
-    }
+    queueMicrotask(() => {
+      setRealDuration(totalSecs);
+      if (totalSecs > 0) {
+        const hrs = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        const formatted = hrs > 0
+          ? `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
+          : `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        setCurrentTrack((prev) => {
+          if (!prev || prev.duration === formatted) return prev;
+          return { ...prev, duration: formatted };
+        });
+      }
+    });
   }, []);
 
   const handleSeek = useCallback((newTime: number) => {
     setPlaybackTime(newTime);
     setSeekToSeconds(newTime);
     setTimeout(() => setSeekToSeconds(null), 100);
+  }, []);
+
+  const handleVolumeChange = useCallback((vol: number) => {
+    setVolume(vol);
+    if (vol > 0 && isMuted) {
+      setIsMuted(false);
+    }
+  }, [isMuted]);
+
+  const handleToggleMute = useCallback(() => {
+    setIsMuted((prev) => !prev);
   }, []);
 
   // Download Modal track & playlist
@@ -411,9 +525,6 @@ export default function App() {
   });
 
   // Synchronize state refs for popstate listener to guarantee fresh values without stale closures
-  const isFullScreenVideoRef = useRef(isFullScreenVideo);
-  isFullScreenVideoRef.current = isFullScreenVideo;
-
   const isOverlayOpenRef = useRef(isOverlayOpen);
   isOverlayOpenRef.current = isOverlayOpen;
 
@@ -524,19 +635,13 @@ export default function App() {
         return;
       }
 
-      // 2. Close Full Video Player Mode if active
-      if (isFullScreenVideoRef.current) {
-        setIsFullScreenVideo(false);
-        return;
-      }
-
-      // 3. Close Audio Player Overlay if active
+      // 2. Close Audio Player Overlay if active
       if (isOverlayOpenRef.current) {
         setIsOverlayOpen(false);
         return;
       }
 
-      // 4. Clear Subscriptions Channel Filter if active
+      // 3. Clear Subscriptions Channel Filter if active
       if (selectedChannelFilterRef.current) {
         setSelectedChannelFilter(null);
         return;
@@ -562,9 +667,8 @@ export default function App() {
     };
   }, [showToast]);
 
-  // Push state when an overlay, full video, or modal opens so device back button pops it smoothly
+  // Push state when an overlay or modal opens so device back button pops it smoothly
   const anyModalOrOverlayOpen = !!(
-    isFullScreenVideo ||
     isOverlayOpen ||
     pendingQualityTrack ||
     selectedChannelForDetails ||
@@ -608,24 +712,24 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Smooth scroll to top when switching active views
+  // Instant reset scroll to top when switching active views without sluggish delay
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [activeTab]);
 
-  // Function to sync Google account data (local <-> Firestore cloud <-> YouTube)
+  // Function to sync account data (local <-> Firestore cloud <-> YouTube)
   const handleSyncGoogleAccount = useCallback(async (targetUser?: User | null, showNotification: boolean = true) => {
     const activeUser = targetUser || auth.currentUser || user;
     if (!activeUser) {
       if (showNotification) {
-        showToast('Please sign in with Google to sync your account.', 'info');
+        showToast('Please sign in with Mobile OTP or Email to sync your account.', 'info');
       }
       return;
     }
 
     try {
       if (showNotification) {
-        showToast('Syncing Google Account with Cloud...', 'info');
+        showToast('Syncing library with Cloud...', 'info');
       }
 
       // 1. Sync local favorites to Firestore
@@ -672,18 +776,38 @@ export default function App() {
         }
       }
 
-      // 4. Auto-sync YouTube subscriptions if access token is available
-      const ytToken = sessionStorage.getItem('aura_yt_access_token');
+      // 4. Auto-sync YouTube subscriptions & watch history in real time with connected Google email
+      const connectedEmail = activeUser.email || getConnectedYouTubeEmail(activeUser);
+      const ytToken = getYouTubeAccessToken(connectedEmail);
       if (ytToken) {
+        // Sync channel subscriptions
         try {
-          const ytChannels = await fetchYouTubeUserSubscriptions(ytToken);
+          const ytChannels = await fetchYouTubeUserSubscriptions(ytToken, connectedEmail);
           for (const ch of ytChannels) {
             await setDoc(doc(db, 'users', activeUser.uid, 'subscriptions', ch.id), {
-              ...ch, userId: activeUser.uid, addedAt: new Date().toISOString()
+              ...ch,
+              userId: activeUser.uid,
+              syncedEmail: connectedEmail,
+              addedAt: new Date().toISOString()
             }, { merge: true });
           }
         } catch (ytErr) {
-          console.log("Could not auto-sync YouTube subscriptions:", ytErr);
+          console.warn("Could not auto-sync YouTube subscriptions:", ytErr);
+        }
+
+        // Sync watch history
+        try {
+          const ytHistory = await fetchYouTubeWatchHistory(ytToken, connectedEmail);
+          for (const t of ytHistory) {
+            await setDoc(doc(db, 'users', activeUser.uid, 'history', t.id), {
+              ...t,
+              userId: activeUser.uid,
+              syncedEmail: connectedEmail,
+              listenedAt: t.addedAt || new Date().toISOString()
+            }, { merge: true });
+          }
+        } catch (ytHistErr) {
+          console.warn("Could not auto-sync YouTube history:", ytHistErr);
         }
       }
 
@@ -700,12 +824,12 @@ export default function App() {
       }
 
       if (showNotification) {
-        showToast(`Google account successfully synced (${activeUser.email || activeUser.displayName})`, 'success');
+        showToast(`Account successfully synced (${activeUser.email || activeUser.displayName || 'Cloud'})`, 'success');
       }
     } catch (err) {
-      console.error('Google account sync error:', err);
+      console.error('Account sync error:', err);
       if (showNotification) {
-        showToast('Failed to sync Google account data.', 'error');
+        showToast('Failed to sync account data.', 'error');
       }
     }
   }, [user]);
@@ -713,28 +837,23 @@ export default function App() {
   // Real-time YouTube Subscription Sync from Google Account
   const handleSyncYouTubeSubscriptions = useCallback(async () => {
     setIsYouTubeSyncing(true);
+    const connectedEmail = user?.email || getConnectedYouTubeEmail(user);
     try {
-      showToast('Syncing YouTube channels from Google Account...', 'info');
+      showToast(`Syncing YouTube channels for ${connectedEmail}...`, 'info');
       let ytChannels: SubscribedChannel[] = [];
       try {
-        ytChannels = await fetchYouTubeUserSubscriptions();
+        ytChannels = await fetchYouTubeUserSubscriptions(undefined, connectedEmail);
       } catch (tokenErr: any) {
         if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
-          showToast('Authenticating with Google to fetch YouTube subscriptions...', 'info');
-          const loginRes = await loginWithGoogle();
-          if (loginRes?.accessToken) {
-            ytChannels = await fetchYouTubeUserSubscriptions(loginRes.accessToken);
-          } else {
-            showToast('Google sign-in completed. Please tap Sync Channels again.', 'info');
-            return;
-          }
+          showToast('Direct token required or add channels in Discover tab.', 'info');
+          return;
         } else {
           throw tokenErr;
         }
       }
 
       if (!ytChannels || ytChannels.length === 0) {
-        showToast('No YouTube subscriptions found on this Google account.', 'info');
+        showToast(`No YouTube subscriptions found for ${connectedEmail}.`, 'info');
         return;
       }
 
@@ -751,6 +870,7 @@ export default function App() {
             await setDoc(doc(db, 'users', user.uid, 'subscriptions', ch.id), {
               ...ch,
               userId: user.uid,
+              syncedEmail: connectedEmail,
               syncedFromYouTube: true,
               syncedAt: new Date().toISOString()
             }, { merge: true });
@@ -760,13 +880,13 @@ export default function App() {
         }
       }
 
-      showToast(`⚡ Successfully synced ${ytChannels.length} YouTube channels!`, 'success');
+      showToast(`⚡ Successfully synced ${ytChannels.length} YouTube channels in real time!`, 'success');
     } catch (err: any) {
       console.warn('YouTube sync notice:', err?.message || err);
       if (err?.message === 'YOUTUBE_API_UNCONFIGURED') {
         showToast('YouTube API sync is currently being verified on Google Cloud. You can browse and add channels directly.', 'info');
       } else {
-        showToast('YouTube sync notice: please ensure you are signed in with your Google account.', 'info');
+        showToast(`YouTube sync notice for ${connectedEmail}: Please ensure access token is configured.`, 'info');
       }
     } finally {
       setIsYouTubeSyncing(false);
@@ -777,19 +897,14 @@ export default function App() {
   const handleSyncYouTubeLiked = useCallback(async () => {
     setIsYouTubeSyncing(true);
     try {
-      showToast('Syncing YouTube liked videos from Google Account...', 'info');
+      showToast('Syncing YouTube liked videos...', 'info');
       let tracks: Track[] = [];
       try {
         tracks = await fetchYouTubeLikedVideos();
       } catch (tokenErr: any) {
         if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
-          showToast('Authenticating with Google for Liked Videos...', 'info');
-          const loginRes = await loginWithGoogle();
-          if (loginRes?.accessToken) {
-            tracks = await fetchYouTubeLikedVideos(loginRes.accessToken);
-          } else {
-            return;
-          }
+          showToast('Direct token required for liked videos sync.', 'info');
+          return;
         } else {
           throw tokenErr;
         }
@@ -830,19 +945,14 @@ export default function App() {
   const handleSyncYouTubePlaylists = useCallback(async () => {
     setIsYouTubeSyncing(true);
     try {
-      showToast('Syncing YouTube playlists from Google Account...', 'info');
+      showToast('Syncing YouTube playlists...', 'info');
       let lists: Playlist[] = [];
       try {
         lists = await fetchYouTubeUserPlaylists();
       } catch (tokenErr: any) {
         if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
-          showToast('Authenticating with Google for Playlists...', 'info');
-          const loginRes = await loginWithGoogle();
-          if (loginRes?.accessToken) {
-            lists = await fetchYouTubeUserPlaylists(loginRes.accessToken);
-          } else {
-            return;
-          }
+          showToast('Direct token required for playlists sync.', 'info');
+          return;
         } else {
           throw tokenErr;
         }
@@ -882,20 +992,16 @@ export default function App() {
   // Real-time YouTube Watch History Sync
   const handleSyncYouTubeHistory = useCallback(async () => {
     setIsYouTubeSyncing(true);
+    const connectedEmail = user?.email || getConnectedYouTubeEmail(user);
     try {
-      showToast('Syncing YouTube watch history from Google Account...', 'info');
+      showToast(`Syncing YouTube watch history for ${connectedEmail}...`, 'info');
       let tracks: Track[] = [];
       try {
-        tracks = await fetchYouTubeWatchHistory();
+        tracks = await fetchYouTubeWatchHistory(undefined, connectedEmail);
       } catch (tokenErr: any) {
         if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
-          showToast('Authenticating with Google for Watch History...', 'info');
-          const loginRes = await loginWithGoogle();
-          if (loginRes?.accessToken) {
-            tracks = await fetchYouTubeWatchHistory(loginRes.accessToken);
-          } else {
-            return;
-          }
+          showToast('Direct token required for watch history sync.', 'info');
+          return;
         } else {
           throw tokenErr;
         }
@@ -906,7 +1012,13 @@ export default function App() {
           const map = new Map<string, Track>();
           prev.forEach(t => map.set(t.id, t));
           tracks.forEach(t => map.set(t.id, t));
-          return Array.from(map.values());
+          const combined = Array.from(map.values());
+          combined.sort((a: any, b: any) => {
+            const timeA = new Date(a.listenedAt || a.addedAt || a.syncedAt || 0).getTime();
+            const timeB = new Date(b.listenedAt || b.addedAt || b.syncedAt || 0).getTime();
+            return timeB - timeA;
+          });
+          return combined;
         });
 
         if (user) {
@@ -915,15 +1027,17 @@ export default function App() {
               await setDoc(doc(db, 'users', user.uid, 'history', t.id), {
                 ...t,
                 userId: user.uid,
+                syncedEmail: connectedEmail,
                 syncedFromYouTube: true,
+                listenedAt: t.addedAt || new Date().toISOString(),
                 syncedAt: new Date().toISOString()
               }, { merge: true });
             } catch (e) {}
           }
         }
-        showToast(`⚡ Synced ${tracks.length} YouTube history videos!`, 'success');
+        showToast(`⚡ Real-time synced ${tracks.length} YouTube history videos!`, 'success');
       } else {
-        showToast('No watch history items found on your YouTube account.', 'info');
+        showToast(`No watch history items found for ${connectedEmail}.`, 'info');
       }
     } catch (err) {
       showToast('Notice: Could not sync YouTube watch history.', 'info');
@@ -935,28 +1049,24 @@ export default function App() {
   // Real-time Full YouTube Synchronization (All In One)
   const handleSyncYouTubeAll = useCallback(async () => {
     setIsYouTubeSyncing(true);
+    const connectedEmail = user?.email || getConnectedYouTubeEmail(user);
     try {
-      showToast('Starting full real-time YouTube sync (channels, liked, playlists, history)...', 'info');
+      showToast(`Starting full real-time sync with YouTube account (${connectedEmail})...`, 'info');
       let syncResult: any = null;
       try {
-        syncResult = await fetchYouTubeSyncAll();
+        syncResult = await fetchYouTubeSyncAll(undefined, connectedEmail);
       } catch (tokenErr: any) {
         if (tokenErr?.message === 'NO_ACCESS_TOKEN' || tokenErr?.message === 'YOUTUBE_TOKEN_EXPIRED') {
-          showToast('Authenticating with Google for Full YouTube Sync...', 'info');
-          const loginRes = await loginWithGoogle();
-          if (loginRes?.accessToken) {
-            syncResult = await fetchYouTubeSyncAll(loginRes.accessToken);
-          } else {
-            return;
-          }
+          showToast('Direct token required for full YouTube sync.', 'info');
+          return;
         } else {
           throw tokenErr;
         }
       }
 
       if (syncResult) {
-        if (syncResult.profile) {
-          setYoutubeChannelProfile(syncResult.profile);
+        if (syncResult.profile || syncResult.channel) {
+          setYoutubeChannelProfile(syncResult.profile || syncResult.channel);
         }
 
         if (syncResult.subscriptions && Array.isArray(syncResult.subscriptions) && syncResult.subscriptions.length > 0) {
@@ -966,15 +1076,36 @@ export default function App() {
             syncResult.subscriptions.forEach((c: SubscribedChannel) => map.set(c.id, c));
             return Array.from(map.values());
           });
+          if (user) {
+            for (const ch of syncResult.subscriptions) {
+              setDoc(doc(db, 'users', user.uid, 'subscriptions', ch.id), {
+                ...ch,
+                userId: user.uid,
+                syncedEmail: connectedEmail,
+                addedAt: new Date().toISOString()
+              }, { merge: true }).catch(() => {});
+            }
+          }
         }
 
-        if (syncResult.likedVideos && Array.isArray(syncResult.likedVideos) && syncResult.likedVideos.length > 0) {
+        const likedList = syncResult.likedTracks || syncResult.likedVideos || [];
+        if (Array.isArray(likedList) && likedList.length > 0) {
           setFavorites((prev) => {
             const map = new Map<string, Track>();
             prev.forEach(t => map.set(t.id, t));
-            syncResult.likedVideos.forEach((t: Track) => map.set(t.id, t));
+            likedList.forEach((t: Track) => map.set(t.id, t));
             return Array.from(map.values());
           });
+          if (user) {
+            for (const t of likedList) {
+              setDoc(doc(db, 'users', user.uid, 'favorites', t.id), {
+                ...t,
+                userId: user.uid,
+                syncedEmail: connectedEmail,
+                addedAt: new Date().toISOString()
+              }, { merge: true }).catch(() => {});
+            }
+          }
         }
 
         if (syncResult.playlists && Array.isArray(syncResult.playlists) && syncResult.playlists.length > 0) {
@@ -984,22 +1115,50 @@ export default function App() {
             syncResult.playlists.forEach((p: Playlist) => map.set(p.id, p));
             return Array.from(map.values());
           });
+          if (user) {
+            for (const p of syncResult.playlists) {
+              setDoc(doc(db, 'users', user.uid, 'playlists', p.id), {
+                ...p,
+                userId: user.uid,
+                syncedEmail: connectedEmail,
+                createdAt: new Date().toISOString()
+              }, { merge: true }).catch(() => {});
+            }
+          }
         }
 
-        if (syncResult.history && Array.isArray(syncResult.history) && syncResult.history.length > 0) {
+        const historyList = syncResult.historyTracks || syncResult.history || [];
+        if (Array.isArray(historyList) && historyList.length > 0) {
           setHistory((prev) => {
             const map = new Map<string, Track>();
             prev.forEach(t => map.set(t.id, t));
-            syncResult.history.forEach((t: Track) => map.set(t.id, t));
-            return Array.from(map.values());
+            historyList.forEach((t: Track) => map.set(t.id, t));
+            const combined = Array.from(map.values());
+            combined.sort((a: any, b: any) => {
+              const timeA = new Date(a.listenedAt || a.addedAt || a.syncedAt || 0).getTime();
+              const timeB = new Date(b.listenedAt || b.addedAt || b.syncedAt || 0).getTime();
+              return timeB - timeA;
+            });
+            return combined;
           });
+          if (user) {
+            for (const t of historyList) {
+              setDoc(doc(db, 'users', user.uid, 'history', t.id), {
+                ...t,
+                userId: user.uid,
+                syncedEmail: connectedEmail,
+                listenedAt: t.addedAt || new Date().toISOString(),
+                syncedAt: new Date().toISOString()
+              }, { merge: true }).catch(() => {});
+            }
+          }
         }
 
-        showToast('⚡ Full YouTube mobile real-time sync completed successfully!', 'success');
+        showToast(`⚡ Real-time sync complete for ${connectedEmail}!`, 'success');
       }
     } catch (err: any) {
       console.warn('Full sync error:', err);
-      showToast('YouTube sync notice: Ensure you are logged into Google.', 'info');
+      showToast(`YouTube sync notice for ${connectedEmail}: Please verify channel connection.`, 'info');
     } finally {
       setIsYouTubeSyncing(false);
     }
@@ -1008,35 +1167,45 @@ export default function App() {
   // Firebase Authentication listener and Firestore real-time sync on startup / open
   useEffect(() => {
     testFirebaseConnection();
-    
-    // Check if coming back from Google OAuth redirect sign-in
-    handleGoogleRedirectResult().then((res) => {
-      if (res?.user) {
-        showToast(`Signed in via Google! Welcome ${res.user.displayName || 'Music Listener'}.`, 'success');
-      }
-    }).catch((err) => {
-      console.warn('Redirect sign-in result check:', err);
-    });
 
     let isInitialLoad = true;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        console.log('Firebase user logged in on application open:', currentUser.uid);
+    const unsubscribeAuth = onAuthStateChanged(
+      auth, 
+      (currentUser) => {
+        setUser(currentUser);
+        if (currentUser) {
+          console.log('Firebase user logged in on application open:', currentUser.uid);
 
-        // Perform Google Account Sync on application open
-        handleSyncGoogleAccount(currentUser, isInitialLoad);
-        if (isInitialLoad) {
-          isInitialLoad = false;
-        }
+          // Perform Google Account Sync on application open
+          handleSyncGoogleAccount(currentUser, isInitialLoad);
+          if (isInitialLoad) {
+            isInitialLoad = false;
+          }
 
         // Subscriptions listener
         const subPath = `users/${currentUser.uid}/subscriptions`;
         const unsubSubs = onSnapshot(collection(db, subPath), (snapshot) => {
           const cloudSubs: SubscribedChannel[] = [];
+          const seen = new Set<string>();
           snapshot.forEach((docSnap) => {
-            cloudSubs.push(docSnap.data() as SubscribedChannel);
+            const data = docSnap.data() as SubscribedChannel;
+            const validId = docSnap.id && docSnap.id !== 'undefined'
+              ? docSnap.id
+              : (data.id && data.id !== 'undefined' ? data.id : `ch-${(data.name || 'ch').toLowerCase().replace(/[^a-z0-9]/g, '-') || cloudSubs.length}-${cloudSubs.length}`);
+            const channelName = data.name || 'Channel';
+            if (!seen.has(validId) && !seen.has(channelName.toLowerCase())) {
+              seen.add(validId);
+              seen.add(channelName.toLowerCase());
+              cloudSubs.push({
+                ...data,
+                id: validId,
+                name: channelName,
+                handle: data.handle || `@${channelName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                avatar: data.avatar || getChannelAvatar(channelName),
+                subscribers: data.subscribers || '1M subscribers',
+              });
+            }
           });
           if (cloudSubs.length > 0) {
             setSubscriptions(cloudSubs);
@@ -1074,6 +1243,11 @@ export default function App() {
           snapshot.forEach((docSnap) => {
             cloudHistory.push(docSnap.data() as Track);
           });
+          cloudHistory.sort((a: any, b: any) => {
+            const timeA = new Date(a.listenedAt || a.addedAt || a.syncedAt || 0).getTime();
+            const timeB = new Date(b.listenedAt || b.addedAt || b.syncedAt || 0).getTime();
+            return timeB - timeA;
+          });
           if (cloudHistory.length > 0) {
             setHistory(cloudHistory);
           }
@@ -1110,20 +1284,11 @@ export default function App() {
           unsubAct();
         };
       } else {
-        // Automatically perform quick automatic sign-in on app open if no active user session exists
-        const hasAutoSignedIn = sessionStorage.getItem('aura_auto_signin_attempted');
-        if (!hasAutoSignedIn) {
-          sessionStorage.setItem('aura_auto_signin_attempted', 'true');
-          loginAnonymously().then((autoUser) => {
-            if (autoUser) {
-              console.log('⚡ Instant automatic sign-in complete on app open:', autoUser.uid);
-              showToast(`⚡ Automatically signed in as ${autoUser.displayName || 'Guest Listener'}`, 'success');
-            }
-          }).catch((err) => {
-            console.warn('Auto sign-in on app open:', err);
-          });
-        }
+        // Guest mode active: User can stream and save local favorites/history without mandatory cloud login
+        console.info('Guest mode active. Local persistence ready.');
       }
+    }, (authError) => {
+      console.warn('Firebase Auth state listener error (offline / network issue):', authError);
     });
 
     return () => unsubscribeAuth();
@@ -1226,10 +1391,11 @@ export default function App() {
     localStorage.setItem('aura_ai_history', JSON.stringify(history));
   }, [history]);
 
-  // Sync last played track to localStorage
+  // Sync last played track to localStorage and update lastPlayedVideo state
   useEffect(() => {
     if (currentTrack) {
       localStorage.setItem('aura_ai_last_played_track', JSON.stringify(currentTrack));
+      setLastPlayedVideo(currentTrack);
     }
   }, [currentTrack]);
 
@@ -1268,38 +1434,45 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [user, currentTrack, playbackTime, activeTab, volume, isMuted]);
 
-  const startActualPlayTrack = (track: Track) => {
-    setIsMiniPlayerDismissed(false);
-    setShowVideo(true);
-    setIsFullScreenVideo(true);
+  const startActualPlayTrack = (track: Track, _unused?: boolean) => {
+    setShowVideo(false);
     setIsOverlayOpen(false);
 
     // Extract clean 11-char YouTube ID and ensure 100% correct YouTube thumbnail
     const validVideoId = extractYouTubeId(track.id || (track as any).youtubeUrl || '');
-    const correctThumbnail = validVideoId && validVideoId.length === 11
-      ? `https://i.ytimg.com/vi/${validVideoId}/hqdefault.jpg`
+    const finalId = validVideoId && validVideoId.length === 11 
+      ? validVideoId 
+      : (track.id && track.id.length === 11 ? track.id : 'BddP6PYo2gs');
+
+    const correctThumbnail = finalId && finalId.length === 11
+      ? `https://i.ytimg.com/vi/${finalId}/hqdefault.jpg`
       : (track.thumbnail && !track.thumbnail.includes('unsplash') && !track.thumbnail.includes('picsum')
           ? track.thumbnail
-          : `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`);
+          : `https://i.ytimg.com/vi/${finalId}/hqdefault.jpg`);
 
     const trackWithCorrectThumbnail: Track = {
       ...track,
-      id: validVideoId || track.id,
+      id: finalId,
       thumbnail: correctThumbnail,
       addedAt: new Date().toISOString()
     };
 
     if (currentTrack?.id === trackWithCorrectThumbnail.id) {
-      // Toggle or keep current track without auto-starting
-      setIsPlaying(false);
+      setIsPlaying(false); // Stop automatic video play
+      setIsFullVideoPlayerOpen(true);
+      setIsVideoMiniPlayerOpen(false);
     } else {
       setCurrentTrack(trackWithCorrectThumbnail);
-      setIsPlaying(false);
+      setIsPlaying(false); // Stop automatic video play
       setPlaybackTime(0);
       setRealDuration(0);
+      setIsFullVideoPlayerOpen(true);
+      setIsVideoMiniPlayerOpen(false);
     }
+    setLastPlayedVideo(trackWithCorrectThumbnail);
+    setIsMiniPlayerDismissed(false);
 
-    // Record to watch history in real-time (deduplicated, latest first) with correct thumbnail
+    // Record to history in real-time (deduplicated, latest first) with correct thumbnail
     setHistory((prev) => {
       const filtered = prev.filter(t => t.id !== trackWithCorrectThumbnail.id);
       const updated = [trackWithCorrectThumbnail, ...filtered].slice(0, 50);
@@ -1322,25 +1495,24 @@ export default function App() {
       });
     }
 
+    showToast(`▶ YouTube Direct: "${trackWithCorrectThumbnail.title}"`, 'success');
+
     // Dispatch storage event to keep other tabs/views updated in real time
     try {
       window.dispatchEvent(new Event('storage'));
     } catch {}
   };
 
-  const handlePlayTrack = (track: Track, forceDirect: boolean = false) => {
-    const skipPrompt = localStorage.getItem('aura_skip_quality_prompt') === 'true';
-    if (forceDirect || skipPrompt) {
-      startActualPlayTrack(track);
-    } else {
-      setPendingQualityTrack(track);
-    }
+  const handlePlayTrack = (track: Track, _forceDirect: boolean = false) => {
+    startActualPlayTrack(track);
   };
 
   const handleConfirmQualityPlay = (track: Track, selectedQuality: QualityOptionId, dontShowAgain: boolean) => {
     if (selectedQuality === 'data_saver') {
       handleToggleDataSaverMode(true);
-      showToast('⚡ Data saver applied: 144p streaming', 'info');
+      handleSetVideoQuality('144p');
+      setAudioQuality('128');
+      showToast('⚡ Data saver applied: 144p lowest data streaming', 'info');
     } else if (selectedQuality === 'higher') {
       handleToggleDataSaverMode(false);
       handleSetVideoQuality('1080p');
@@ -1349,7 +1521,8 @@ export default function App() {
     } else {
       handleToggleDataSaverMode(false);
       handleSetVideoQuality('auto');
-      setAudioQuality('320');
+      setAudioQuality('192');
+      showToast('Auto adaptive quality enabled', 'info');
     }
 
     setPendingQualityTrack(null);
@@ -1376,32 +1549,60 @@ export default function App() {
   };
 
   const handleToggleFavorite = async (track: Track) => {
-    const exists = favorites.some(f => f.id === track.id);
+    const trackYtId = extractYouTubeId(track.id || track.youtubeUrl || '');
+    const exists = isTrackLiked(track, favorites);
     
-    // Optimistic state update
+    // Ensure clean thumbnail
+    const cleanTrack: Track = {
+      ...track,
+      thumbnail: track.thumbnail || (trackYtId ? `https://i.ytimg.com/vi/${trackYtId}/hqdefault.jpg` : '')
+    };
+
+    // Optimistic state update: Prepend to the top so You tab Liked section updates with newest on top
     setFavorites((prev) => {
       if (exists) {
-        return prev.filter(f => f.id !== track.id);
+        return prev.filter(f => {
+          if (f.id === track.id) return false;
+          const fYtId = extractYouTubeId(f.id || f.youtubeUrl || '');
+          return !(trackYtId && fYtId && trackYtId === fYtId);
+        });
       } else {
-        return [...prev, track];
+        const withoutCurrent = prev.filter(f => {
+          if (f.id === track.id) return false;
+          const fYtId = extractYouTubeId(f.id || f.youtubeUrl || '');
+          return !(trackYtId && fYtId && trackYtId === fYtId);
+        });
+        return [cleanTrack, ...withoutCurrent];
       }
     });
+
+    // Also keep aura_liked_video_ids in sync for any standalone components
+    if (trackYtId) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('aura_liked_video_ids') || '[]');
+        const updated = exists 
+          ? stored.filter((id: string) => id !== trackYtId)
+          : Array.from(new Set([trackYtId, ...stored]));
+        localStorage.setItem('aura_liked_video_ids', JSON.stringify(updated));
+      } catch {}
+    }
 
     if (exists) {
       showToast(`Removed from Liked videos`, 'info');
     } else {
-      showToast(`Added to Liked videos`, 'success');
+      showToast(`Added to Liked videos 👍`, 'success');
     }
 
     // Sync to Firestore if logged in
     if (user) {
-      const path = `users/${user.uid}/favorites/${track.id}`;
+      const docId = track.id || trackYtId || 'track';
+      const path = `users/${user.uid}/favorites/${docId}`;
       try {
         if (exists) {
-          await deleteDoc(doc(db, 'users', user.uid, 'favorites', track.id));
+          await deleteDoc(doc(db, 'users', user.uid, 'favorites', docId));
         } else {
-          await setDoc(doc(db, 'users', user.uid, 'favorites', track.id), {
-            ...track,
+          await setDoc(doc(db, 'users', user.uid, 'favorites', docId), {
+            ...cleanTrack,
             userId: user.uid,
             addedAt: new Date().toISOString()
           });
@@ -1412,17 +1613,41 @@ export default function App() {
     }
   };
 
-  const handleToggleSubscribe = async (channel: SubscribedChannel) => {
-    const channelName = channel?.name || 'Channel';
-    const channelId = channel?.id || '';
-    const exists = subscriptions.some(s => s.id === channelId || (s.name || '').toLowerCase() === channelName.toLowerCase());
+  const handleToggleSubscribe = async (channel: SubscribedChannel | string) => {
+    const rawName = typeof channel === 'string' ? channel : (channel?.name || 'Channel');
+    const rawId = typeof channel === 'string' ? '' : (channel?.id || '');
+    const cleanId = rawId && rawId !== 'undefined'
+      ? rawId
+      : `ch-${rawName.toLowerCase().replace(/[^a-z0-9]/g, '-') || Date.now()}`;
+
+    const channelObj: SubscribedChannel = typeof channel === 'string'
+      ? {
+          id: cleanId,
+          name: rawName,
+          handle: `@${rawName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+          avatar: getChannelAvatar(rawName),
+          subscribers: '1M subscribers',
+        }
+      : {
+          ...channel,
+          id: cleanId,
+          name: rawName,
+          handle: channel.handle || `@${rawName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+          avatar: channel.avatar || getChannelAvatar(rawName),
+          subscribers: channel.subscribers || '1M subscribers',
+        };
+
+    const channelName = channelObj.name;
+    const channelId = channelObj.id;
+    const exists = subscriptions.some(s => (s.id && s.id === channelId) || (s.name && s.name.toLowerCase() === channelName.toLowerCase()));
     
     // Instant optimistic state update
     setSubscriptions((prev) => {
       if (exists) {
-        return prev.filter(s => s.id !== channelId && (s.name || '').toLowerCase() !== channelName.toLowerCase());
+        return prev.filter(s => (s.id && s.id !== channelId) && ((s.name || '').toLowerCase() !== channelName.toLowerCase()));
       } else {
-        return [...prev, channel];
+        const withoutExisting = prev.filter(s => (s.id !== channelId) && ((s.name || '').toLowerCase() !== channelName.toLowerCase()));
+        return [...withoutExisting, channelObj];
       }
     });
 
@@ -1441,14 +1666,13 @@ export default function App() {
 
     // Sync to Firestore in real time if logged in
     if (user) {
-      const cleanId = channel.id || `ch-${Date.now()}`;
       const path = `users/${user.uid}/subscriptions/${cleanId}`;
       try {
         if (exists) {
           await deleteDoc(doc(db, 'users', user.uid, 'subscriptions', cleanId));
         } else {
           await setDoc(doc(db, 'users', user.uid, 'subscriptions', cleanId), {
-            ...channel,
+            ...channelObj,
             id: cleanId,
             userId: user.uid,
             createdAt: new Date().toISOString()
@@ -1580,52 +1804,57 @@ export default function App() {
     }
   };
 
-  // Next / Prev Track handling
-  const handleNextTrack = () => {
-    const list = DEFAULT_TRACKS;
-    if (!currentTrack) return;
+  // Next / Prev Track handling with Autoplay (Mini player does not autoplay)
+  const handleNextTrack = (trackList?: Track[]) => {
+    const list = (trackList && trackList.length > 0) ? trackList : DEFAULT_TRACKS;
+    if (!currentTrack) {
+      if (list.length > 0) {
+        startActualPlayTrack(list[0]);
+      }
+      return;
+    }
     const idx = list.findIndex(t => t.id === currentTrack.id);
-    const nextIdx = (idx + 1) % list.length;
-    setCurrentTrack(list[nextIdx]);
-    setIsPlaying(false);
-    setPlaybackTime(0);
+    const nextIdx = idx >= 0 ? (idx + 1) % list.length : 0;
+    const nextTrack = list[nextIdx] || DEFAULT_TRACKS[0];
+
+    startActualPlayTrack(nextTrack);
+    setIsPlaying(true);
+    showToast(`▶ Playing: ${nextTrack.title}`, 'info');
   };
 
   const handleTrackEnded = () => {
-    setIsPlaying(false);
-    showToast('Video playback completed', 'info');
+    if (isAutoplayUpNext) {
+      handleNextTrack();
+    } else {
+      setIsPlaying(false);
+      showToast('Track playback completed', 'info');
+    }
   };
 
-  const handlePrevTrack = () => {
-    const list = DEFAULT_TRACKS;
+  const handlePrevTrack = (trackList?: Track[]) => {
+    const list = (trackList && trackList.length > 0) ? trackList : DEFAULT_TRACKS;
     if (!currentTrack) return;
     const idx = list.findIndex(t => t.id === currentTrack.id);
     const prevIdx = (idx - 1 + list.length) % list.length;
-    setCurrentTrack(list[prevIdx]);
-    setIsPlaying(false);
-    setPlaybackTime(0);
+    const prevTrack = list[prevIdx] || DEFAULT_TRACKS[0];
+
+    startActualPlayTrack(prevTrack);
+    setIsPlaying(true);
+    showToast(`▶ Playing: ${prevTrack.title}`, 'info');
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors selection:bg-indigo-500 selection:text-white relative overflow-x-hidden flex flex-col items-center justify-start w-full">
+    <div className="min-h-screen bg-slate-100/90 dark:bg-[#07080f] text-slate-900 dark:text-slate-100 font-sans transition-colors selection:bg-rose-500 selection:text-white relative overflow-x-hidden flex flex-col items-center justify-start w-full">
       <AnimatePresence>
         {showSplash && <SplashScreen onComplete={handleCompleteSplash} />}
       </AnimatePresence>
       
-      {/* iOS Liquid Glass Ambient Background Mesh Orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div 
-          className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[120px] animate-liquid-orb-1" 
-          style={{ backgroundColor: 'var(--accent-orb-1)' }}
-        />
-        <div 
-          className="absolute top-[40%] right-[-10%] w-[600px] h-[600px] rounded-full blur-[140px] animate-liquid-orb-2" 
-          style={{ backgroundColor: 'var(--accent-orb-2)' }}
-        />
-        <div 
-          className="absolute bottom-[-10%] left-[20%] w-[550px] h-[550px] rounded-full blur-[130px] animate-liquid-orb-1" 
-          style={{ backgroundColor: 'var(--accent-orb-1)' }}
-        />
+      {/* ========================================================================= */}
+      {/* Clean Fluid Liquid Background (Zero Circle Artifacts)                     */}
+      {/* ========================================================================= */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 select-none">
+        <div className="absolute inset-0 bg-gradient-to-tr from-rose-950/20 via-transparent to-indigo-950/25 dark:from-rose-950/25 dark:via-transparent dark:to-blue-950/30 opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900/10 dark:to-black/35 pointer-events-none" />
       </div>
 
 
@@ -1641,62 +1870,67 @@ export default function App() {
       {/* Janmashtami Divine Floating Particles (Active until 6th Sep 2026) */}
       <JanmashtamiParticles enabled={janmashtamiParticlesEnabled} />
 
+      {/* Laxmi Puja Auspicious Floating Golden Shimmer & Lotus Embers */}
+      <LaxmiPujaParticles enabled={laxmiPujaParticlesEnabled} />
+
       {/* Direct APK & WebAPK Installer Prompt */}
       <PWAInstallBanner showToast={showToast} />
 
-      {/* Main Header & Shifted Bottom Dock Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        favoritesCount={favorites.length}
-        hasYouTubeKey={!!youtubeApiKey}
-        subscriptionsCount={subscriptions.length}
-        subscriptions={subscriptions}
-        selectedChannelFilter={selectedChannelFilter}
-        setSelectedChannelFilter={setSelectedChannelFilter}
-        onOpenSubscriptionsModal={() => setIsSubscriptionsModalOpen(true)}
-        user={user}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onOpenNotifications={() => setIsNotificationsOpen(true)}
-        onOpenCreateModal={() => setIsCreateModalOpen(true)}
-        onOpenShareModal={() => setIsShareModalOpen(true)}
-        onOpenWebView={handleOpenWebView}
-        onOpenAndroidModal={handleOpenAndroidModal}
-        onOpenJanmashtamiModal={() => setIsJanmashtamiModalOpen(true)}
-        isDataSaverMode={isDataSaverMode}
-        onToggleDataSaverMode={handleToggleDataSaverMode}
-        userName={user?.displayName || 'Bikash Jana'}
-      />
+      {/* Main Header & Shifted Bottom Dock Navbar (Hidden when Full Video Player is open to prevent overlying) */}
+      {!isFullVideoPlayerOpen && (
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          favoritesCount={favorites.length}
+          hasYouTubeKey={!!youtubeApiKey}
+          subscriptionsCount={subscriptions.length}
+          subscriptions={subscriptions}
+          selectedChannelFilter={selectedChannelFilter}
+          setSelectedChannelFilter={setSelectedChannelFilter}
+          onOpenSubscriptionsModal={() => setIsSubscriptionsModalOpen(true)}
+          user={user}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onOpenNotifications={() => setIsNotificationsOpen(true)}
+          onOpenCreateModal={() => setIsCreateModalOpen(true)}
+          onOpenShareModal={() => setIsShareModalOpen(true)}
+          onOpenWebView={handleOpenWebView}
+          onOpenAndroidModal={handleOpenAndroidModal}
+          onOpenJanmashtamiModal={() => setIsJanmashtamiModalOpen(true)}
+          onOpenLaxmiPujaModal={() => setIsLaxmiPujaModalOpen(true)}
+          isDataSaverMode={isDataSaverMode}
+          onToggleDataSaverMode={handleToggleDataSaverMode}
+          userName={user?.displayName || mobileAuthUser?.displayName || mobileAuthUser?.phoneNumber || 'Bikash Jana'}
+          currentTrack={currentTrack || lastPlayedVideo}
+          hasLastPlayedVideo={!!(currentTrack || lastPlayedVideo)}
+          onToggleMiniPlayer={() => {
+            setIsFullVideoPlayerOpen(false);
+            setIsMiniPlayerDismissed(false);
+            setIsVideoMiniPlayerOpen(true);
+            if (!currentTrack && lastPlayedVideo) {
+              setCurrentTrack(lastPlayedVideo);
+            }
+          }}
+        />
+      )}
 
       {/* Primary Main Content Area */}
-      <main className="mx-auto pt-0 pb-20 w-full flex flex-col items-center justify-start self-center overflow-x-hidden max-w-full min-h-screen px-0 sm:px-4 lg:px-6">
-        <AnimatePresence mode="wait" initial={false}>
+      <main className="mx-auto pt-2 sm:pt-3 pb-28 sm:pb-32 w-full flex flex-col items-center justify-start self-center overflow-x-hidden max-w-full min-h-screen px-0 sm:px-4 lg:px-6">
+        <AnimatePresence mode="wait" initial={false} custom={tabDirection}>
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 12, scale: 0.99 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.99 }}
-            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center will-change-transform"
+            custom={tabDirection}
+            initial={(dir: number) => ({ opacity: 0, x: (dir || 1) * 36, scale: 0.985 })}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={(dir: number) => ({ opacity: 0, x: (dir || 1) * -28, scale: 0.99 })}
+            transition={{
+              x: { type: 'spring', stiffness: 360, damping: 30 },
+              opacity: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+              scale: { duration: 0.20, ease: [0.16, 1, 0.3, 1] }
+            }}
+            className="w-full min-h-[70vh] flex flex-col items-center justify-start self-center will-change-[transform,opacity] transform-gpu"
           >
-            {activeTab === 'home' && (
-              <HomeView
-                onPlay={handlePlayTrack}
-                onDownload={(track) => setDownloadTrack(track)}
-                currentTrackId={currentTrack?.id}
-                favorites={favorites}
-                history={history}
-                onClearHistory={handleClearHistory}
-                onToggleFavorite={handleToggleFavorite}
-                onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
-                onOpenMetadata={(track) => setMetadataTrack(track)}
-                onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
-                onShowToast={showToast}
-              />
-            )}
-
             {activeTab === 'subscriptions' && (
               <SubscriptionsView
                 onPlay={handlePlayTrack}
@@ -1753,9 +1987,21 @@ export default function App() {
                 onOpenChannelDetails={(ch) => setSelectedChannelForDetails(ch)}
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}
                 onShowToast={showToast}
-                userName={user?.displayName || 'Bikash Jana'}
-                userEmail={user?.email || 'bikashjana2005@gmail.com'}
+                userName={user?.displayName || 'My Account'}
+                userEmail={user?.email && user.email !== 'bikashjana2005@gmail.com' ? user.email : (getTargetYouTubeEmail() !== 'bikashjana2005@gmail.com' ? getTargetYouTubeEmail() : '')}
                 userPhoto={user?.photoURL || undefined}
+                isDataSaverMode={isDataSaverMode}
+                onToggleDataSaverMode={handleToggleDataSaverMode}
+                videoQuality={videoQuality}
+                onChangeVideoQuality={handleSetVideoQuality}
+                onOpenSettings={() => handleTabChange('settings')}
+                onOpenDownloads={() => handleTabChange('downloads')}
+                onOpenShareModal={() => setIsShareModalOpen(true)}
+                downloadedTracks={downloadedTracks}
+                onRemoveDownload={(trackId) => setDownloadedTracks(prev => prev.filter(t => t.id !== trackId))}
+                onClearAllDownloads={() => setDownloadedTracks([])}
+                onSyncYouTubeHistory={handleSyncYouTubeHistory}
+                isYouTubeSyncing={isYouTubeSyncing}
               />
             )}
 
@@ -1786,7 +2032,7 @@ export default function App() {
                 videoQuality={videoQuality}
                 setVideoQuality={handleSetVideoQuality}
                 autoPlayOnSelect={autoPlayOnSelect}
-                setAutoPlayOnSelect={setAutoPlayOnSelect}
+                setAutoPlayOnSelect={handleSetAutoPlayOnSelect}
                 onShowToast={showToast}
                 user={user}
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -1816,86 +2062,6 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* Full Screen Audio Stream Player Overlay */}
-      {isOverlayOpen && currentTrack && (
-        <AudioPlayerOverlay
-          track={currentTrack}
-          isPlaying={isPlaying}
-          onTogglePlay={handleTogglePlay}
-          onClose={() => setIsOverlayOpen(false)}
-          onDownload={(track) => setDownloadTrack(track)}
-          onPlayTrack={handlePlayTrack}
-          onNextTrack={handleNextTrack}
-          onPrevTrack={handlePrevTrack}
-          isFavorite={favorites.some(f => f.id === currentTrack.id)}
-          onToggleFavorite={handleToggleFavorite}
-          onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
-          onOpenMetadata={(track) => setMetadataTrack(track)}
-          volume={volume}
-          setVolume={setVolume}
-          isMuted={isMuted}
-          setIsMuted={setIsMuted}
-          showVideo={showVideo}
-          setShowVideo={setShowVideo}
-          onShowToast={showToast}
-          audioQuality={audioQuality}
-          playbackTime={playbackTime}
-          realDuration={realDuration}
-          onSeek={handleSeek}
-          playerEngine={playerEngine}
-          onChangePlayerEngine={handleChangePlayerEngine}
-          isDataSaverMode={isDataSaverMode}
-          onToggleDataSaverMode={handleToggleDataSaverMode}
-          onToggleFullScreen={() => {
-            setIsOverlayOpen(false);
-            setShowVideo(true);
-            setIsFullScreenVideo(true);
-          }}
-        />
-      )}
-
-      {/* Persistent Global YouTube Video & Audio Player */}
-      {currentTrack && (
-        <GlobalYouTubePlayer
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          onTogglePlayPause={() => setIsPlaying(prev => !prev)}
-          onSetPlaying={(p) => setIsPlaying(p)}
-          volume={volume}
-          isMuted={isMuted}
-          showVideo={showVideo}
-          isOverlayOpen={isOverlayOpen}
-          isFullScreen={isFullScreenVideo}
-          onToggleFullScreen={() => setIsFullScreenVideo(prev => !prev)}
-          onTrackEnded={handleTrackEnded}
-          isAutoplay={isAutoplayUpNext}
-          onToggleAutoplay={handleToggleAutoplayUpNext}
-          audioQuality={audioQuality}
-          isDataSaverMode={isDataSaverMode}
-          onOpenOverlay={() => setIsOverlayOpen(true)}
-          onCloseVideo={() => {
-            setShowVideo(false);
-            setIsFullScreenVideo(false);
-          }}
-          onProgress={handleProgress}
-          onDuration={handleDuration}
-          seekToSeconds={seekToSeconds}
-          playerEngine={playerEngine}
-          onChangePlayerEngine={handleChangePlayerEngine}
-          onPlayTrack={handlePlayTrack}
-          onDownloadTrack={(track) => setDownloadTrack(track)}
-          onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
-          isFavorite={favorites.some(f => f.id === currentTrack.id)}
-          onToggleFavorite={handleToggleFavorite}
-          isSubscribed={subscriptions.some(s => (s?.name || '').toLowerCase() === (currentTrack?.channel || '').toLowerCase())}
-          onToggleSubscribe={handleToggleSubscribe}
-          onShowToast={showToast}
-          isOnline={isOnline}
-          downloadedTracks={downloadedTracks}
-          darkMode={darkMode}
-        />
-      )}
-
       {/* Download Options Modal (Track or Full Playlist) */}
       <DownloadModal
         isOpen={!!(downloadTrack || downloadPlaylist)}
@@ -1917,7 +2083,7 @@ export default function App() {
             return prev;
           });
           handlePlayTrack(track);
-          showToast(`Downloaded "${track.title}" - Playing video now!`, 'success');
+          showToast(`Downloaded "${track.title}"`, 'success');
         }}
       />
 
@@ -2030,6 +2196,10 @@ export default function App() {
         onShowToast={showToast}
         onSyncGoogleAccount={() => handleSyncGoogleAccount(user, true)}
         onSyncYouTubeSubscriptions={handleSyncYouTubeSubscriptions}
+        onOpenMobileAuth={() => {
+          setIsAuthModalOpen(false);
+          setShowMobileAuth(true);
+        }}
         favoritesCount={favorites.length}
         subscriptionsCount={subscriptions.length}
         playlistsCount={playlists.length}
@@ -2079,6 +2249,189 @@ export default function App() {
         }}
         onShowToast={showToast}
       />
+
+      {/* Laxmi Puja Special Festival Celebration Modal */}
+      <LaxmiPujaModal
+        isOpen={isLaxmiPujaModalOpen}
+        onClose={() => setIsLaxmiPujaModalOpen(false)}
+        onPlayTrack={handlePlayTrack}
+        particlesOn={laxmiPujaParticlesEnabled}
+        onToggleParticles={() => {
+          const next = !laxmiPujaParticlesEnabled;
+          setLaxmiPujaParticlesEnabled(next);
+          localStorage.setItem('aura_laxmi_particles', next ? 'true' : 'false');
+          showToast(next ? '✨ Laxmi Puja golden effects ON' : 'Golden effects paused', 'info');
+        }}
+        onShowToast={showToast}
+      />
+
+      {/* Mobile Login / Signup Screen with Real OTP from Trusted Source (Shown after logo screen) */}
+      <MobileAuthModal
+        isOpen={showMobileAuth}
+        onClose={() => setShowMobileAuth(false)}
+        onSuccess={(verifiedUser) => {
+          setShowMobileAuth(false);
+          setMobileAuthUser(verifiedUser);
+          const greeting = verifiedUser.displayName 
+            ? `${verifiedUser.displayName} (${verifiedUser.phoneNumber})` 
+            : verifiedUser.phoneNumber;
+          showToast(`Verified as ${greeting}! Welcome to Ai Music Stream 🎉`, 'success');
+        }}
+        onShowToast={showToast}
+      />
+
+      {/* Global Background Audio Player Engine (inactive when Full or Mini Video player handles playback) */}
+      <GlobalYouTubePlayer
+        currentTrack={null}
+        isPlaying={false}
+        volume={volume}
+        isMuted={true}
+        showVideo={false}
+        onTrackEnded={handleTrackEnded}
+        onProgress={handleProgress}
+        onDuration={handleDuration}
+        seekToSeconds={seekToSeconds}
+        playerEngine={playerEngine}
+        onChangePlayerEngine={handleChangePlayerEngine}
+        isDataSaverMode={isDataSaverMode}
+        onPlayTrack={handlePlayTrack}
+        onNextTrack={handleNextTrack}
+        onPrevTrack={handlePrevTrack}
+        onDownloadTrack={(track) => setDownloadTrack(track)}
+        onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+        isFavorite={favorites.some(f => f.id === currentTrack?.id)}
+        onToggleFavorite={handleToggleFavorite}
+        isSubscribed={subscriptions.some(s => s.name.toLowerCase() === (currentTrack?.artist || currentTrack?.channel || '').toLowerCase())}
+        onToggleSubscribe={handleToggleSubscribe}
+        onShowToast={showToast}
+        downloadedTracks={downloadedTracks}
+        allTracks={DEFAULT_TRACKS}
+        darkMode={darkMode}
+        isAutoplay={isAutoplayUpNext}
+        onToggleAutoplay={handleToggleAutoplayUpNext}
+        onTogglePlayPause={handleTogglePlay}
+        onSetPlaying={setIsPlaying}
+        videoQuality={videoQuality}
+        onChangeVideoQuality={handleSetVideoQuality}
+        onVolumeChange={handleVolumeChange}
+        onToggleMute={handleToggleMute}
+      />
+
+      {/* Resizable Rectangular Video Mini Player (floating Picture-in-Picture window displaying last played video) */}
+      {!isFullVideoPlayerOpen && (currentTrack || lastPlayedVideo) && !isMiniPlayerDismissed && (
+        <VideoMiniPlayer
+          currentTrack={currentTrack || lastPlayedVideo}
+          isPlaying={isPlaying}
+          onTogglePlay={handleTogglePlay}
+          onNextTrack={() => handleNextTrack()}
+          onExpand={() => {
+            setIsVideoMiniPlayerOpen(false);
+            setIsFullVideoPlayerOpen(true);
+          }}
+          onClose={() => {
+            setIsVideoMiniPlayerOpen(false);
+            setIsMiniPlayerDismissed(true);
+            setIsPlaying(false);
+          }}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+        />
+      )}
+
+      {/* Floating Restore Mini Player Button when dismissed: Show last played video in mini player anytime */}
+      {!isFullVideoPlayerOpen && isMiniPlayerDismissed && (currentTrack || lastPlayedVideo) && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsMiniPlayerDismissed(false);
+            setIsVideoMiniPlayerOpen(true);
+            if (!currentTrack && lastPlayedVideo) {
+              setCurrentTrack(lastPlayedVideo);
+            }
+          }}
+          className="fixed bottom-16 sm:bottom-4 right-3 sm:right-4 z-40 px-3 py-2 rounded-xl bg-zinc-900/95 hover:bg-zinc-800 text-white border border-red-500/40 shadow-2xl backdrop-blur-md flex items-center gap-2.5 group transition-all duration-150 active:scale-95 cursor-pointer ring-1 ring-black/40"
+          title={`Show last played video in mini player: ${(currentTrack || lastPlayedVideo)?.title}`}
+        >
+          <div className="relative w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0 border border-white/20">
+            <img
+              src={(currentTrack || lastPlayedVideo)?.thumbnail || `https://i.ytimg.com/vi/${extractYouTubeId((currentTrack || lastPlayedVideo)?.id || '')}/hqdefault.jpg`}
+              alt="Last played thumbnail"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&auto=format&fit=crop';
+              }}
+            />
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+              <Play size={10} className="fill-white text-white" />
+            </div>
+          </div>
+          <div className="text-left max-w-[130px] sm:max-w-[180px] min-w-0">
+            <span className="text-[9px] font-black text-amber-400 block uppercase tracking-wider leading-none mb-0.5">
+              Last Played Video
+            </span>
+            <span className="text-[11px] font-bold text-white truncate block leading-tight">
+              {(currentTrack || lastPlayedVideo)?.title}
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-red-400 group-hover:text-red-300 transition-colors shrink-0">
+            Mini Player ↗
+          </span>
+        </button>
+      )}
+
+      {/* YouTube Own Standard Web Full Video Player with Smooth Morph Transition */}
+      <AnimatePresence>
+        {isFullVideoPlayerOpen && (
+          <YouTubeStandardWebPlayer
+            key="yt-standard-web-player-modal"
+            isOpen={isFullVideoPlayerOpen}
+            track={currentTrack || lastPlayedVideo}
+            isPlaying={isPlaying}
+            onClose={() => {
+              setIsFullVideoPlayerOpen(false);
+              setIsVideoMiniPlayerOpen(true);
+              setIsMiniPlayerDismissed(false);
+              if (!currentTrack && lastPlayedVideo) {
+                setCurrentTrack(lastPlayedVideo);
+              }
+            }}
+            onMinimizeToMiniPlayer={() => {
+              setIsFullVideoPlayerOpen(false);
+              setIsVideoMiniPlayerOpen(true);
+              setIsMiniPlayerDismissed(false);
+              if (!currentTrack && lastPlayedVideo) {
+                setCurrentTrack(lastPlayedVideo);
+              }
+            }}
+            onTogglePlay={handleTogglePlay}
+            onPlayTrack={(t) => {
+              startActualPlayTrack(t);
+              setIsVideoMiniPlayerOpen(false);
+              setIsFullVideoPlayerOpen(true);
+            }}
+            onNextTrack={() => handleNextTrack()}
+            onPrevTrack={() => handlePrevTrack()}
+            volume={volume}
+            onVolumeChange={handleVolumeChange}
+            isMuted={isMuted}
+            onToggleMute={handleToggleMute}
+            onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+            onDownload={(track) => setDownloadTrack(track)}
+            isFavorite={favorites.some(f => f.id === currentTrack?.id)}
+            onToggleFavorite={handleToggleFavorite}
+            isSubscribed={subscriptions.some(s => s.name.toLowerCase() === (currentTrack?.artist || currentTrack?.channel || '').toLowerCase())}
+            onToggleSubscribe={handleToggleSubscribe}
+            onShowToast={showToast}
+            allTracks={DEFAULT_TRACKS}
+            darkMode={darkMode}
+            accentThemeId={accentThemeId}
+            user={user}
+            userName={user?.displayName || mobileAuthUser?.displayName || mobileAuthUser?.phoneNumber || 'Bikash Jana'}
+            isAutoplayUpNext={isAutoplayUpNext}
+            onToggleAutoplayUpNext={handleToggleAutoplayUpNext}
+          />
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -11,9 +11,17 @@
     <link rel="apple-touch-icon" href="/app-logo.svg" />
     <link rel="manifest" href="/manifest.json" />
     <title>Ai Music Stream</title>
+    <meta name="description" content="AI-powered music streaming, YouTube mobile synchronization for subscriptions, channels, history, liked videos, and playlists in real time." />
+    <meta property="og:title" content="Ai Music Stream" />
+    <meta property="og:description" content="AI-powered music streaming, YouTube mobile synchronization for subscriptions, channels, history, liked videos, and playlists in real time." />
   </head>
-  <body>
-    <div id="root"></div>
+  <body class="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+    <div id="root">
+      <div style="position:fixed;inset:0;background:#090d16;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;">
+        <img src="/app-logo.svg" alt="Ai Music Stream" style="width:104px;height:104px;border-radius:50%;box-shadow:0 12px 36px rgba(225,29,72,0.28);" />
+        <div style="margin-top:16px;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.5px;">Ai Music Stream</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {

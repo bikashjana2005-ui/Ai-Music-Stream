@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   X, 
   Search, 
-  Youtube, 
   Check, 
   Plus, 
   Trash2, 
@@ -26,7 +25,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SubscribedChannel } from '../types';
-import { loginWithGoogle, fetchYouTubeUserSubscriptions } from '../lib/firebase';
+import { fetchYouTubeUserSubscriptions } from '../lib/firebase';
 import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
 
 interface ChannelSubscriptionsModalProps {
@@ -260,7 +259,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
     e.target.value = ''; // reset
   };
 
-  // Sync real-time original YouTube account subscriptions via Google OAuth
+  // Sync real-time YouTube subscriptions via stored access token or API
   const handleSyncYouTubeAccountSubscriptions = async () => {
     setIsSyncingYouTube(true);
     try {
@@ -268,17 +267,12 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
       try {
         channels = await fetchYouTubeUserSubscriptions();
       } catch (tokenErr) {
-        onShowToast('Authenticating with Google for YouTube Subscriptions...', 'info');
-        const loginRes = await loginWithGoogle();
-        if (loginRes?.accessToken) {
-          channels = await fetchYouTubeUserSubscriptions(loginRes.accessToken);
-        } else {
-          throw new Error('Could not retrieve YouTube access token');
-        }
+        onShowToast('Direct access token required. You can add channels via Discover or import below.', 'info');
+        return;
       }
 
       if (!channels || channels.length === 0) {
-        onShowToast('No active YouTube subscriptions found on your Google Account.', 'info');
+        onShowToast('No active YouTube subscriptions found.', 'info');
         return;
       }
 
@@ -304,7 +298,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
       if (err?.message === 'YOUTUBE_API_UNCONFIGURED') {
         onShowToast('YouTube API access is being verified. You can search and add channels directly in the Discover tab.', 'info');
       } else {
-        onShowToast('Could not fetch YouTube subscriptions. Please verify Google sign-in.', 'info');
+        onShowToast('Could not fetch YouTube subscriptions.', 'info');
       }
     } finally {
       setIsSyncingYouTube(false);
@@ -374,25 +368,25 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.12 }}
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
             onClick={onClose}
           />
 
           {/* Modal Container */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 12 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-3xl bg-slate-900/95 border border-white/15 rounded-3xl p-5 sm:p-7 shadow-[0_25px_80px_rgba(0,0,0,0.7)] max-h-[92vh] flex flex-col relative text-white transition-colors duration-300 z-10 overflow-hidden backdrop-blur-2xl"
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-3xl bg-slate-900/95 border border-white/15 rounded-3xl p-5 sm:p-7 shadow-[0_25px_80px_rgba(0,0,0,0.7)] max-h-[92vh] flex flex-col relative text-white z-10 overflow-hidden backdrop-blur-2xl transform-gpu"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header Bar */}
             <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-rose-600 to-red-500 text-white flex items-center justify-center shadow-lg shadow-rose-600/30 shrink-0">
-                  <Youtube size={24} />
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
                 </div>
                 <div>
                   <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
@@ -451,7 +445,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                 }`}
               >
                 <RefreshCw size={15} />
-                <span>Google YouTube Sync</span>
+                <span>Cloud & Import Sync</span>
               </button>
             </div>
 
@@ -497,11 +491,11 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                         <Sparkles size={14} /> Search Results
                       </h3>
                       <div className="grid grid-cols-1 gap-2.5">
-                        {searchResults.map((ch) => {
+                        {searchResults.map((ch, idx) => {
                           const subscribed = isSubscribed(ch.id, ch.name);
                           return (
                             <div 
-                              key={`search-ch-${ch.id}`}
+                              key={`search-ch-${ch.id || ch.name || idx}-${idx}`}
                               className="flex items-center justify-between gap-3 p-3.5 bg-slate-800/90 rounded-2xl border border-white/10 shadow-sm"
                             >
                               <div className="flex items-center gap-3 min-w-0">
@@ -562,11 +556,11 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {POPULAR_RECOMMENDED_CHANNELS.map((ch) => {
+                      {POPULAR_RECOMMENDED_CHANNELS.map((ch, idx) => {
                         const subscribed = isSubscribed(ch.id, ch.name);
                         return (
                           <div
-                            key={`rec-ch-${ch.id}`}
+                            key={`rec-ch-${ch.id || ch.name || idx}-${idx}`}
                             className={`flex items-center justify-between gap-3 p-3 rounded-2xl border transition-all ${
                               subscribed 
                                 ? 'bg-rose-500/15 border-rose-500/40 shadow-xs' 
@@ -640,7 +634,7 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
 
                   {filteredSubscriptions.length === 0 ? (
                     <div className="py-12 text-center space-y-3 bg-slate-950/40 rounded-3xl border border-dashed border-white/10 p-6">
-                      <Youtube size={38} className="text-slate-600 mx-auto" />
+                      <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600 mx-auto"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
                       <p className="text-xs font-bold text-slate-300">No channels found</p>
                       <button
                         onClick={() => setActiveTab('discover')}
@@ -651,11 +645,11 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {filteredSubscriptions.map((ch) => {
+                      {filteredSubscriptions.map((ch, idx) => {
                         const isBellOn = channelBellStates[ch.id] !== false;
                         return (
                           <div 
-                            key={`sub-manage-${ch.id}`}
+                            key={`sub-manage-${ch.id || ch.name || idx}-${idx}`}
                             className="flex items-center justify-between gap-3 p-3.5 bg-slate-800/80 rounded-2xl border border-white/10 hover:border-rose-500/40 transition-all group"
                           >
                             <div 
@@ -720,25 +714,25 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                 </div>
               )}
 
-              {/* TAB 3: GOOGLE YOUTUBE ACCOUNT OAUTH SYNC & IMPORTER */}
+              {/* TAB 3: CLOUD & BACKUP SYNC */}
               {activeTab === 'sync' && (
                 <div className="space-y-5 animate-fade-in">
                   
-                  {/* Section 1: Google OAuth Direct Sync */}
+                  {/* Section 1: Cloud Subscription Sync */}
                   <div className="bg-gradient-to-r from-red-600/20 via-rose-600/20 to-indigo-600/20 border border-red-500/30 rounded-3xl p-5 space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-red-600/30">
-                        <Youtube size={26} />
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></svg>
                       </div>
                       <div>
                         <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
-                          Sync Google YouTube Account
+                          Sync Subscriptions with Cloud
                           <span className="text-[10px] font-black bg-red-600 text-white px-2 py-0.5 rounded-full uppercase">
-                            OAuth Live
+                            Live Sync
                           </span>
                         </h3>
                         <p className="text-xs text-slate-300 font-medium">
-                          Import all subscribed creators from your connected Google account in one tap.
+                          Keep your subscribed creators synced across devices with Firebase Firestore.
                         </p>
                       </div>
                     </div>
@@ -746,10 +740,10 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                     <div className="bg-slate-950/80 rounded-2xl p-4 border border-white/10 space-y-2 text-xs text-slate-300">
                       <div className="flex items-center gap-2 font-bold text-white">
                         <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-                        <span>Direct Google Account Integration</span>
+                        <span>Cloud Database Synchronization</span>
                       </div>
                       <p className="text-slate-400 pl-6">
-                        Seamlessly connects to your signed-in Google account to synchronize your live YouTube subscriptions library.
+                        Seamlessly syncs your subscribed channels across all sessions and active profiles.
                       </p>
                     </div>
 
@@ -761,12 +755,12 @@ export const ChannelSubscriptionsModal: React.FC<ChannelSubscriptionsModalProps>
                       {isSyncingYouTube ? (
                         <>
                           <Loader2 size={18} className="animate-spin" />
-                          <span>Connecting to Google YouTube...</span>
+                          <span>Syncing Channels...</span>
                         </>
                       ) : (
                         <>
                           <RefreshCw size={18} />
-                          <span>Sync My Google YouTube Subscriptions</span>
+                          <span>Sync Channel Subscriptions</span>
                         </>
                       )}
                     </button>

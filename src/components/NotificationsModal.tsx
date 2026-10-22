@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, X, Check, Youtube, Play, Sparkles, Radio } from 'lucide-react';
+import { Bell, X, Check,  Play, Sparkles, Radio } from 'lucide-react';
 import { Track } from '../types';
 
 interface NotificationsModalProps {

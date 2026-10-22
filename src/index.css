@@ -18,17 +18,80 @@
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    transition: background-color 350ms cubic-bezier(0.16, 1, 0.3, 1), color 350ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color 80ms ease-out, color 80ms ease-out;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  *, ::before, ::after {
-    transition-property: background-color, border-color, color, fill, stroke, box-shadow, backdrop-filter;
+  /* Snappy, ultra-fast targeted transitions for all interactive elements */
+  button, a, input, select, textarea, [role="button"] {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow, transform, opacity;
     transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-    transition-duration: 200ms;
+    transition-duration: 160ms;
+    touch-action: manipulation;
   }
+}
+
+/* ========================================================================= */
+/* ULTRA SMOOTH TRANSITION UTILITIES & INERTIA TOKENS                       */
+/* ========================================================================= */
+.ios-smooth-inertia {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+.ios-card-interactive {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease-out;
+  will-change: transform;
+}
+.ios-card-interactive:hover {
+  transform: translateY(-2px);
+}
+.ios-card-interactive:active {
+  transform: scale(0.985);
+}
+
+.ios-tap-feedback {
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ios-tap-feedback:active {
+  transform: scale(0.94);
+}
+
+/* ========================================================================= */
+/* VIRTUAL 165HZ MOTION ENGINE TOKENS & HARDWARE ACCELERATION               */
+/* ========================================================================= */
+:root {
+  --hz-165-frame: 6.06ms;
+  --hz-165-subframe-damping: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html.virtual-165hz-active {
+  scroll-behavior: auto; /* Defer to 165Hz sub-frame interpolation loop */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html.virtual-165hz-active body,
+html.virtual-165hz-active #root {
+  backface-visibility: hidden;
+}
+
+.virtual-165hz-active .overflow-y-auto,
+.virtual-165hz-active .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  will-change: scroll-position;
+}
+
+.subpixel-smooth {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
 /* Dynamic Accent Theme Helpers */
@@ -99,11 +162,11 @@
   background: rgba(156, 163, 175, 0.6);
 }
 
-/* Page & View Smooth Animations */
+/* Page & View Smooth Animations (Ultra-Fast 60fps) */
 @keyframes view-fade-scale {
   0% {
     opacity: 0;
-    transform: translateY(8px) scale(0.99);
+    transform: translateY(4px) scale(0.995);
   }
   100% {
     opacity: 1;
@@ -114,18 +177,18 @@
 @keyframes slide-up-smooth {
   0% {
     opacity: 0;
-    transform: translateY(16px) scale(0.98);
+    transform: translateY(8px);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 @keyframes scale-in-smooth {
   0% {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
   100% {
     opacity: 1;
@@ -134,62 +197,383 @@
 }
 
 .animate-fade-in {
-  animation: view-fade-scale 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: view-fade-scale 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
 }
 
 .animate-slide-up {
-  animation: slide-up-smooth 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slide-up-smooth 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
 }
 
 .animate-scale-in {
-  animation: scale-in-smooth 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: scale-in-smooth 0.14s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
 }
 
 .smooth-transition {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .smooth-hover {
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.14s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
 }
 
 .smooth-hover:hover {
   transform: translateY(-2px);
 }
 
-/* iOS Liquid Glass Custom Styling */
-.glass-liquid-light {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+/* GPU acceleration and performance utilities */
+.transform-gpu {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.fast-tap {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fast-fade {
+  transition: opacity 0.14s ease-out;
+}
+
+/* ==========================================================================
+   NATIVE iOS LIQUID FLUIDITY GLASS DESIGN SYSTEM & ANIMATED AURORA MESH
+   ========================================================================== */
+
+/* Animated iOS Aurora Mesh Keyframes */
+@keyframes ios-aurora-float-1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(60px, -50px) scale(1.18) rotate(25deg);
+  }
+  66% {
+    transform: translate(-40px, 40px) scale(0.92) rotate(-15deg);
+  }
+}
+
+@keyframes ios-aurora-float-2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(-70px, 60px) scale(1.15) rotate(-30deg);
+  }
+  66% {
+    transform: translate(50px, -45px) scale(0.88) rotate(20deg);
+  }
+}
+
+@keyframes ios-aurora-float-3 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(45px, 55px) scale(1.22);
+  }
+}
+
+@keyframes ios-aurora-float-4 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-55px, -35px) scale(1.14);
+  }
+}
+
+@keyframes ios-aurora-morph {
+  0%, 100% {
+    border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%;
+  }
+  33% {
+    border-radius: 70% 30% 46% 54% / 30% 29% 71% 70%;
+  }
+  66% {
+    border-radius: 30% 70% 70% 30% / 50% 60% 40% 50%;
+  }
+}
+
+.animate-aurora-1 {
+  animation: ios-aurora-float-1 22s ease-in-out infinite, ios-aurora-morph 28s ease-in-out infinite alternate;
+  will-change: transform, border-radius;
+}
+
+.animate-aurora-2 {
+  animation: ios-aurora-float-2 26s ease-in-out infinite, ios-aurora-morph 32s ease-in-out infinite alternate;
+  will-change: transform, border-radius;
+}
+
+.animate-aurora-3 {
+  animation: ios-aurora-float-3 20s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-aurora-4 {
+  animation: ios-aurora-float-4 24s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ==========================================================================
+   ULTRA-TRANSPARENT LIQUID GLASS UTILITY CLASSES
+   ========================================================================== */
+
+/* Universal Ultra-Transparent Glass */
+.ios-glass-ultra {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 
+    0 16px 40px -10px rgba(0, 0, 0, 0.08),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.02);
+}
+
+.dark .ios-glass-ultra {
+  background: rgba(12, 13, 22, 0.42);
+  backdrop-filter: blur(30px) saturate(210%);
+  -webkit-backdrop-filter: blur(30px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 20px 50px -12px rgba(0, 0, 0, 0.65),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.35);
+}
+
+/* Floating iOS Header Island */
+.ios-glass-header {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.6);
   box-shadow: 
+    0 12px 36px -10px rgba(0, 0, 0, 0.09),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+}
+
+.dark .ios-glass-header {
+  background: rgba(14, 15, 24, 0.52);
+  backdrop-filter: blur(36px) saturate(210%);
+  -webkit-backdrop-filter: blur(36px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 
+    0 18px 45px -12px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.28);
+}
+
+/* Floating Bottom iOS Liquid Glass Dock */
+.ios-glass-dock {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(36px) saturate(220%);
+  -webkit-backdrop-filter: blur(36px) saturate(220%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 
+    0 20px 45px -10px rgba(0, 0, 0, 0.15),
+    inset 0 1px 1.8px rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.03);
+}
+
+.dark .ios-glass-dock {
+  background: rgba(14, 15, 25, 0.58);
+  backdrop-filter: blur(40px) saturate(230%);
+  -webkit-backdrop-filter: blur(40px) saturate(230%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 
+    0 24px 60px -12px rgba(0, 0, 0, 0.8),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.32),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+}
+
+/* Translucent Glass Card with Specular Edge */
+.ios-glass-card {
+  background: rgba(255, 255, 255, 0.48);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    0 10px 30px -10px rgba(0, 0, 0, 0.06),
+    inset 0 1px 1.2px rgba(255, 255, 255, 0.9);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease;
+}
+
+.dark .ios-glass-card {
+  background: rgba(20, 22, 34, 0.45);
+  backdrop-filter: blur(26px) saturate(200%);
+  -webkit-backdrop-filter: blur(26px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 
+    0 14px 38px -12px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1.2px rgba(255, 255, 255, 0.2);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease;
+}
+
+.ios-glass-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 
+    0 18px 40px -10px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+}
+
+.dark .ios-glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 
+    0 22px 50px -12px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.32);
+}
+
+/* Tactile iOS Glass Pill / Filter Chip / Button */
+.ios-glass-pill {
+  background: rgba(255, 255, 255, 0.52);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 
+    0 4px 16px -4px rgba(0, 0, 0, 0.06),
+    inset 0 1px 1px rgba(255, 255, 255, 0.85);
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .ios-glass-pill {
+  background: rgba(28, 30, 46, 0.5);
+  backdrop-filter: blur(22px) saturate(190%);
+  -webkit-backdrop-filter: blur(22px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 6px 20px -6px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.22);
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ios-glass-pill:hover {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.dark .ios-glass-pill:hover {
+  background: rgba(36, 40, 60, 0.65);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.ios-glass-pill:active {
+  transform: scale(0.95);
+}
+
+/* Active Highlight Pill */
+.ios-glass-pill-active {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.9), rgba(244, 63, 94, 0.85));
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 
+    0 6px 20px -4px rgba(225, 29, 72, 0.45),
+    inset 0 1px 1.2px rgba(255, 255, 255, 0.6);
+}
+
+/* High Contrast Text Protection */
+.ios-text-contrast {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.dark .ios-text-contrast {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* YouTube Standard Web Player Liquid Glass Canvas & Panels */
+.ios-glass-web-player {
+  background: rgba(12, 14, 24, 0.82);
+  backdrop-filter: blur(36px) saturate(210%);
+  -webkit-backdrop-filter: blur(36px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 24px 60px -15px rgba(0, 0, 0, 0.8),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.22);
+}
+
+/* Legacy & Compatibility Utilities */
+.ios-glass {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 
+    0 12px 36px 0 rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.dark .ios-glass {
+  background: rgba(15, 17, 28, 0.55);
+  backdrop-filter: blur(32px) saturate(210%);
+  -webkit-backdrop-filter: blur(32px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 16px 40px 0 rgba(0, 0, 0, 0.55),
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.24);
+}
+
+.ios-glass-button {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .ios-glass-button {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  transition: all 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ios-glass-button:hover {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.dark .ios-glass-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.glass-liquid-light {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(26px) saturate(200%);
+  -webkit-backdrop-filter: blur(26px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 
     0 10px 40px -10px rgba(31, 38, 135, 0.08),
-    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.03);
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.9);
 }
 
 .glass-liquid-dark {
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 18, 30, 0.5);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow: 
     0 10px 40px -10px rgba(0, 0, 0, 0.5),
-    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.2);
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.2);
 }
 
 .glass-pill-light {
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 .glass-pill-dark {
-  background: rgba(30, 41, 59, 0.75);
+  background: rgba(26, 32, 48, 0.55);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -325,13 +709,17 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
-  border-radius: 16px;
   overflow: hidden;
 }
 
 #player {
   width: 100%;
   height: 100%;
+}
+
+#player iframe {
+  border: 0 !important;
+  outline: none !important;
 }
 
 /* ==========================================================================
@@ -473,5 +861,41 @@
   background-color: rgba(160, 160, 175, 0.4);
   margin-left: auto;
   margin-right: auto;
+}
+
+/* RGB Border Animation & Glow for Video Player */
+@keyframes rgbBorderRotate {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.rgb-border-gradient {
+  background: linear-gradient(
+    115deg,
+    #ff0055,
+    #ff5500,
+    #ffcc00,
+    #00ff66,
+    #00f0ff,
+    #3b82f6,
+    #a855f7,
+    #ff0099,
+    #ff0055
+  );
+  background-size: 300% 300%;
+  animation: rgbBorderRotate 5s ease infinite;
+}
+
+.rgb-glow {
+  box-shadow: 0 0 18px -2px rgba(255, 0, 128, 0.4),
+              0 0 28px -4px rgba(0, 230, 255, 0.3),
+              0 12px 36px rgba(0, 0, 0, 0.85);
 }
 

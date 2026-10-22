@@ -19,7 +19,7 @@ import {
   Filter,
   Play,
   CheckCircle2,
-  Youtube,
+  
   Zap,
   Sliders,
   SlidersHorizontal,
@@ -53,6 +53,7 @@ import { YouTubeSearchFilterModal, SearchFilterOptions } from '../components/You
 import { JanmashtamiBanner } from '../components/JanmashtamiEffect';
 import { isJanmashtamiActive } from '../utils/janmashtami';
 import { getNetworkStatus, setLowNetworkMode, getOptimizedThumbnail } from '../utils/networkOptimizer';
+import { RedesignedSearchView } from '../components/RedesignedSearchView';
 
 interface SearchViewProps {
   onPlay: (track: Track) => void;
@@ -163,40 +164,42 @@ export const SearchView: React.FC<SearchViewProps> = ({
     hd4kOnly: false
   });
 
-  const hasActiveCustomFilters = filterOptions.sortBy !== 'relevance' || 
-    filterOptions.type !== 'all' || 
-    filterOptions.uploadDate !== 'any' || 
-    filterOptions.duration !== 'any' || 
-    filterOptions.officialOnly || 
-    filterOptions.liveOnly || 
-    filterOptions.hd4kOnly;
+  const hasActiveCustomFilters = Boolean(
+    (filterOptions?.sortBy && filterOptions.sortBy !== 'relevance') || 
+    (filterOptions?.type && filterOptions.type !== 'all') || 
+    (filterOptions?.uploadDate && filterOptions.uploadDate !== 'any') || 
+    (filterOptions?.duration && filterOptions.duration !== 'any') || 
+    filterOptions?.officialOnly || 
+    filterOptions?.liveOnly || 
+    filterOptions?.hd4kOnly
+  );
 
   // Filter and sort search results based on active filters
   const displayedSearchResults = React.useMemo(() => {
     let list = [...searchResults];
 
-    if (filterOptions.liveOnly) {
+    if (filterOptions?.liveOnly) {
       list = list.filter(t => 
         t.views?.toLowerCase().includes('live') || 
         t.views?.toLowerCase().includes('stream') || 
         t.title.toLowerCase().includes('live')
       );
     }
-    if (filterOptions.officialOnly) {
+    if (filterOptions?.officialOnly) {
       list = list.filter(t => 
         t.isOfficial || 
         t.views?.toLowerCase().includes('view') || 
         t.views?.toLowerCase().includes('verified')
       );
     }
-    if (filterOptions.hd4kOnly) {
+    if (filterOptions?.hd4kOnly) {
       list = list.filter(t => 
         t.title.toLowerCase().includes('4k') || 
         t.title.toLowerCase().includes('hd') || 
         (t.aiMoodTags && t.aiMoodTags.toLowerCase().includes('4k'))
       );
     }
-    if (filterOptions.sortBy === 'view_count') {
+    if (filterOptions?.sortBy === 'view_count') {
       list.sort((a, b) => {
         const getNum = (str?: string) => {
           if (!str) return 0;
@@ -589,17 +592,16 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const isResultsMode = hasSubmitted && query.trim().length > 0;
 
   return (
-    <div className="space-y-4 animate-fade-in pb-28 w-full max-w-full mx-auto relative">
-
-      {/* YouTube Top Search Bar Header (Modern Android Material 3 Design) */}
-      <div ref={searchContainerRef} className="sticky top-0 z-30 pt-1.5 pb-2 bg-[#0f0f0f] border-b border-white/5">
+    <div className="space-y-4 animate-fade-in pb-28 w-full max-w-full mx-auto relative min-h-screen text-gray-900 dark:text-gray-100">
+      {/* YouTube Top Search Bar Header (Docked cleanly below Header Navbar without overlying) */}
+      <div ref={searchContainerRef} className="sticky top-14 z-30 pt-1.5 pb-2.5 bg-gray-50/95 dark:bg-[#0f0f0f]/95 backdrop-blur-xl border-b border-gray-200/70 dark:border-white/10 transition-all">
         <div className="flex items-center gap-2 sm:gap-2.5">
           
           {/* Back Navigation Arrow (Clears search & returns to Discovery) */}
           <button
             type="button"
             onClick={handleBackToDiscovery}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#f1f1f1] hover:bg-white/10 active:bg-white/20 transition-all shrink-0 cursor-pointer"
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60 active:scale-95"
             title="Back"
           >
             <ArrowLeft size={22} />
@@ -623,7 +625,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder="Search YouTube"
-                className="w-full bg-[#222222] text-[#f1f1f1] pl-4 pr-20 py-2 sm:py-2.5 rounded-full border border-transparent focus:border-zinc-500 focus:outline-none font-normal text-[15px] shadow-xs placeholder:text-[#888888] transition-all"
+                className="w-full pl-4 pr-12 py-2 sm:py-2.5 focus:outline-none font-normal text-[16px] sm:text-[17px] transition-all bg-white/70 dark:bg-white/10 backdrop-blur-2xl text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-400 rounded-xl border border-black/10 dark:border-white/20 focus:border-red-500 focus:ring-2 focus:ring-red-500/30 shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.4)]"
               />
 
               {/* Right side inner controls (Clear & Search Submit) */}
@@ -638,250 +640,31 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       setShowDropdown(true);
                       inputRef.current?.focus();
                     }}
-                    className="p-1.5 text-zinc-400 hover:text-white rounded-full transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
                     title="Clear search"
                   >
                     <X size={18} />
                   </button>
                 )}
-
-                <button
-                  type="submit"
-                  disabled={loading || !query.trim()}
-                  className="p-1.5 bg-[#333333] hover:bg-zinc-700 text-white rounded-full transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
-                  title="Search"
-                >
-                  {loading || isSyncing ? <Loader2 size={16} className="animate-spin text-white" /> : <Search size={16} />}
-                </button>
               </div>
             </div>
           </form>
 
-          {/* Standalone Circular Voice Search Mic Button (Modern Android YouTube) */}
+          {/* Standalone Voice Search Mic Button */}
           <button
             type="button"
             onClick={() => setShowVoiceModal(true)}
-            className="w-10 h-10 rounded-full flex items-center justify-center bg-[#222222] text-[#f1f1f1] hover:bg-[#383838] active:scale-95 transition-all shrink-0 cursor-pointer"
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer bg-white/70 dark:bg-white/10 backdrop-blur-2xl text-gray-700 dark:text-zinc-200 border border-black/10 dark:border-white/20 hover:bg-white/90 dark:hover:bg-white/20 hover:text-red-500 active:scale-95 shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.4)]"
             title="Search with your voice"
           >
-            <Mic size={20} className="text-white" />
+            <Mic size={20} />
           </button>
-
-          {/* Low Network Zero-Buffer Toggle Button */}
-          <button
-            type="button"
-            onClick={() => {
-              const next = !isLowNetworkActive;
-              setLowNetworkMode(next);
-              setIsLowNetworkActive(next);
-              onShowToast(
-                next 
-                  ? '⚡ Zero Buffer Mode Active: 240p stream & 90% lighter thumbnails' 
-                  : 'Standard HD video streaming restored',
-                'info'
-              );
-            }}
-            className={`h-10 px-3 rounded-full flex items-center gap-1.5 transition-all shrink-0 cursor-pointer active:scale-95 text-xs font-semibold ${
-              isLowNetworkActive
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'bg-[#222222] text-zinc-400 hover:text-white border border-transparent'
-            }`}
-            title={isLowNetworkActive ? "Zero Buffer Mode Active" : "Enable Zero Buffer Mode"}
-          >
-            <Zap size={14} className={isLowNetworkActive ? "fill-emerald-400 text-emerald-400 animate-pulse" : "text-zinc-400"} />
-            <span className="hidden sm:inline">{isLowNetworkActive ? 'Zero Buffer' : 'Data Saver'}</span>
-          </button>
-
-          {/* Android YouTube Search Filter Modal Trigger Button */}
-          <button
-            type="button"
-            onClick={() => setShowFilterModal(true)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer relative ${
-              hasActiveCustomFilters
-                ? 'bg-white text-black font-bold'
-                : 'bg-[#222222] text-[#f1f1f1] hover:bg-[#383838] active:scale-95'
-            }`}
-            title="Search filters"
-          >
-            <SlidersHorizontal size={18} />
-            {hasActiveCustomFilters && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-black" />
-            )}
-          </button>
-
         </div>
-
-        {/* Quick Voice Search Command Presets Bar */}
-        {!isSearchingMode && (
-          <div className="mt-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            <span className="text-[11px] font-medium text-zinc-400 flex items-center gap-1 shrink-0">
-              <Mic size={12} className="text-zinc-400" /> Voice prompts:
-            </span>
-            {[
-              ...(isJanmashtamiActive() ? ['Play Achyutam Keshavam', 'Radhe Radhe Bhajan'] : []),
-              'Arijit Singh Hits',
-              'Lofi Beats Chill',
-              'Coke Studio India',
-              'Bollywood Dance Party'
-            ].map((cmd) => (
-              <button
-                key={cmd}
-                type="button"
-                onClick={() => {
-                  handleSelectTerm(cmd);
-                  onShowToast(`🎙️ Voice Command: "${cmd}"`, 'success');
-                }}
-                className="px-3 py-1 rounded-full text-xs font-medium bg-[#222222] text-zinc-300 hover:bg-[#333333] hover:text-white border border-white/5 transition-all shrink-0 active:scale-95 cursor-pointer"
-              >
-                <span>"{cmd}"</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* VIEW SWITCHER: Suggestions View VS Search Results VS Discovery Hub */}
-      {isSearchingMode ? (
-        /* 1. YOUTUBE SEARCH SUGGESTIONS VIEW (Matching screenshot IMG-20260906-WA0000.jpg) */
-        <div className="bg-[#0f0f0f] border border-white/5 rounded-2xl overflow-hidden shadow-2xl divide-y divide-white/5 animate-fade-in">
-          
-          {query.trim() ? (
-            /* Active Query Autocomplete List with ArrowUpLeft Buttons */
-            <div>
-              {autoSuggestions.length > 0 ? (
-                autoSuggestions.map((item, idx) => (
-                  <div
-                    key={`yt-sug-${idx}`}
-                    onClick={() => handleSelectTerm(item)}
-                    className={`flex items-center justify-between px-4 py-3.5 hover:bg-[#272727] active:bg-[#333] cursor-pointer transition-colors group ${
-                      focusedSuggestionIndex === idx ? 'bg-[#272727]' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <Search size={18} className="text-zinc-500 group-hover:text-zinc-300 shrink-0" />
-                      <span className="text-[15px] font-normal text-zinc-100 truncate">
-                        {item}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => handleAppendTerm(item, e)}
-                      className="p-2 text-zinc-400 hover:text-white transition-colors"
-                      title="Insert into search"
-                    >
-                      <ArrowUpLeft size={18} />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div
-                  onClick={() => handleSelectTerm(query)}
-                  className="flex items-center justify-between px-4 py-3.5 hover:bg-[#272727] cursor-pointer"
-                >
-                  <div className="flex items-center gap-4 min-w-0 flex-1">
-                    <Search size={18} className="text-zinc-500 shrink-0" />
-                    <span className="text-[15px] font-normal text-zinc-100 truncate">
-                      {query}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => handleAppendTerm(query, e)}
-                    className="p-2 text-zinc-400 hover:text-white"
-                  >
-                    <ArrowUpLeft size={18} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Query is empty - Show Recent History & YouTube Trending Searches */
-            <div>
-              {searchHistory.length > 0 && (
-                <div>
-                  <div className="px-4 py-2 flex items-center justify-between bg-zinc-900/60 border-b border-white/5">
-                    <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5 uppercase tracking-wider">
-                      <Clock size={13} className="text-purple-400" /> Recent Searches
-                    </span>
-                    <button
-                      type="button"
-                      onClick={clearSearchHistory}
-                      className="text-xs text-zinc-400 hover:text-rose-400 transition-colors"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-
-                  {searchHistory.map((item, idx) => (
-                    <div
-                      key={`yt-hist-${idx}`}
-                      onClick={() => handleSelectTerm(item)}
-                      className="flex items-center justify-between px-4 py-3.5 hover:bg-[#272727] active:bg-[#333] cursor-pointer transition-colors group"
-                    >
-                      <div className="flex items-center gap-4 min-w-0 flex-1">
-                        <Clock size={18} className="text-zinc-500 group-hover:text-purple-400 shrink-0" />
-                        <span className="text-[15px] font-normal text-purple-400 truncate">
-                          {item}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => removeSearchTerm(item, e)}
-                          className="p-2 text-zinc-500 hover:text-rose-400 transition-colors"
-                          title="Remove from history"
-                        >
-                          <X size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleAppendTerm(item, e)}
-                          className="p-2 text-zinc-400 hover:text-white transition-colors"
-                          title="Insert into search"
-                        >
-                          <ArrowUpLeft size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Popular Searches */}
-              <div>
-                <div className="px-4 py-2 bg-zinc-900/60 border-t border-b border-white/5">
-                  <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5 uppercase tracking-wider">
-                    <TrendingUp size={13} className="text-rose-400" /> Trending on YouTube
-                  </span>
-                </div>
-                {POPULAR_SEARCH_QUERIES.slice(0, 8).map((p, idx) => (
-                  <div
-                    key={`yt-pop-${idx}`}
-                    onClick={() => handleSelectTerm(p.term)}
-                    className="flex items-center justify-between px-4 py-3.5 hover:bg-[#272727] cursor-pointer transition-colors group"
-                  >
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <TrendingUp size={18} className="text-rose-500 shrink-0" />
-                      <span className="text-[15px] font-normal text-zinc-200 truncate">
-                        {p.term}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => handleAppendTerm(p.term, e)}
-                      className="p-2 text-zinc-400 hover:text-white transition-colors"
-                    >
-                      <ArrowUpLeft size={18} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-        </div>
-      ) : isResultsMode ? (
-        /* 2. ACTIVE YOUTUBE SEARCH RESULTS VIEW */
+      {/* VIEW SWITCHER: Active YouTube Search Results View OR Redesigned YouTube Search Suggestions Screen */}
+      {isResultsMode ? (
+        /* 1. ACTIVE YOUTUBE SEARCH RESULTS VIEW */
         <div className="space-y-4 animate-fade-in">
           
           {/* Modern Android YouTube Filter Chips Row */}
@@ -890,17 +673,17 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <button
               type="button"
               onClick={() => setShowFilterModal(true)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shrink-0 cursor-pointer active:scale-95 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer active:scale-95 ${
                 hasActiveCustomFilters
-                  ? 'bg-white text-black font-semibold'
-                  : 'bg-[#222222] text-[#f1f1f1] hover:bg-[#383838]'
+                  ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-xs border border-transparent'
+                  : 'bg-white/80 dark:bg-gray-900/80 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800 shadow-xs'
               }`}
               title="Filter results"
             >
               <SlidersHorizontal size={13} />
               <span>Filters</span>
               {hasActiveCustomFilters && (
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                <span className="w-1.5 h-1.5 rounded-xs bg-white" />
               )}
             </button>
 
@@ -946,10 +729,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
                       executeSearch(query, chip.id as any, true);
                     }
                   }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-150 shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5 ${
                     isSelected
-                      ? 'bg-white text-black font-semibold shadow-xs'
-                      : 'bg-[#222222] text-[#f1f1f1] hover:bg-[#383838]'
+                      ? 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-xs border border-transparent'
+                      : 'bg-white/80 dark:bg-gray-900/80 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-800 shadow-xs'
                   }`}
                 >
                   <span>{chip.label}</span>
@@ -960,11 +743,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
           {/* Low Network Mode Status Banner */}
           {isLowNetworkActive && (
-            <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs text-emerald-300 shadow-xs">
+            <div className="bg-indigo-950/20 dark:bg-indigo-950/40 border border-indigo-500/20 dark:border-indigo-500/30 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-300 shadow-xs">
               <div className="flex items-center gap-2 min-w-0">
-                <Zap size={15} className="fill-emerald-400 text-emerald-400 shrink-0" />
+                <Zap size={15} className="fill-indigo-500 text-indigo-500 shrink-0" />
                 <span className="truncate">
-                  <strong>Zero-Buffer Mode Active</strong>: 240p stream & compressed previews prevent buffering.
+                  <strong>Zero-Buffer Mode Active</strong>: 144p stream & compressed previews prevent buffering.
                 </span>
               </div>
               <button
@@ -974,7 +757,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   setIsLowNetworkActive(false);
                   onShowToast('Switched to Standard HD streaming', 'info');
                 }}
-                className="text-[11px] underline font-bold hover:text-white shrink-0 ml-2 cursor-pointer"
+                className="text-[11px] underline font-bold hover:text-gray-900 dark:hover:text-white shrink-0 ml-2 cursor-pointer"
               >
                 Disable
               </button>
@@ -1044,9 +827,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   onClick={() => handleToggleViewMode('grid')}
                   className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
                     viewMode === 'grid'
-                      ? 'bg-slate-700 text-rose-400 shadow-xs'
+                      ? 'bg-slate-700 shadow-xs'
                       : 'text-gray-400 hover:text-white'
                   }`}
+                  style={{ color: viewMode === 'grid' ? 'var(--accent-primary)' : undefined }}
                   title="Grid View"
                 >
                   <LayoutGrid size={14} />
@@ -1055,9 +839,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   onClick={() => handleToggleViewMode('list')}
                   className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
                     viewMode === 'list'
-                      ? 'bg-slate-700 text-rose-400 shadow-xs'
+                      ? 'bg-slate-700 shadow-xs'
                       : 'text-gray-400 hover:text-white'
                   }`}
+                  style={{ color: viewMode === 'list' ? 'var(--accent-primary)' : undefined }}
                   title="List View"
                 >
                   <List size={14} />
@@ -1089,9 +874,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
                   : "grid grid-cols-1 md:grid-cols-2 gap-4"
               }>
-                {displayedSearchResults.map((track) => (
+                {displayedSearchResults.map((track, idx) => (
                   <YouTubeFeedCard
-                    key={`search-feed-${track.id}`}
+                    key={`search-feed-${track.id || idx}-${idx}`}
                     track={track}
                     onPlay={handlePlayTrack}
                     onDownload={onDownload}
@@ -1111,7 +896,11 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 <button
                   onClick={handleLoadMore}
                   disabled={loadingMore}
-                  className="px-6 py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black rounded-full shadow-lg border border-rose-400/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                  className="px-6 py-3 text-white text-xs font-black rounded-full shadow-lg border border-white/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                  style={{
+                    background: 'linear-gradient(to right, var(--accent-primary), var(--accent-secondary))',
+                    boxShadow: '0 4px 20px var(--accent-glow)'
+                  }}
                 >
                   {loadingMore ? (
                     <>
@@ -1155,9 +944,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
                     ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
                     : "grid grid-cols-1 md:grid-cols-2 gap-4"
                 }>
-                  {YOUTUBE_SEARCH_DATA.slice(0, 8).map((track) => (
+                  {YOUTUBE_SEARCH_DATA.slice(0, 8).map((track, idx) => (
                     <YouTubeFeedCard
-                      key={`fallback-yt-${track.id}`}
+                      key={`fallback-yt-${track.id || idx}-${idx}`}
                       track={track}
                       onPlay={handlePlayTrack}
                       onDownload={onDownload}
@@ -1176,361 +965,15 @@ export const SearchView: React.FC<SearchViewProps> = ({
           )}
         </div>
       ) : (
-        /* YOUTUBE SEARCH DATA HUB & DISCOVERY VIEW */
-        <div className="space-y-6">
-
-          {/* Janmashtami Festival Celebratory Banner (Active until 6th Sep 2026) */}
-          {isJanmashtamiActive() && (
-            <JanmashtamiBanner
-              onPlayTrack={onPlay}
-              onSearchQuery={(q) => {
-                handleSelectTerm(q);
-              }}
-              onShowToast={onShowToast}
-            />
-          )}
-          
-          {/* 1. YouTube Search Data Hero Banner */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-rose-950/40 to-slate-900 border border-rose-500/20 shadow-xl p-5 sm:p-7">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-            
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div className="space-y-2 max-w-xl">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 bg-rose-600/20 border border-rose-500/30 text-rose-400 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                    <Youtube size={12} className="text-rose-500" />
-                    Verified YouTube Search Data
-                  </span>
-                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-bold">
-                    Real Video Streams
-                  </span>
-                </div>
-                
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  YouTube Search Data Hub
-                </h2>
-                
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  Explore over 70+ curated YouTube music videos, chartbuster tracks, and viral creators across 11 categories with real-time video playback and offline capability.
-                </p>
-
-                {/* Quick Meta Stats */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1 bg-black/30 px-2.5 py-1 rounded-lg border border-white/5">
-                    <Flame size={12} className="text-rose-400" /> 70+ Verified Videos
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1 bg-black/30 px-2.5 py-1 rounded-lg border border-white/5">
-                    <Layers size={12} className="text-indigo-400" /> 11 Dynamic Categories
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1 bg-black/30 px-2.5 py-1 rounded-lg border border-white/5">
-                    <Zap size={12} className="text-amber-400" /> Instant Stream
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap sm:flex-col gap-2.5 shrink-0">
-                <button
-                  onClick={handleShufflePlayCategory}
-                  className="px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg border border-rose-400/30 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Shuffle size={14} />
-                  <span>Shuffle Category</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const firstTrack = curatedYouTubeData[0];
-                    if (firstTrack) handlePlayTrack(firstTrack);
-                  }}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-white/10 flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Play size={14} className="fill-current text-rose-500" />
-                  <span>Play Top Video</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Popular YouTube Search Topics & Trending Queries */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <Flame size={16} className="text-rose-500" />
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                  Trending YouTube Search Topics
-                </h3>
-              </div>
-              <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                Click to search instantly
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-              {POPULAR_SEARCH_QUERIES.map((q, idx) => (
-                <button
-                  key={`popular-q-${idx}`}
-                  type="button"
-                  onClick={() => handleSelectTerm(q.term)}
-                  className="px-3 py-1.5 bg-white dark:bg-slate-800/90 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-full text-xs font-semibold flex items-center gap-2 shrink-0 transition-all active:scale-95 group cursor-pointer shadow-xs"
-                >
-                  <Search size={12} className="text-gray-400 group-hover:text-rose-500 transition-colors" />
-                  <span>{q.term}</span>
-                  <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase ${
-                    q.tag === 'Viral' || q.tag === 'Hot'
-                      ? 'bg-rose-500/20 text-rose-400'
-                      : q.tag === 'Festival'
-                      ? 'bg-amber-500/20 text-amber-400'
-                      : 'bg-indigo-500/20 text-indigo-400'
-                  }`}>
-                    {q.tag}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 3. YouTube Search Category Selector Tabs */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <Compass size={16} className="text-indigo-400" />
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                  Browse YouTube Search Categories
-                </h3>
-              </div>
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                {YOUTUBE_SEARCH_CATEGORIES.length} Categories
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-              {YOUTUBE_SEARCH_CATEGORIES.map((cat) => {
-                const isActive = selectedCategory === cat.id;
-                return (
-                  <button
-                    key={`cat-${cat.id}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory(cat.id);
-                      onShowToast(`Browsing ${cat.label}`, 'info');
-                    }}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold flex items-center gap-2 shrink-0 transition-all border cursor-pointer active:scale-95 ${
-                      isActive
-                        ? 'bg-gradient-to-r from-rose-600 to-red-600 border-rose-400/40 text-white shadow-md shadow-rose-600/20'
-                        : 'bg-white dark:bg-slate-800/80 border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {renderCategoryIcon(cat.icon)}
-                    <span>{cat.label}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
-                      isActive ? 'bg-black/25 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
-                    }`}>
-                      {cat.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 4. Curated YouTube Search Video Showcase */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
-              <div className="flex items-center gap-2">
-                <Youtube size={18} className="text-rose-500" />
-                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span>
-                    {YOUTUBE_SEARCH_CATEGORIES.find(c => c.id === selectedCategory)?.label || 'All YouTube Videos'}
-                  </span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">
-                    {curatedYouTubeData.length} videos
-                  </span>
-                </h3>
-              </div>
-
-              {/* Search Within Category & View Mode Controls */}
-              <div className="flex items-center gap-2.5">
-                <div className="relative w-44 sm:w-56">
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={curatedFilterQuery}
-                    onChange={(e) => setCuratedFilterQuery(e.target.value)}
-                    placeholder="Filter category..."
-                    className="w-full pl-7 pr-7 py-1 text-xs bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-white/10 rounded-xl text-gray-800 dark:text-white placeholder-gray-400 focus:outline-hidden focus:border-rose-500"
-                  />
-                  {curatedFilterQuery && (
-                    <button
-                      onClick={() => setCuratedFilterQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-
-                <div className="bg-gray-100 dark:bg-slate-800 p-0.5 rounded-xl border border-gray-200/60 dark:border-white/10 flex items-center gap-0.5">
-                  <button
-                    onClick={() => handleToggleViewMode('grid')}
-                    className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
-                      viewMode === 'grid'
-                        ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
-                    }`}
-                    title="Grid View"
-                  >
-                    <LayoutGrid size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleToggleViewMode('list')}
-                    className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
-                      viewMode === 'list'
-                        ? 'bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs'
-                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
-                    }`}
-                    title="List View"
-                  >
-                    <List size={14} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Video Cards Grid / List */}
-            {curatedYouTubeData.length > 0 ? (
-              <div className={
-                viewMode === 'grid'
-                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
-                  : "grid grid-cols-1 md:grid-cols-2 gap-4"
-              }>
-                {curatedYouTubeData.map((track) => (
-                  <YouTubeFeedCard
-                    key={`curated-yt-${track.id}`}
-                    track={track}
-                    onPlay={handlePlayTrack}
-                    onDownload={onDownload}
-                    isPlayingCurrent={currentTrackId === track.id}
-                    isFavorite={favorites.some(f => f.id === track.id)}
-                    onToggleFavorite={onToggleFavorite}
-                    onOpenAddToPlaylist={onOpenAddToPlaylist}
-                    onOpenMetadata={onOpenMetadata}
-                    onOpenChannelDetails={onOpenChannelDetails}
-                    onShowToast={onShowToast}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="py-12 text-center text-gray-500 dark:text-gray-400 text-xs font-medium bg-gray-50 dark:bg-slate-900/30 rounded-2xl border border-gray-200 dark:border-white/10 p-6">
-                No videos match "{curatedFilterQuery}" in this category.
-              </div>
-            )}
-          </div>
-
-          {/* 5. User Search History & Recent Video Searches */}
-          <div className="pt-6 border-t border-gray-200 dark:border-white/10 space-y-6">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <Clock size={18} className="text-rose-500" />
-                <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                  Your Recent Searches
-                </h3>
-              </div>
-              {(searchHistory.length > 0 || recentVideoSearches.length > 0) && (
-                <button
-                  onClick={(e) => {
-                    clearSearchHistory(e);
-                    clearRecentVideoSearches();
-                  }}
-                  className="text-xs font-bold text-rose-500 hover:text-rose-400 flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 size={13} />
-                  <span>Clear History</span>
-                </button>
-              )}
-            </div>
-
-            {/* Search Keyword Pills */}
-            {searchHistory.length > 0 && (
-              <div className="bg-gray-100/80 dark:bg-slate-900/80 p-3 sm:p-4 rounded-2xl border border-gray-200/80 dark:border-white/10 space-y-2.5">
-                <div className="text-[11px] font-extrabold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <History size={13} className="text-rose-500" />
-                  <span>Recent Keywords</span>
-                </div>
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-                  {searchHistory.map((item, idx) => (
-                    <div
-                      key={`recent-query-${idx}`}
-                      onClick={() => handleSelectTerm(item)}
-                      className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-full text-xs font-semibold flex items-center gap-2 shrink-0 cursor-pointer group transition-all"
-                    >
-                      <Search size={12} className="text-gray-400 group-hover:text-rose-500" />
-                      <span>{item}</span>
-                      <button
-                        onClick={(e) => removeSearchTerm(item, e)}
-                        className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full text-gray-400 hover:text-rose-500 transition-colors"
-                        title="Remove keyword"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recently Searched Video Feed Cards */}
-            {recentVideoSearches.length > 0 && (
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 px-1">
-                  <Video size={14} className="text-rose-500" />
-                  <span>Recently Played & Searched Videos ({recentVideoSearches.length})</span>
-                </span>
-
-                <div className={
-                  viewMode === 'grid'
-                    ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
-                    : "grid grid-cols-1 md:grid-cols-2 gap-4"
-                }>
-                  {recentVideoSearches.map((track) => (
-                    <div key={`recent-video-${track.id}`} className="relative group">
-                      <YouTubeFeedCard
-                        track={track}
-                        onPlay={handlePlayTrack}
-                        onDownload={onDownload}
-                        isPlayingCurrent={currentTrackId === track.id}
-                        isFavorite={favorites.some(f => f.id === track.id)}
-                        onToggleFavorite={onToggleFavorite}
-                        onOpenAddToPlaylist={onOpenAddToPlaylist}
-                        onOpenMetadata={onOpenMetadata}
-                        onOpenChannelDetails={onOpenChannelDetails}
-                        onShowToast={onShowToast}
-                      />
-                      <button
-                        onClick={(e) => removeRecentVideoSearch(track.id, e)}
-                        className="absolute top-2 right-2 z-10 p-1.5 bg-black/80 hover:bg-rose-600 text-white rounded-full opacity-90 sm:opacity-0 group-hover:opacity-100 transition-all shadow-md cursor-pointer"
-                        title="Remove from recent searches"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-        </div>
+        <RedesignedSearchView
+          query={query}
+          searchHistory={searchHistory}
+          autoSuggestions={autoSuggestions}
+          onSelectTerm={handleSelectTerm}
+          onAppendTerm={handleAppendTerm}
+          onOpenVoiceModal={() => setShowVoiceModal(true)}
+        />
       )}
-
-      {/* Android Material Design 3 Expressive Floating Action Button (FAB) */}
-      <button
-        type="button"
-        onClick={() => setShowVoiceModal(true)}
-        className="fixed bottom-24 right-4 sm:right-6 z-30 w-14 h-14 rounded-[20px] bg-gradient-to-tr from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white shadow-2xl shadow-rose-950/60 flex items-center justify-center cursor-pointer active:scale-90 transition-all duration-200 border border-rose-400/30 hover:scale-105 group"
-        title="Voice Search (Android M3 Expressive FAB)"
-      >
-        <Mic size={24} className="group-hover:scale-110 transition-transform" />
-      </button>
 
       {/* YouTube Voice Search Modal */}
       <YouTubeVoiceSearchModal
@@ -1548,6 +991,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       <YouTubeSearchFilterModal
         isOpen={showFilterModal}
         onClose={() => setShowFilterModal(false)}
+        currentFilters={filterOptions}
         filterOptions={filterOptions}
         onApplyFilters={(newOptions) => {
           setFilterOptions(newOptions);

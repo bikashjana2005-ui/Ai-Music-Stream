@@ -42,12 +42,12 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
 
   // Helper for crisp high-resolution thumbnail
   const getTrackThumb = (track: Track) => {
-    if (track.thumbnail && !track.thumbnail.includes('unsplash')) {
-      return track.thumbnail;
-    }
-    const ytid = extractYouTubeId(track.id);
+    const ytid = extractYouTubeId(track.id || track.youtubeUrl || '');
     if (ytid && ytid.length === 11) {
       return `https://i.ytimg.com/vi/${ytid}/hqdefault.jpg`;
+    }
+    if (track.thumbnail && !track.thumbnail.includes('unsplash')) {
+      return track.thumbnail;
     }
     return track.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop';
   };
@@ -105,7 +105,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
       <div 
         className="absolute top-0 left-0 right-0 h-80 opacity-25 dark:opacity-40 blur-3xl pointer-events-none transition-all duration-700 -z-0 scale-105"
         style={{
-          backgroundImage: `radial-gradient(circle at 50% 25%, rgba(37, 99, 235, 0.4), transparent 70%)`
+          backgroundImage: `radial-gradient(circle at 50% 25%, rgba(225, 29, 72, 0.35), transparent 70%)`
         }}
       />
 
@@ -121,7 +121,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-blue-600/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-rose-600/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center justify-center">
               <ThumbsUp size={16} />
             </div>
             <span className="text-sm font-black tracking-tight text-slate-900 dark:text-white">Liked Videos</span>
@@ -132,7 +132,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
           <button
             onClick={() => setShowSearch(!showSearch)}
             className={`w-10 h-10 rounded-full hover:bg-slate-200/80 dark:hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer ${
-              showSearch ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-white'
+              showSearch ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-white'
             }`}
             title="Search liked videos"
           >
@@ -184,7 +184,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search within Liked videos..."
               autoFocus
-              className="w-full bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm px-4 py-2.5 pl-10 rounded-2xl border border-slate-200 dark:border-slate-700/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-lg"
+              className="w-full bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm px-4 py-2.5 pl-10 rounded-2xl border border-slate-200 dark:border-slate-700/80 focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-lg"
             />
             <Search size={16} className="absolute left-3.5 top-3.5 text-slate-400" />
             {searchQuery && (
@@ -237,7 +237,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
           <span>•</span>
           <span>{likedTracks.length} videos</span>
           <span>•</span>
-          <span>No views</span>
+          <span>Auto-updated</span>
         </div>
       </div>
 
@@ -253,7 +253,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
               onShowToast('No liked videos to play yet!', 'info');
             }
           }}
-          className="px-6 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-xl active:scale-95 transition-all shrink-0 cursor-pointer"
+          className="px-6 py-2.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/25 active:scale-95 transition-all shrink-0 cursor-pointer"
         >
           <Play size={16} className="fill-current ml-0.5" />
           <span>Play all</span>
@@ -335,7 +335,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
                 onClick={() => onPlay(track)}
                 className={`group flex items-start gap-3 p-2 rounded-2xl transition-all cursor-pointer relative ${
                   isPlaying 
-                    ? 'bg-blue-500/15 border border-blue-500/40 shadow-xs' 
+                    ? 'bg-rose-500/15 border border-rose-500/40 shadow-xs' 
                     : 'hover:bg-white/80 dark:hover:bg-slate-900/80 border border-transparent hover:border-slate-200/80 dark:hover:border-slate-800'
                 }`}
               >
@@ -365,7 +365,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
 
                   {/* Active playing equalizer indicator */}
                   {isPlaying && (
-                    <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center backdrop-blur-xs">
+                    <div className="absolute inset-0 bg-rose-600/30 flex items-center justify-center backdrop-blur-xs">
                       <div className="flex items-center gap-0.5">
                         <span className="w-1 h-4 bg-white rounded-full animate-bounce" />
                         <span className="w-1 h-6 bg-white rounded-full animate-bounce [animation-delay:0.15s]" />
@@ -378,7 +378,7 @@ export const YouTubeLikedVideos: React.FC<YouTubeLikedVideosProps> = ({
                 {/* Video Info (Title, Channel, Views & Time) */}
                 <div className="flex-1 min-w-0 pr-1">
                   <h3 className={`text-xs sm:text-sm font-bold line-clamp-2 leading-snug ${
-                    isPlaying ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-white'
+                    isPlaying ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100 group-hover:text-rose-600 dark:group-hover:text-rose-400'
                   }`}>
                     {decodeHtmlEntities(track.title)}
                   </h3>

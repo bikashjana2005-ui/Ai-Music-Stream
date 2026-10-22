@@ -269,9 +269,9 @@ export const JanmashtamiBanner: React.FC<{
             <KrishnaFluteIcon size={14} /> Quick Bhajans:
           </span>
 
-          {JANMASHTAMI_SPECIAL_TRACKS.slice(0, 5).map((track) => (
+          {JANMASHTAMI_SPECIAL_TRACKS.slice(0, 5).map((track, idx) => (
             <button
-              key={`quick-janmashtami-${track.id}`}
+              key={`quick-janmashtami-${track.id || idx}-${idx}`}
               type="button"
               onClick={() => {
                 onPlayTrack(track);
@@ -368,7 +368,7 @@ export const JanmashtamiModal: React.FC<{
         <div className="p-4 overflow-y-auto space-y-2.5 no-scrollbar flex-1">
           {JANMASHTAMI_SPECIAL_TRACKS.map((track, idx) => (
             <div
-              key={`modal-janmashtami-track-${track.id}`}
+              key={`modal-janmashtami-track-${track.id || idx}-${idx}`}
               onClick={() => {
                 onPlayTrack(track);
                 onShowToast(`🪶 Now Playing: ${track.title.split('|')[0]}`, 'success');

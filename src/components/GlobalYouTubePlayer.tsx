@@ -1,113 +1,27 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ChevronDown, 
-  ChevronUp,
-  Maximize2, 
-  Maximize,
-  X, 
-  PlaySquare, 
-  ExternalLink, 
-  Settings2, 
-  Settings,
-  Globe, 
-  GripHorizontal, 
-  Scaling, 
-  Move,
-  ThumbsUp,
-  ThumbsDown,
-  Share2,
-  Download,
-  ListPlus,
-  Bell,
-  CheckCircle2,
-  Sparkles,
-  MessageSquare,
-  Send,
-  Play,
-  Volume2,
-  VolumeX,
-  Radio,
-  Zap,
-  Info,
-  Sliders,
-  Tv,
-  ArrowLeft,
-  Scissors,
-  MoreHorizontal,
-  ListFilter,
-  CornerDownRight,
-  Pause,
-  HardDrive,
-  WifiOff,
-  RotateCcw,
-  Eye,
-  Calendar,
-  Flame,
-  Copy,
-  Check,
-  Youtube,
-  Tag,
-  Pin,
-  Heart,
-  Smile,
-  MoreVertical,
-  Layers,
-  Cast,
-  Subtitles,
-  SkipBack,
-  SkipForward,
-  Bookmark,
-  FolderPlus
-} from 'lucide-react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import ReactPlayer from 'react-player/youtube';
-import { db } from '../lib/firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { Track } from '../types';
-import { extractYouTubeId, decodeHtmlEntities } from '../utils/youtube';
-import { getChannelAvatar, getFallbackChannelAvatar } from '../utils/channelLogos';
-import { getNetworkStatus, setLowNetworkMode } from '../utils/networkOptimizer';
-import { YouTubeVideoDescriptionSheet } from './YouTubeVideoDescriptionSheet';
-import { YouTubeFeedCard } from './YouTubeFeedCard';
+import { extractYouTubeId } from '../utils/youtube';
+
+const formatTime = (secs: number) => {
+  if (isNaN(secs) || secs < 0) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+};
 
 export type PlayerEngine = 'youtube' | 'youtube-nocookie' | 'invidious' | 'piped' | 'embed';
 
-interface CommentReplyItem {
-  id: string;
-  author: string;
-  avatar: string;
-  text: string;
-  timeAgo: string;
-  likes: number;
-  userLiked?: boolean;
-  userDisliked?: boolean;
-  isVerified?: boolean;
-}
-
-interface CommentItem {
-  id: string;
-  author: string;
-  avatar: string;
-  text: string;
-  timeAgo: string;
-  likes: number;
-  dislikes?: number;
-  userLiked?: boolean;
-  userDisliked?: boolean;
-  isPinned?: boolean;
-  pinnedBy?: string;
-  creatorHeart?: boolean;
-  isVerified?: boolean;
-  replies?: CommentReplyItem[];
-}
-
-interface GlobalYouTubePlayerProps {
+export interface GlobalYouTubePlayerProps {
   currentTrack: Track | null;
   isPlaying: boolean;
   volume: number;
   isMuted: boolean;
-  showVideo: boolean;
+  showVideo?: boolean;
   isOverlayOpen?: boolean;
+  isStandardWebPlayerOpen?: boolean;
+  onOpenStandardWebPlayer?: () => void;
+  onCloseStandardWebPlayer?: () => void;
   onTrackEnded?: () => void;
   audioQuality?: string;
   onOpenOverlay?: () => void;
@@ -120,7 +34,10 @@ interface GlobalYouTubePlayerProps {
   isDataSaverMode?: boolean;
   isFullScreen?: boolean;
   onToggleFullScreen?: () => void;
-  onPlayTrack?: (track: Track) => void;
+  onCloseFullScreen?: () => void;
+  onPlayTrack?: (track: Track, forceDirect?: boolean) => void;
+  onNextTrack?: () => void;
+  onPrevTrack?: () => void;
   onDownloadTrack?: (track: Track) => void;
   onOpenAddToPlaylist?: (track: Track) => void;
   isFavorite?: boolean;
@@ -130,11 +47,16 @@ interface GlobalYouTubePlayerProps {
   onShowToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isOnline?: boolean;
   downloadedTracks?: Track[];
+  allTracks?: Track[];
   darkMode?: boolean;
   isAutoplay?: boolean;
   onToggleAutoplay?: (enabled?: boolean) => void;
   onTogglePlayPause?: () => void;
   onSetPlaying?: (playing: boolean) => void;
+  videoQuality?: string;
+  onChangeVideoQuality?: (quality: string) => void;
+  onVolumeChange?: (volume: number) => void;
+  onToggleMute?: () => void;
 }
 
 export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
@@ -142,155 +64,95 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
   isPlaying,
   volume,
   isMuted,
-  showVideo,
-  isOverlayOpen = false,
+  showVideo = false,
+  isStandardWebPlayerOpen = false,
+  onOpenStandardWebPlayer,
+  onCloseStandardWebPlayer,
   onTrackEnded,
-  audioQuality,
-  onOpenOverlay,
   onCloseVideo,
   onProgress,
   onDuration,
   seekToSeconds,
   playerEngine = 'youtube',
-  onChangePlayerEngine,
-  isDataSaverMode = false,
-  isFullScreen = false,
-  onToggleFullScreen,
   onPlayTrack,
+  onNextTrack,
+  onPrevTrack,
   onDownloadTrack,
   onOpenAddToPlaylist,
-  isFavorite = false,
+  isFavorite,
   onToggleFavorite,
-  isSubscribed = false,
+  isSubscribed,
   onToggleSubscribe,
   onShowToast,
-  isOnline = true,
   downloadedTracks = [],
-  darkMode = true,
-  isAutoplay = false,
+  allTracks = [],
+  isAutoplay,
   onToggleAutoplay,
   onTogglePlayPause,
-  onSetPlaying
+  onSetPlaying,
+  onVolumeChange,
+  onToggleMute,
+  videoQuality,
+  onChangeVideoQuality,
 }) => {
-  const playerRef = useRef<ReactPlayer | null>(null);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const chaptersSectionRef = useRef<HTMLDivElement | null>(null);
-  const [showEngineMenu, setShowEngineMenu] = useState<boolean>(false);
-  const [showSizePresets, setShowSizePresets] = useState<boolean>(false);
-  const [isNativeFullScreen, setIsNativeFullScreen] = useState<boolean>(false);
-  const [isPlaybackError, setIsPlaybackError] = useState<boolean>(false);
-  const [offlinePlayedSeconds, setOfflinePlayedSeconds] = useState<number>(0);
-
-  // YouTube Original Full Player state
-  const [likeCount, setLikeCount] = useState<number>(142800);
-  const [hasLiked, setHasLiked] = useState<boolean>(false);
-  const [hasDisliked, setHasDisliked] = useState<boolean>(false);
-  const [subBellActive, setSubBellActive] = useState<boolean>(true);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const [selectedQuality, setSelectedQuality] = useState<string>('Auto (Buffer-Free)');
-  const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
-  const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
-  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
-  const [showFullDescription, setShowFullDescription] = useState<boolean>(false);
-  const [selectedTopicCategory, setSelectedTopicCategory] = useState<string>('All');
-  const [showAiSummary, setShowAiSummary] = useState<boolean>(false);
-  const [copyLinkSuccess, setCopyLinkSuccess] = useState<boolean>(false);
-  const [showActionMoreMenu, setShowActionMoreMenu] = useState<boolean>(false);
-
-  // Real-time Metadata States
-  const [realChannelAvatar, setRealChannelAvatar] = useState<string>('');
-  const [realSubscriberCount, setRealSubscriberCount] = useState<string>('');
-  const [realViewCount, setRealViewCount] = useState<string>('');
-  const [realLikeCountStr, setRealLikeCountStr] = useState<string>('');
-  const [realChannelName, setRealChannelName] = useState<string>('');
-
-  // Video Chapters State & Current Playback Tracker
+  const playerRef = useRef<any>(null);
+  const lastPlaybackTimeRef = useRef<number>(0);
   const [currentSeconds, setCurrentSeconds] = useState<number>(0);
-  const [showChaptersPanel, setShowChaptersPanel] = useState<boolean>(false);
-  const [showInVideoChapters, setShowInVideoChapters] = useState<boolean>(false);
-  const [videoChapters, setVideoChapters] = useState<Array<{ timeSeconds: number; timeDisplay: string; title: string }>>([
-    { timeSeconds: 0, timeDisplay: "0:00", title: "Intro & Opening Prelude" },
-    { timeSeconds: 45, timeDisplay: "0:45", title: "Verse 1 & Main Vocals" },
-    { timeSeconds: 105, timeDisplay: "1:45", title: "Chorus & Central Melody" },
-    { timeSeconds: 165, timeDisplay: "2:45", title: "Instrumental Bridge & Solo" },
-    { timeSeconds: 225, timeDisplay: "3:45", title: "Final Climax & Chorus" },
-    { timeSeconds: 275, timeDisplay: "4:35", title: "Outro & Fadeout" }
-  ]);
-
-  // Related YouTube Video Recommendations & Comments
-  const [recommendations, setRecommendations] = useState<Track[]>([]);
-  const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
-  const [comments, setComments] = useState<CommentItem[]>([]);
-  const [newCommentInput, setNewCommentInput] = useState<string>('');
-  const [isCommentFocused, setIsCommentFocused] = useState<boolean>(false);
-  const [commentSort, setCommentSort] = useState<'top' | 'newest'>('top');
-  const [showSortMenu, setShowSortMenu] = useState<boolean>(false);
-  const [replyingToId, setReplyingToId] = useState<string | null>(null);
-  const [replyInputText, setReplyInputText] = useState<string>('');
-  const [isCommentsVisible, setIsCommentsVisible] = useState<boolean>(true);
-  const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({ c1: true });
-  const [activeCommentMenuId, setActiveCommentMenuId] = useState<string | null>(null);
-
-  const [showMobileOverlayControls, setShowMobileOverlayControls] = useState<boolean>(true);
-  const [showClosedCaptions, setShowClosedCaptions] = useState<boolean>(false);
-  const [showMobileCommentsSheet, setShowMobileCommentsSheet] = useState<boolean>(false);
-  const hideControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Low Network & Zero-Buffering Engine State
+  const [durationSeconds, setDurationSeconds] = useState<number>(0);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [isPlayerBuffering, setIsPlayerBuffering] = useState<boolean>(false);
-  const bufferingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [lowNetworkModeActive, setLowNetworkModeActive] = useState<boolean>(() => {
-    return getNetworkStatus().isLowNetwork || !!isDataSaverMode;
-  });
+  const bufferWatchdogRef = useRef<any>(null);
 
+  // Prohibit YouTube iframe from navigating/redirecting the parent window or opening unauthorized popups
   useEffect(() => {
-    const handleNetworkChange = () => {
-      setLowNetworkModeActive(getNetworkStatus().isLowNetwork || !!isDataSaverMode);
+    const enforceSandbox = () => {
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach((ifr) => {
+        try {
+          if (!ifr.getAttribute('sandbox')) {
+            ifr.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-forms');
+          }
+        } catch {}
+      });
     };
-    window.addEventListener('storage', handleNetworkChange);
-    window.addEventListener('networkModeChanged', handleNetworkChange);
-    return () => {
-      window.removeEventListener('storage', handleNetworkChange);
-      window.removeEventListener('networkModeChanged', handleNetworkChange);
-    };
-  }, [isDataSaverMode]);
+    enforceSandbox();
+    const timer = setTimeout(enforceSandbox, 600);
+    return () => clearTimeout(timer);
+  }, [currentTrack, playerEngine, isStandardWebPlayerOpen]);
 
-  // Auto-hide mobile overlay controls after 3.5s when playing
+  // Offline Audio Playback
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
+  const [, setOfflinePlayedSeconds] = useState<number>(0);
+  const offlineAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Determine YouTube ID
+  const videoId = extractYouTubeId(currentTrack?.id || (currentTrack as any)?.youtubeUrl || '');
+
+  // Track offline availability
   useEffect(() => {
-    if (isPlaying && showMobileOverlayControls) {
-      if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
-      hideControlsTimeoutRef.current = setTimeout(() => {
-        setShowMobileOverlayControls(false);
-      }, 3500);
+    if (!currentTrack) return;
+    const downloaded = downloadedTracks.find(t => t.id === currentTrack.id);
+    if (downloaded && downloaded.isDownloaded && downloaded.localAudioUrl) {
+      setIsOfflineMode(true);
+      if (offlineAudioRef.current) {
+        offlineAudioRef.current.src = downloaded.localAudioUrl;
+        if (isPlaying) {
+          offlineAudioRef.current.play().catch(() => {});
+        }
+      }
+    } else {
+      setIsOfflineMode(false);
     }
-    return () => {
-      if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
-    };
-  }, [isPlaying, showMobileOverlayControls]);
+  }, [currentTrack, downloadedTracks, isPlaying]);
 
-  // Helper to toggle mobile controls
-  const handleToggleMobileControls = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setShowMobileOverlayControls((prev) => !prev);
-  };
-
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
-  // Check if current track is downloaded locally
-  const isDownloadedTrack = downloadedTracks.some(t => t.id === currentTrack?.id);
-  const isOfflineMode = !isOnline || isPlaybackError || isDownloadedTrack;
-
-  // Reset error & timer when track changes
-  useEffect(() => {
-    setIsPlaybackError(false);
-    setOfflinePlayedSeconds(0);
-  }, [currentTrack?.id]);
-
-  // Handle external seek requests
+  // Handle Seek from props
   useEffect(() => {
     if (seekToSeconds !== undefined && seekToSeconds !== null) {
       if (isOfflineMode) {
         setOfflinePlayedSeconds(seekToSeconds);
+        if (offlineAudioRef.current) {
+          offlineAudioRef.current.currentTime = seekToSeconds;
+        }
       } else if (playerRef.current) {
         playerRef.current.seekTo(seekToSeconds, 'seconds');
       }
@@ -298,2287 +160,185 @@ export const GlobalYouTubePlayer: React.FC<GlobalYouTubePlayerProps> = ({
     }
   }, [seekToSeconds, isOfflineMode]);
 
-  const currentPlaybackTime = isOfflineMode ? offlinePlayedSeconds : currentSeconds;
-
-  // Determine current active chapter based on playback position
-  const activeChapter = [...videoChapters]
-    .sort((a, b) => b.timeSeconds - a.timeSeconds)
-    .find(ch => currentPlaybackTime >= ch.timeSeconds) || videoChapters[0];
-
-  const handleSeekToChapter = (ch: { timeSeconds: number; timeDisplay: string; title: string }) => {
-    if (!isFull && onOpenOverlay) {
-      onOpenOverlay();
+  // Safe deferred callbacks
+  const safeOnProgress = useCallback((sec: number) => {
+    if (onProgress) {
+      queueMicrotask(() => onProgress(sec));
     }
-    setShowChaptersPanel(true);
-    if (isOfflineMode) {
-      setOfflinePlayedSeconds(ch.timeSeconds);
+  }, [onProgress]);
+
+  const safeOnDuration = useCallback((dur: number) => {
+    setDurationSeconds(dur);
+    if (onDuration) {
+      queueMicrotask(() => onDuration(dur));
+    }
+  }, [onDuration]);
+
+  const handleSeek = (seconds: number) => {
+    if (isOfflineMode && offlineAudioRef.current) {
+      offlineAudioRef.current.currentTime = seconds;
+      setOfflinePlayedSeconds(seconds);
     } else if (playerRef.current) {
-      playerRef.current.seekTo(ch.timeSeconds, 'seconds');
-    }
-    setCurrentSeconds(ch.timeSeconds);
-    onProgress?.(ch.timeSeconds);
-    if (onShowToast) {
-      onShowToast(`Jumped to chapter: ${ch.title} (${ch.timeDisplay})`, 'info');
-    }
-    setTimeout(() => {
-      chaptersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 120);
-  };
-
-  // Helper to parse duration string (e.g. "4:28") to total seconds
-  const parseDurationToSeconds = (durationStr?: string): number => {
-    if (!durationStr) return 210;
-    const parts = durationStr.split(':').map(p => parseInt(p, 10));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return parts[0] * 60 + parts[1];
-    }
-    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-      return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    }
-    return 210;
-  };
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const totalTrackSeconds = parseDurationToSeconds(currentTrack?.duration);
-  const progressPercent = totalTrackSeconds > 0 ? (currentPlaybackTime / totalTrackSeconds) * 100 : 0;
-
-  const handleSkipBackward = () => {
-    const target = Math.max(0, currentPlaybackTime - 10);
-    if (isOfflineMode) {
-      setOfflinePlayedSeconds(target);
-    } else if (playerRef.current) {
-      playerRef.current.seekTo(target, 'seconds');
-    }
-    setCurrentSeconds(target);
-    onProgress?.(target);
-  };
-
-  const handleSkipForward = () => {
-    const target = Math.min(totalTrackSeconds, currentPlaybackTime + 10);
-    if (isOfflineMode) {
-      setOfflinePlayedSeconds(target);
-    } else if (playerRef.current) {
-      playerRef.current.seekTo(target, 'seconds');
-    }
-    setCurrentSeconds(target);
-    onProgress?.(target);
-  };
-
-  const handleScrubClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const fraction = Math.max(0, Math.min(1, clickX / rect.width));
-    const target = fraction * totalTrackSeconds;
-    if (isOfflineMode) {
-      setOfflinePlayedSeconds(target);
-    } else if (playerRef.current) {
-      playerRef.current.seekTo(target, 'seconds');
-    }
-    setCurrentSeconds(target);
-    onProgress?.(target);
-  };
-
-  // Offline Audio & Video Progress Timer Driver
-  useEffect(() => {
-    if (!isOfflineMode || !isPlaying) {
-      return;
-    }
-
-    const totalDurationSec = parseDurationToSeconds(currentTrack?.duration);
-    onDuration?.(totalDurationSec);
-
-    const timer = setInterval(() => {
-      setOfflinePlayedSeconds(prev => {
-        const next = prev + 1;
-        onProgress?.(next);
-        if (next >= totalDurationSec) {
-          onTrackEnded?.();
-          return 0;
-        }
-        return next;
-      });
-    }, 1000 / (playbackSpeed || 1));
-
-    return () => clearInterval(timer);
-  }, [isOfflineMode, isPlaying, playbackSpeed, currentTrack?.duration, onProgress, onDuration, onTrackEnded]);
-
-  // Mini player dimensions state (Medium Compact default)
-  const [dimensions, setDimensions] = useState<{ width: number; height: number }>(() => {
-    const savedW = localStorage.getItem('aura_player_width');
-    const savedH = localStorage.getItem('aura_player_height');
-    if (!savedW || parseInt(savedW, 10) === 380 || parseInt(savedW, 10) > 360) {
-      return { width: 280, height: 158 };
-    }
-    const parsedW = parseInt(savedW, 10);
-    return {
-      width: parsedW,
-      height: savedH ? parseInt(savedH, 10) : Math.round(parsedW * (9 / 16)),
-    };
-  });
-
-  const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(true);
-  const [isResizing, setIsResizing] = useState<boolean>(false);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-
-  const videoId = extractYouTubeId(currentTrack?.id || '');
-
-  // Handle external seek requests
-  useEffect(() => {
-    if (seekToSeconds !== undefined && seekToSeconds !== null && playerRef.current) {
-      playerRef.current.seekTo(seekToSeconds, 'seconds');
-    }
-  }, [seekToSeconds]);
-
-  // Handle native HTML5 fullscreen changes
-  useEffect(() => {
-    const handleFSChange = () => {
-      setIsNativeFullScreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFSChange);
-    return () => document.removeEventListener('fullscreenchange', handleFSChange);
-  }, []);
-
-  // Fetch related recommendations with optional category filter
-  const fetchRelated = async (cat?: string) => {
-    if (!currentTrack) return;
-    setLoadingRecs(true);
-    const activeCategory = cat !== undefined ? cat : selectedTopicCategory;
-    try {
-      const res = await fetch("/api/music/recommendations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          trackTitle: currentTrack.title, 
-          channel: currentTrack.channel,
-          genre: currentTrack.genre,
-          category: activeCategory
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.tracks && Array.isArray(data.tracks)) {
-          const filtered = data.tracks.filter((t: Track) => t.id !== currentTrack.id);
-          setRecommendations(filtered.slice(0, 12));
-          return;
-        }
-      }
-    } catch {
-      // Soft fallback on network disconnect or timeout
-    } finally {
-      setLoadingRecs(false);
-    }
-  };
-
-  // Fetch contextual YouTube recommendations & initial comments when track changes
-  useEffect(() => {
-    if (!currentTrack) return;
-
-    let isMounted = true;
-    setHasLiked(isFavorite);
-    setLikeCount(Math.floor(100000 + (currentTrack.title.length * 4821) % 900000));
-
-    // Initialize realistic YouTube comments
-    const channelName = currentTrack.channel || 'Official Channel';
-    setComments([
-      {
-        id: 'c1',
-        author: channelName,
-        avatar: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        text: `Thank you for loving "${currentTrack.title}"! Stream the official high-definition 1080p audio and share your favorite timestamps in the comments below! 🎧❤️`,
-        timeAgo: '1 day ago',
-        likes: 3840,
-        isPinned: true,
-        pinnedBy: channelName,
-        creatorHeart: true,
-        isVerified: true,
-        replies: [
-          {
-            id: 'c1-r1',
-            author: 'ArijitPritamVibes',
-            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop',
-            text: 'This track is an absolute masterpiece! Pure magic ✨',
-            timeAgo: '18 hours ago',
-            likes: 412,
-            isVerified: false
-          },
-          {
-            id: 'c1-r2',
-            author: 'StudioMasteringHQ',
-            avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop',
-            text: 'The 320kbps audio stream quality is phenomenal. Kudos to the mixing team!',
-            timeAgo: '12 hours ago',
-            likes: 189,
-            isVerified: true
-          }
-        ]
-      },
-      {
-        id: 'c2',
-        author: 'MusicVibesOfficial',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop',
-        text: `The audio mastering on "${currentTrack.title}" is so clean! Absolutely incredible performance by ${channelName}. 🔥`,
-        timeAgo: '2 hours ago',
-        likes: 1240,
-        creatorHeart: true,
-        isVerified: true,
-        replies: []
-      },
-      {
-        id: 'c3',
-        author: 'Alex_AudioLog',
-        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop',
-        text: 'Listening to this live in 1080p stream mode. Pure perfection!',
-        timeAgo: '5 hours ago',
-        likes: 482,
-        replies: []
-      },
-      {
-        id: 'c4',
-        author: 'MelodySeeker',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop',
-        text: `Found this official video through recommendations and I'm obsessed! Loop number 10 today.`,
-        timeAgo: '1 day ago',
-        likes: 219,
-        replies: []
-      }
-    ]);
-
-    fetchRelated('All');
-    return () => { isMounted = false; };
-  }, [currentTrack?.id]);
-
-  // Fetch Real-time Video Info (Channel Avatar, Subscribers, Views, Likes, Creator Name)
-  useEffect(() => {
-    if (!videoId) return;
-
-    let isMounted = true;
-    fetch('/api/youtube/video-info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoId })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (!isMounted) return;
-        if (data.channelAvatar) setRealChannelAvatar(data.channelAvatar);
-        if (data.subscriberCount) setRealSubscriberCount(data.subscriberCount);
-        if (data.viewCount) setRealViewCount(data.viewCount);
-        if (data.likeCount) setRealLikeCountStr(data.likeCount);
-        if (data.channelName) setRealChannelName(data.channelName);
-        if (data.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
-          setVideoChapters(data.chapters);
-        }
-        if (data.comments && Array.isArray(data.comments) && data.comments.length > 0) {
-          setComments(prev => {
-            const userAdded = prev.filter(c => c.id.startsWith('user-cm-'));
-            const merged = [...userAdded, ...data.comments];
-            saveCommentsToFirestore(merged);
-            return merged;
-          });
-        }
-      })
-      .catch(() => {});
-
-    return () => { isMounted = false; };
-  }, [videoId]);
-
-  // Save Real-time Comments array to Firebase Firestore
-  const saveCommentsToFirestore = (updatedComments: CommentItem[]) => {
-    if (!videoId) return;
-    setDoc(doc(db, 'yt_comments', videoId), {
-      videoId,
-      comments: updatedComments,
-      updatedAt: Date.now()
-    }, { merge: true }).catch(err => {
-      console.warn('Firestore comment sync warning:', err);
-    });
-  };
-
-  // Listen to Firestore Real-time Comment updates across users/devices
-  useEffect(() => {
-    if (!videoId) return;
-
-    const docRef = doc(db, 'yt_comments', videoId);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data?.comments && Array.isArray(data.comments) && data.comments.length > 0) {
-          setComments(data.comments);
-        }
-      }
-    }, (err) => {
-      console.warn('Firestore real-time comment snapshot error:', err);
-    });
-
-    return () => unsubscribe();
-  }, [videoId]);
-
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCommentInput.trim()) return;
-
-    const newComment: CommentItem = {
-      id: `comment-${Date.now()}`,
-      author: 'You (Listener)',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop',
-      text: newCommentInput.trim(),
-      timeAgo: 'Just now',
-      likes: 1,
-      dislikes: 0,
-      userLiked: true,
-      replies: []
-    };
-
-    const updated = [newComment, ...comments];
-    setComments(updated);
-    saveCommentsToFirestore(updated);
-    setNewCommentInput('');
-    setIsCommentFocused(false);
-    onShowToast?.('Comment posted to real-time YouTube discussion!', 'success');
-  };
-
-  const handleToggleCommentLike = (commentId: string) => {
-    const updated = comments.map(c => {
-      if (c.id === commentId) {
-        const currentlyLiked = c.userLiked;
-        const currentlyDisliked = c.userDisliked;
-        return {
-          ...c,
-          userLiked: !currentlyLiked,
-          userDisliked: false,
-          likes: currentlyLiked ? c.likes - 1 : c.likes + 1,
-          dislikes: currentlyDisliked ? Math.max(0, (c.dislikes || 0) - 1) : (c.dislikes || 0)
-        };
-      }
-      return c;
-    });
-    setComments(updated);
-    saveCommentsToFirestore(updated);
-  };
-
-  const handleToggleCommentDislike = (commentId: string) => {
-    const updated = comments.map(c => {
-      if (c.id === commentId) {
-        const currentlyDisliked = c.userDisliked;
-        const currentlyLiked = c.userLiked;
-        return {
-          ...c,
-          userDisliked: !currentlyDisliked,
-          userLiked: false,
-          dislikes: currentlyDisliked ? Math.max(0, (c.dislikes || 0) - 1) : (c.dislikes || 0) + 1,
-          likes: currentlyLiked ? Math.max(0, c.likes - 1) : c.likes
-        };
-      }
-      return c;
-    });
-    setComments(updated);
-    saveCommentsToFirestore(updated);
-  };
-
-  const handleAddReply = (commentId: string) => {
-    if (!replyInputText.trim()) return;
-
-    const newReply: CommentReplyItem = {
-      id: `reply-${Date.now()}`,
-      author: 'You (Listener)',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop',
-      text: replyInputText.trim(),
-      timeAgo: 'Just now',
-      likes: 0,
-      userLiked: false
-    };
-
-    const updated = comments.map(c => {
-      if (c.id === commentId) {
-        return {
-          ...c,
-          replies: [...(c.replies || []), newReply]
-        };
-      }
-      return c;
-    });
-
-    setComments(updated);
-    saveCommentsToFirestore(updated);
-    setReplyInputText('');
-    setReplyingToId(null);
-    onShowToast?.('Reply posted live!', 'success');
-  };
-
-  const handleToggleLike = () => {
-    if (hasLiked) {
-      setHasLiked(false);
-      setLikeCount(prev => prev - 1);
-    } else {
-      setHasLiked(true);
-      if (hasDisliked) setHasDisliked(false);
-      setLikeCount(prev => prev + 1);
-      if (onToggleFavorite && currentTrack) onToggleFavorite(currentTrack);
-    }
-  };
-
-  const handleToggleDislike = () => {
-    if (hasDisliked) {
-      setHasDisliked(false);
-    } else {
-      setHasDisliked(true);
-      if (hasLiked) {
-        setHasLiked(false);
-        setLikeCount(prev => prev - 1);
-      }
-      onShowToast?.('Feedback noted', 'info');
-    }
-  };
-
-  const handleFullscreenClick = () => {
-    if (onToggleFullScreen) {
-      onToggleFullScreen();
-      return;
-    }
-    if (!document.fullscreenElement) {
-      if (wrapperRef.current?.requestFullscreen) {
-        wrapperRef.current.requestFullscreen().catch(() => {});
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      }
-    }
-  };
-
-  const handleSeekToSeconds = (seconds: number) => {
-    if (playerRef.current) {
       playerRef.current.seekTo(seconds, 'seconds');
     }
-    if (onProgress) {
-      onProgress(seconds);
-    }
+    setCurrentSeconds(seconds);
+    safeOnProgress(seconds);
   };
 
-  if (!videoId || videoId.length !== 11) return null;
-
-  const isFull = isFullScreen || isNativeFullScreen;
-  const isFloating = showVideo && !isOverlayOpen && !isFull;
-  const isOverlay = false; // Prevent duplicate floating player over AudioPlayerOverlay
-  const isHidden = !showVideo || (isOverlayOpen && !isFull);
-
-  let containerClassName = '';
-  let playerBoxClassName = '';
-
-  if (isFull) {
-    // YouTube Mobile Full Player Layout Mode - Pure Dark Theme with solid White Border & Inner RGB Visual Effect
-    containerClassName = `fixed inset-0 z-[100] w-screen h-screen bg-slate-950 text-slate-100 flex flex-col pointer-events-auto p-0 m-0 overflow-y-auto select-none transition-colors duration-300 dark`;
-    playerBoxClassName = isTheaterMode 
-      ? 'relative w-full aspect-video max-h-[88vh] bg-black flex items-center justify-center shadow-2xl border-2 sm:border-[3px] border-white rounded-none sm:rounded-2xl overflow-hidden rgb-video-player-frame'
-      : 'relative w-full aspect-video min-h-[220px] sm:min-h-[340px] md:min-h-[420px] lg:min-h-[480px] xl:min-h-[540px] max-h-[82vh] bg-black flex items-center justify-center shadow-2xl rounded-none sm:rounded-2xl overflow-hidden border-2 sm:border-[3px] border-white rgb-video-player-frame';
-  } else if (isHidden) {
-    // Background Audio Mode
-    containerClassName = 'fixed -top-[9999px] -left-[9999px] w-[320px] h-[180px] pointer-events-none z-[-10] overflow-hidden';
-    playerBoxClassName = 'w-full h-full bg-black';
-  } else {
-    // Mini Floating Window with slightly square modern edges
-    containerClassName = 'fixed bottom-20 right-3 sm:bottom-24 sm:right-6 rounded-lg overflow-hidden shadow-2xl ring-1 ring-white/20 bg-slate-950 pointer-events-auto flex flex-col z-[90] border border-white/20 touch-none';
-    playerBoxClassName = 'relative flex-1 w-full h-full bg-black pointer-events-auto select-none rounded-b-lg overflow-hidden';
-  }
-
-  // Handle Corner/Edge Resizing
-  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, handle: 'br' | 'bl' | 'tr' | 'tl' | 'r' | 'b' | 'l' | 't') => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizing(true);
-
-    const startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const startY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const startWidth = dimensions.width;
-    const startHeight = dimensions.height;
-
-    const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
-      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
-      const currentY = 'touches' in moveEvent ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const deltaX = currentX - startX;
-      const deltaY = currentY - startY;
-
-      let newWidth = startWidth;
-      let newHeight = startHeight;
-
-      const maxWidth = window.innerWidth - 24;
-      const maxHeight = window.innerHeight - 24;
-
-      if (handle === 'br') {
-        newWidth = Math.max(220, Math.min(maxWidth, startWidth + deltaX));
-        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight + deltaY));
-      } else if (handle === 'bl') {
-        newWidth = Math.max(220, Math.min(maxWidth, startWidth - deltaX));
-        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight + deltaY));
-      } else if (handle === 'tr') {
-        newWidth = Math.max(220, Math.min(maxWidth, startWidth + deltaX));
-        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight - deltaY));
-      } else if (handle === 'tl') {
-        newWidth = Math.max(220, Math.min(maxWidth, startWidth - deltaX));
-        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : Math.max(135, Math.min(maxHeight, startHeight - deltaY));
-      } else if (handle === 'r') {
-        newWidth = Math.max(220, Math.min(maxWidth, startWidth + deltaX));
-        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : startHeight;
-      } else if (handle === 'b') {
-        newHeight = Math.max(135, Math.min(maxHeight, startHeight + deltaY));
-        newWidth = lockAspectRatio ? Math.round(newHeight * (16 / 9)) : startWidth;
-      } else if (handle === 'l') {
-        newWidth = Math.max(220, Math.min(maxWidth, startWidth - deltaX));
-        newHeight = lockAspectRatio ? Math.round(newWidth * (9 / 16)) : startHeight;
-      } else if (handle === 't') {
-        newHeight = Math.max(135, Math.min(maxHeight, startHeight - deltaY));
-        newWidth = lockAspectRatio ? Math.round(newHeight * (16 / 9)) : startWidth;
+  const handleForceUnstick = useCallback(() => {
+    try {
+      const internal = playerRef.current?.getInternalPlayer();
+      if (internal) {
+        if (typeof internal.playVideo === 'function') {
+          internal.playVideo();
+        }
+        if (typeof internal.getCurrentTime === 'function' && typeof internal.seekTo === 'function') {
+          const ct = internal.getCurrentTime();
+          if (ct > 0) internal.seekTo(ct + 0.1, true);
+        }
+      } else if (playerRef.current && currentSeconds > 0) {
+        playerRef.current.seekTo(currentSeconds + 0.1, 'seconds');
       }
-
-      setDimensions({ width: newWidth, height: newHeight });
-    };
-
-    const handleUp = () => {
-      setIsResizing(false);
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchmove', handleMove);
-      window.removeEventListener('touchend', handleUp);
-      localStorage.setItem('aura_player_width', String(dimensions.width));
-      localStorage.setItem('aura_player_height', String(dimensions.height));
-    };
-
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchmove', handleMove);
-    window.addEventListener('touchend', handleUp);
-  };
-
-  const applyPresetSize = (w: number, h: number) => {
-    setDimensions({ width: w, height: h });
-    localStorage.setItem('aura_player_width', String(w));
-    localStorage.setItem('aura_player_height', String(h));
-    setShowSizePresets(false);
-  };
-
-  const getThirdPartyEmbedUrl = () => {
-    if (!videoId) return null;
-    const autoplayParam = 0;
-    switch (playerEngine) {
-      case 'invidious':
-        return `https://yewtu.be/embed/${videoId}?autoplay=${autoplayParam}&dark_mode=true&quality=dash`;
-      case 'piped':
-        return `https://piped.video/embed/${videoId}?autoplay=${autoplayParam}&theme=dark`;
-      case 'youtube-nocookie':
-        return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=${autoplayParam}&enablejsapi=1&rel=0&modestbranding=1&playsinline=1`;
-      case 'embed':
-      default:
-        return `https://www.youtube.com/embed/${videoId}?autoplay=${autoplayParam}&playsinline=1&controls=1&rel=0`;
+      setIsPlayerBuffering(false);
+      onShowToast?.('Stream buffer refreshed', 'success');
+    } catch {
+      onShowToast?.('Attempted stream unstick', 'info');
     }
-  };
+  }, [currentSeconds, onShowToast]);
 
-  const formattedLikeCount = likeCount >= 1000 ? `${(likeCount / 1000).toFixed(1)}K` : `${likeCount}`;
+  if (!currentTrack) return null;
 
-  const renderVideoStage = (isMini: boolean) => {
+  const normalizedVolume = isMuted ? 0 : (volume > 1 ? volume / 100 : volume);
+
+  const renderPlayerEngine = (isFullWatch: boolean) => {
     if (isOfflineMode) {
-      const totalSec = parseDurationToSeconds(currentTrack?.duration);
-      const progressPercent = totalSec > 0 ? (offlinePlayedSeconds / totalSec) * 100 : 0;
-      const downloadedItem = downloadedTracks.find(t => t.id === currentTrack?.id);
-      const isMp4Video = downloadedItem?.format === 'mp4' || true;
-
-      const handleScrubClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const newPct = Math.max(0, Math.min(1, clickX / rect.width));
-        const newSec = Math.floor(newPct * totalSec);
-        setOfflinePlayedSeconds(newSec);
-        onProgress?.(newSec);
-      };
-
-      const handleSkipForward = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const next = Math.min(totalSec, offlinePlayedSeconds + 10);
-        setOfflinePlayedSeconds(next);
-        onProgress?.(next);
-      };
-
-      const handleSkipBackward = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        const prev = Math.max(0, offlinePlayedSeconds - 10);
-        setOfflinePlayedSeconds(prev);
-        onProgress?.(prev);
-      };
-
       return (
-        <div className="relative w-full h-full bg-slate-950 flex flex-col items-center justify-between overflow-hidden group select-none">
-          {/* High Resolution Artwork / Frame Canvas Background */}
-          <div className="absolute inset-0 w-full h-full overflow-hidden">
-            <img
-              src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-              alt={currentTrack?.title || 'Track'}
-              className={`w-full h-full object-cover transition-transform duration-1000 ${
-                isPlaying ? 'scale-105 blur-[2px] brightness-90' : 'scale-100 blur-[4px] brightness-75'
-              }`}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop';
-              }}
-            />
-            {/* Scanlines / Animated Frame Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-slate-950/30" />
-            
-            {/* Motion Video Beat Pulse Effect */}
-            {isPlaying && (
-              <motion.div 
-                animate={{ opacity: [0.15, 0.35, 0.15] }}
-                transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                className="absolute inset-0 bg-gradient-to-r from-rose-600/20 via-indigo-600/20 to-purple-600/20 mix-blend-overlay pointer-events-none"
-              />
-            )}
-          </div>
-
-          {/* Top Status Badge Bar */}
-          <div className="relative z-20 w-full p-2.5 flex items-center justify-between gap-2 pointer-events-auto">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/90 backdrop-blur-md text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black tracking-wider uppercase shadow-lg">
-              <HardDrive size={12} className="text-emerald-400 animate-pulse" />
-              <span>{isMp4Video ? '1080p Offline Video' : '320kbps Offline Audio'}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="px-2 py-0.5 bg-black/60 backdrop-blur-md text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-mono font-extrabold uppercase">
-                {downloadedItem?.quality || '1080p 60fps'} Local
-              </span>
-            </div>
-          </div>
-
-          {/* Center Stage Video Content & Big Play/Pause Touch Target */}
-          <div 
-            onClick={() => onPlayTrack ? onPlayTrack(currentTrack!) : null}
-            className="relative z-10 flex flex-col items-center justify-center text-center p-2 w-full max-w-sm flex-1 cursor-pointer group/center"
-          >
-            <div className={`relative ${isMini ? 'w-20 h-20' : 'w-28 h-28 sm:w-36 sm:h-36'} rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 mb-2 group-hover/center:scale-105 transition-all`}>
-              <img
-                src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-                alt={currentTrack?.title || 'Track'}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop';
-                }}
-              />
-              
-              {/* Center Play Overlay Icon */}
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center transition-opacity">
-                {isPlaying ? (
-                  <div className="flex items-center justify-center gap-1">
-                    {[40, 80, 100, 60, 90, 50, 75].map((h, i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ height: [`${h * 0.3}%`, `${h}%`, `${h * 0.2}%`] }}
-                        transition={{ repeat: Infinity, duration: 0.5 + i * 0.1, ease: 'easeInOut' }}
-                        className="w-1 bg-rose-500 rounded-full shadow-lg"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-rose-600/90 text-white flex items-center justify-center shadow-xl">
-                    <Play size={20} className="fill-white ml-1" />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {!isMini && (
-              <div className="px-2">
-                <h3 className="text-xs sm:text-sm font-black text-white line-clamp-1 mb-0.5">
-                  {decodeHtmlEntities(currentTrack?.title || '')}
-                </h3>
-                <p className="text-[11px] text-slate-300 font-medium line-clamp-1">
-                  {decodeHtmlEntities(currentTrack?.channel || '')}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Bottom Interactive Video Scrub Bar & Controls (in Overlay/Full Mode) */}
-          {!isMini && (
-            <div className="relative z-20 w-full bg-slate-950/90 backdrop-blur-xl border-t border-white/10 p-2.5 space-y-2 pointer-events-auto">
-              
-              {/* Scrub timeline */}
-              <div 
-                onClick={handleScrubClick}
-                className="w-full h-2 bg-slate-800 rounded-full cursor-pointer relative overflow-hidden group/scrub"
-              >
-                <div 
-                  className="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full transition-all duration-150"
-                  style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono font-bold">
-                <span>{formatTime(offlinePlayedSeconds)}</span>
-                <span className="text-rose-400 font-extrabold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  Offline Playback
-                </span>
-                <span>{formatTime(totalSec)}</span>
-              </div>
-
-              {/* Player Control Action Buttons */}
-              <div className="flex items-center justify-between gap-2 pt-0.5">
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={handleSkipBackward}
-                    className="p-1.5 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition-colors"
-                    title="Rewind 10s"
-                  >
-                    <RotateCcw size={14} />
-                  </button>
-                  <button
-                    onClick={handleSkipForward}
-                    className="p-1.5 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition-colors"
-                    title="Skip 10s"
-                  >
-                    <Zap size={14} />
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-slate-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
-                    Speed: {playbackSpeed}x
-                  </span>
-                  <button
-                    onClick={handleFullscreenClick}
-                    className="p-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition-all active:scale-95 shadow-sm"
-                    title="Full Screen Video"
-                  >
-                    <Maximize2 size={13} />
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-        </div>
+        <audio
+          ref={offlineAudioRef}
+          onTimeUpdate={(e) => {
+            const current = e.currentTarget.currentTime;
+            setOfflinePlayedSeconds(current);
+            safeOnProgress(current);
+          }}
+          onLoadedMetadata={(e) => {
+            safeOnDuration(e.currentTarget.duration);
+          }}
+          onEnded={() => onTrackEnded?.()}
+          className="hidden"
+        />
       );
     }
 
-    if (playerEngine === 'youtube' || playerEngine === 'youtube-nocookie') {
-      const playerUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-      // Calculate quality parameter: if data saver mode or low resolution is selected, use small/medium for instant buffer-free playback
-      let vqParam: string | undefined = undefined;
-      const lowerQ = (selectedQuality || '').toLowerCase();
-      if (isDataSaverMode || lowNetworkModeActive || lowerQ.includes('saver') || lowerQ.includes('144') || lowerQ.includes('240') || lowerQ.includes('buffer')) {
-        vqParam = 'small';
-      } else if (lowerQ.includes('4k') || lowerQ.includes('2160')) {
-        vqParam = 'highres';
-      } else if (lowerQ.includes('1080')) {
-        vqParam = 'hd1080';
-      } else if (lowerQ.includes('720')) {
-        vqParam = 'hd720';
-      } else if (lowerQ.includes('480')) {
-        vqParam = 'large';
-      } else if (lowerQ.includes('360')) {
-        vqParam = 'medium';
-      }
-
-      return (
-        <div 
-          id="player-container"
-          onClick={handleToggleMobileControls}
-          className="relative w-full h-full bg-black touch-manipulation group/vstage select-none overflow-hidden"
-        >
-          <div id="player" className="w-full h-full">
-            <ReactPlayer
-              ref={playerRef}
-              url={playerUrl}
-              playing={isPlaying}
-              volume={volume / 100}
-              muted={isMuted}
-              playbackRate={playbackSpeed}
-              onEnded={onTrackEnded}
-              onBuffer={() => {
-                setIsPlayerBuffering(true);
-                if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
-                bufferingTimeoutRef.current = setTimeout(() => {
-                  setSelectedQuality('240p (Zero Buffer)');
-                  onShowToast?.('⚡ Low connection detected: switched to 240p for zero buffering', 'info');
-                }, 2000);
-              }}
-              onBufferEnd={() => {
-                setIsPlayerBuffering(false);
-                if (bufferingTimeoutRef.current) clearTimeout(bufferingTimeoutRef.current);
-              }}
-              onProgress={(state) => {
-                onProgress?.(state.playedSeconds);
-                setCurrentSeconds(state.playedSeconds);
-              }}
-              onDuration={(duration) => onDuration?.(duration)}
-              onError={() => setIsPlaybackError(true)}
-              width="100%"
-              height="100%"
-              playsinline={true}
-              controls={false}
-              progressInterval={isDataSaverMode || lowNetworkModeActive ? 1000 : 500}
-              config={{
-                youtube: {
-                  embedOptions: {
-                    host: playerEngine === 'youtube-nocookie' ? 'https://www.youtube-nocookie.com' : 'https://www.youtube.com'
-                  },
-                  playerVars: {
-                    autoplay: 0,
-                    rel: 0,
-                    modestbranding: 1,
-                    enablejsapi: 1,
-                    playsinline: 1,
-                    fs: 0,
-                    controls: 0,
-                    disablekb: 1,
-                    iv_load_policy: 3,
-                    cc_load_policy: 0,
-                    origin: typeof window !== 'undefined' ? window.location.origin : '',
-                    widget_referrer: typeof window !== 'undefined' ? window.location.origin : '',
-                    ...(vqParam ? { vq: vqParam } : {})
-                  }
-                }
-              }}
-            />
-          </div>
-
-          {/* AUTHENTIC YOUTUBE MOBILE ON-SCREEN HUD OVERLAY */}
-          <AnimatePresence>
-            {(showMobileOverlayControls || !isPlaying) && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="absolute inset-0 bg-black/45 backdrop-blur-[0.5px] z-20 flex flex-col justify-between p-3 sm:p-4 pointer-events-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* TOP BAR: Minimize Chevron, Autoplay, Cast, CC, Settings */}
-                <div className="flex items-center justify-between w-full">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFullscreenClick();
-                    }}
-                    className="p-2 text-white hover:text-zinc-200 rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer"
-                    title="Collapse / Minimize Player"
-                  >
-                    <ChevronDown size={24} className="drop-shadow-md stroke-[2.5]" />
-                  </button>
-
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    {/* Autoplay Toggle Switch */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleAutoplay?.(!isAutoplay);
-                      }}
-                      className={`p-1.5 rounded-full flex items-center gap-1 transition-all text-xs font-bold active:scale-95 ${
-                        isAutoplay ? 'text-white' : 'text-zinc-400 hover:text-white'
-                      }`}
-                      title={isAutoplay ? 'Autoplay is ON' : 'Autoplay is OFF'}
-                    >
-                      <div className={`w-7 h-4 rounded-full p-0.5 transition-colors relative flex items-center ${
-                        isAutoplay ? 'bg-white' : 'bg-zinc-700'
-                      }`}>
-                        <div className={`w-3 h-3 rounded-full transition-transform ${
-                          isAutoplay ? 'translate-x-3 bg-zinc-950' : 'translate-x-0 bg-zinc-400'
-                        }`} />
-                      </div>
-                    </button>
-
-                    {/* Low Network Zero-Buffer Toggle */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const next = !lowNetworkModeActive;
-                        setLowNetworkMode(next);
-                        setLowNetworkModeActive(next);
-                        if (next) {
-                          setSelectedQuality('240p (Zero Buffer)');
-                          onShowToast?.('⚡ Zero Buffer Mode: 240p stream enabled for low connection', 'success');
-                        } else {
-                          setSelectedQuality('Auto');
-                          onShowToast?.('Standard HD video stream restored', 'info');
-                        }
-                      }}
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                        lowNetworkModeActive
-                          ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 shadow-xs'
-                          : 'bg-black/40 text-zinc-300 border border-white/20 hover:text-white'
-                      }`}
-                      title={lowNetworkModeActive ? "Zero-Buffer Mode Active (240p)" : "Enable Zero-Buffer Mode"}
-                    >
-                      <Zap size={11} className={lowNetworkModeActive ? "fill-emerald-400 text-emerald-400" : "text-zinc-400"} />
-                      <span className="hidden sm:inline">{lowNetworkModeActive ? 'Zero Buffer' : 'Data Saver'}</span>
-                    </button>
-
-                    {/* Chromecast / Cast Icon */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onShowToast?.('Looking for Chromecast / AirPlay streaming devices...', 'info');
-                      }}
-                      className="p-2 text-white hover:text-zinc-200 rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer"
-                      title="Cast to TV / Speaker"
-                    >
-                      <Cast size={19} className="drop-shadow-md" />
-                    </button>
-
-                    {/* Closed Captions CC Badge */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowClosedCaptions(!showClosedCaptions);
-                        onShowToast?.(showClosedCaptions ? 'Captions turned off' : 'English Captions (CC) turned on', 'info');
-                      }}
-                      className={`px-2 py-0.5 rounded text-xs font-black transition-all active:scale-90 cursor-pointer ${
-                        showClosedCaptions
-                          ? 'bg-white text-zinc-950 shadow-md'
-                          : 'border border-white/80 text-white hover:bg-white/15'
-                      }`}
-                      title="Toggle Subtitles / Captions"
-                    >
-                      CC
-                    </button>
-
-                    {/* Settings / Gear Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowActionMoreMenu(true);
-                      }}
-                      className="p-2 text-white hover:text-zinc-200 rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer"
-                      title="Video Settings & Quality"
-                    >
-                      <Settings size={19} className="drop-shadow-md" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* CENTER CONTROLS: 10s Rewind, Big Play/Pause, 10s Forward */}
-                <div className="flex items-center justify-center gap-8 sm:gap-14 w-full my-auto">
-                  {/* Rewind 10s */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSkipBackward();
-                    }}
-                    className="flex flex-col items-center justify-center p-3 text-white/90 hover:text-white rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer group"
-                    title="Rewind 10 seconds"
-                  >
-                    <RotateCcw size={26} className="group-hover:-rotate-12 transition-transform drop-shadow" />
-                    <span className="text-[10px] font-black mt-0.5 tracking-tighter font-mono">10</span>
-                  </button>
-
-                  {/* Big Play / Pause Button */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onTogglePlayPause) {
-                        onTogglePlayPause();
-                      } else if (onSetPlaying) {
-                        onSetPlaying(!isPlaying);
-                      }
-                    }}
-                    className="p-4 sm:p-5 rounded-full bg-black/65 hover:bg-black/85 text-white border border-white/20 shadow-2xl backdrop-blur-md transition-all active:scale-90 cursor-pointer hover:scale-105 flex items-center justify-center"
-                    title={isPlaying ? 'Pause Video' : 'Play Video'}
-                  >
-                    {isPlayerBuffering ? (
-                      <div className="w-8 h-8 border-3 border-rose-500 border-t-transparent rounded-full animate-spin" />
-                    ) : isPlaying ? (
-                      <Pause size={32} className="fill-white drop-shadow-lg" />
-                    ) : (
-                      <Play size={32} className="fill-white ml-1 drop-shadow-lg" />
-                    )}
-                  </button>
-
-                  {/* Forward 10s */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSkipForward();
-                    }}
-                    className="flex flex-col items-center justify-center p-3 text-white/90 hover:text-white rounded-full hover:bg-white/15 transition-all active:scale-90 cursor-pointer group"
-                    title="Skip forward 10 seconds"
-                  >
-                    <RotateCcw size={26} className="scale-x-[-1] group-hover:rotate-12 transition-transform drop-shadow" />
-                    <span className="text-[10px] font-black mt-0.5 tracking-tighter font-mono">10</span>
-                  </button>
-                </div>
-
-                {/* BOTTOM BAR: Time Display, Scrubber, Fullscreen */}
-                <div className="w-full space-y-1 pt-1">
-                  {/* Closed Captions Preview (when enabled) */}
-                  {showClosedCaptions && (
-                    <div className="flex justify-center pb-1 pointer-events-none">
-                      <span className="px-3 py-1 bg-black/85 text-white text-xs font-semibold rounded-md border border-white/15 backdrop-blur-sm shadow-md">
-                        ♪ [{decodeHtmlEntities(currentTrack?.title || 'Audio Stream')}] ♪
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Scrub Slider Bar */}
-                  <div 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleScrubClick(e);
-                    }}
-                    className="w-full h-3 flex items-center cursor-pointer relative group/scrub"
-                  >
-                    <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden relative group-hover/scrub:h-1.5 transition-all">
-                      <div 
-                        className="h-full bg-rose-600 rounded-full relative"
-                        style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
-                      />
-                    </div>
-                    {/* Scrub Thumb Knob */}
-                    <div 
-                      className="absolute w-3.5 h-3.5 rounded-full bg-rose-600 shadow-md border-2 border-white pointer-events-none -translate-x-1/2 scale-100 group-hover/scrub:scale-125 transition-transform"
-                      style={{ left: `${Math.min(100, Math.max(0, progressPercent))}%` }}
-                    />
-                  </div>
-
-                  {/* Time & Fullscreen Row */}
-                  <div className="flex items-center justify-between text-xs font-mono font-bold text-white drop-shadow">
-                    <div className="flex items-center gap-1.5">
-                      <span>{formatTime(currentPlaybackTime)}</span>
-                      <span className="text-zinc-400">/</span>
-                      <span className="text-zinc-300">{currentTrack?.duration || '3:30'}</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFullscreenClick();
-                      }}
-                      className="p-1 text-white hover:text-zinc-200 transition-transform active:scale-90 cursor-pointer"
-                      title="Toggle Fullscreen"
-                    >
-                      <Maximize2 size={18} />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      );
-    }
-
-    const embedUrl = getThirdPartyEmbedUrl();
-    if (!embedUrl) {
-      return (
-        <div className="relative w-full h-full bg-black flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      );
-    }
+    if (!videoId) return null;
 
     return (
-      <div className="relative w-full h-full bg-black">
-        <iframe
-          src={embedUrl}
-          title={currentTrack?.title || "Third Party Player"}
-          className="w-full h-full border-0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
-      </div>
+      <ReactPlayer
+        ref={playerRef}
+        url={`https://${playerEngine === 'youtube-nocookie' ? 'www.youtube-nocookie.com' : 'www.youtube.com'}/watch?v=${videoId}`}
+        playing={isPlaying}
+        volume={normalizedVolume}
+        muted={isMuted}
+        playbackRate={playbackRate}
+        width="100%"
+        height="100%"
+        controls={false}
+        pip={false}
+        playsinline
+        config={{
+          playerVars: {
+            autoplay: isPlaying ? 1 : 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            iv_load_policy: 3,
+            modestbranding: 1,
+            rel: 0,
+            playsinline: 1,
+            enablejsapi: 1,
+            origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+          }
+        }}
+        onPlay={() => {
+          setIsPlayerBuffering(false);
+          if (onSetPlaying) onSetPlaying(true);
+        }}
+        onPause={() => {
+          setIsPlayerBuffering(false);
+          if (onSetPlaying) onSetPlaying(false);
+        }}
+        onBuffer={() => {
+          setIsPlayerBuffering(true);
+          if (bufferWatchdogRef.current) clearTimeout(bufferWatchdogRef.current);
+          // If buffering lasts longer than 1.6 seconds, auto unstick
+          bufferWatchdogRef.current = setTimeout(() => {
+            try {
+              const internal = playerRef.current?.getInternalPlayer();
+              if (internal) {
+                if (typeof internal.playVideo === 'function') {
+                  internal.playVideo();
+                }
+                if (typeof internal.getCurrentTime === 'function' && typeof internal.seekTo === 'function') {
+                  const ct = internal.getCurrentTime();
+                  if (ct > 0) internal.seekTo(ct + 0.1, true);
+                }
+              }
+            } catch {}
+            setIsPlayerBuffering(false);
+          }, 1600);
+        }}
+        onBufferEnd={() => {
+          setIsPlayerBuffering(false);
+          if (bufferWatchdogRef.current) {
+            clearTimeout(bufferWatchdogRef.current);
+            bufferWatchdogRef.current = null;
+          }
+        }}
+        onReady={() => {
+          setIsPlayerBuffering(false);
+          if (isPlaying) {
+            try {
+              const internal = playerRef.current?.getInternalPlayer();
+              if (internal && typeof internal.playVideo === 'function') {
+                internal.playVideo();
+              }
+            } catch {}
+          }
+          if (lastPlaybackTimeRef.current > 1.5 && Math.abs(lastPlaybackTimeRef.current - currentSeconds) > 2) {
+            setTimeout(() => {
+              try {
+                playerRef.current?.seekTo(lastPlaybackTimeRef.current, 'seconds');
+              } catch {}
+            }, 250);
+          }
+        }}
+        onProgress={(state) => {
+          lastPlaybackTimeRef.current = state.playedSeconds;
+          setCurrentSeconds(state.playedSeconds);
+          safeOnProgress(state.playedSeconds);
+        }}
+        onDuration={(dur) => {
+          safeOnDuration(dur);
+        }}
+        onEnded={() => onTrackEnded?.()}
+        onError={() => {
+          setIsPlayerBuffering(false);
+          onShowToast?.('Reconnecting video stream...', 'info');
+          setTimeout(() => {
+            handleForceUnstick();
+          }, 500);
+        }}
+      />
     );
   };
 
+  // Pure Offscreen Background Audio Stream (Music plays continuously without video player)
   return (
-    <motion.div
-      ref={wrapperRef}
-      key="global-youtube-player-wrapper"
-      className={containerClassName}
-      style={isFloating ? { width: `${dimensions.width}px`, height: `${dimensions.height}px` } : undefined}
-      drag={isFloating}
-      dragMomentum={false}
-      dragElastic={0.05}
-      onDragStart={() => setIsDragging(true)}
-      onDragEnd={() => setIsDragging(false)}
+    <div
+      id="global-audio-stream-engine"
+      className="fixed -top-[9999px] -left-[9999px] w-[320px] h-[180px] pointer-events-none z-[-10] overflow-hidden opacity-0"
+      aria-hidden="true"
     >
-      {/* Floating Mode Drag Header */}
-      {isFloating && (
-        <div className="bg-slate-900/95 backdrop-blur-md px-2.5 py-1.5 flex items-center justify-between gap-1.5 border-b border-white/10 shrink-0 z-20 text-white select-none cursor-grab active:cursor-grabbing relative">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="text-gray-400 hover:text-white transition-colors" title="Drag to move player">
-              <GripHorizontal size={16} />
-            </div>
-            <button
-              onClick={onCloseVideo}
-              className="p-1 hover:bg-white/15 bg-white/5 rounded-full text-gray-300 hover:text-white transition-all shrink-0 active:scale-95"
-              title="Hide video player"
-            >
-              <ChevronDown size={15} className="text-indigo-400" />
-            </button>
-            <div className="min-w-0">
-              <span className="text-[11px] font-bold truncate block text-gray-100 max-w-[110px] sm:max-w-[160px]">
-                {currentTrack?.title || 'Video Stream'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                const nextW = dimensions.width === 280 ? 330 : dimensions.width === 330 ? 220 : 280;
-                applyPresetSize(nextW, Math.round(nextW * (9 / 16)));
-              }}
-              className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-white/15 rounded text-[10px] font-mono font-extrabold transition-all active:scale-95 cursor-pointer"
-              title="Switch Mini Player Size (Medium Compact: 280x158)"
-            >
-              {dimensions.width <= 240 ? '220p' : dimensions.width <= 290 ? '280p' : '330p'}
-            </button>
-            <button
-              onClick={handleFullscreenClick}
-              className="p-1 bg-rose-600 hover:bg-rose-500 rounded-md text-white transition-all flex items-center shadow-sm active:scale-95"
-              title="Expand Full Video Player (Fullscreen)"
-            >
-              <Maximize2 size={11} />
-            </button>
-            {onCloseVideo && (
-              <button
-                onClick={onCloseVideo}
-                className="p-1 hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 rounded-md transition-colors"
-                title="Close Video Player"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* MAIN CONTENT AREA */}
-      {/* ========================================================= */}
-      {isFull ? (
-        /* YouTube Official Video Page Container Layout (Dark Theme) */
-        <div className={`w-full mx-auto p-0 sm:p-4 md:p-6 space-y-3 sm:space-y-4 ${isTheaterMode ? 'max-w-full' : 'max-w-[1520px]'}`}>
-          {/* Top Control Bar with Back Button */}
-          <div className="flex items-center justify-between px-3 sm:px-0 pt-2 sm:pt-0 pb-1">
-            <button
-              onClick={handleFullscreenClick}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-white/15 text-slate-200 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
-              title="Back to App View"
-            >
-              <ArrowLeft size={16} />
-              <span>Back</span>
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsTheaterMode(!isTheaterMode)}
-                className={`px-3 py-1.5 rounded-full border text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 ${
-                  isTheaterMode ? 'bg-rose-600/30 border-rose-500 text-rose-300' : 'bg-slate-900 border-white/15 text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-                title="Toggle Theater Mode"
-              >
-                <Tv size={14} />
-                <span className="hidden sm:inline">{isTheaterMode ? 'Default View' : 'Theater View'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowActionMoreMenu(true)}
-                className="p-2 rounded-full bg-slate-900 border border-white/15 text-slate-300 hover:bg-slate-800 hover:text-white transition-all active:scale-95 cursor-pointer"
-                title="More Options"
-              >
-                <MoreHorizontal size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            {/* MAIN COLUMN (Video + Actions + Description + Comments) */}
-            <div className={`space-y-4 ${isTheaterMode ? 'lg:col-span-12' : 'lg:col-span-8 xl:col-span-9'}`}>
-              
-              {/* VIDEO STAGE CONTAINER WITH CINEMATIC AMBIENT GLOW */}
-              <div className="sticky top-0 sm:top-2 lg:top-4 z-30 group">
-                {/* Dynamic RGB Ambient Glow Backlight */}
-                <div className="absolute -inset-2.5 rgb-video-ambient-glow rounded-3xl blur-2xl opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none" />
-
-                <div className={playerBoxClassName}>
-                  {/* Animated RGB Visual Effect strictly on the INSIDE of the White Border */}
-                  <div className="rgb-video-inner-border pointer-events-none" />
-                  {renderVideoStage(false)}
-                </div>
-              </div>
-
-              {/* LOWER METADATA & ACTIONS WRAPPER WITH PADDING ON MOBILE */}
-              <div className="px-3 sm:px-0 space-y-4">
-
-              {/* OFFLINE PLAYBACK ALERT BANNER */}
-              {isOfflineMode && (
-                <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs font-bold text-amber-300 backdrop-blur-md">
-                  <div className="flex items-center gap-2">
-                    <WifiOff size={16} className="text-amber-400" />
-                    <span>Offline Mode — Playing video from local downloaded cache</span>
-                  </div>
-                  <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 rounded-full border border-amber-500/30 text-[10px] font-black uppercase">
-                    Downloaded
-                  </span>
-                </div>
-              )}
-
-              {/* VIDEO TITLE & METADATA SECTION */}
-              <div className="space-y-1.5 pt-1">
-                <h1 className="text-base sm:text-xl font-extrabold text-white leading-snug tracking-tight line-clamp-2">
-                  {decodeHtmlEntities(currentTrack?.title || '')}
-                </h1>
-
-                {/* Sub Metadata line: @Channel views likes time ...more */}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400 font-medium">
-                  <span className="font-bold text-zinc-200">@{ (realChannelName || currentTrack?.channel || 'channel').toLowerCase().replace(/\s+/g, '') }</span>
-                  <span>{realLikeCountStr || '4.7K'} likes</span>
-                  <span>{realViewCount || '53K views'}</span>
-                  <span>3h ago</span>
-                  <span className="font-mono text-zinc-500">12</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowFullDescription(!showFullDescription)}
-                    className="font-extrabold text-white hover:text-rose-400 bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-full text-[11px] transition-all cursor-pointer inline-flex items-center gap-1 active:scale-95"
-                    title="More details"
-                  >
-                    <span>...more</span>
-                    {showFullDescription ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* VIDEO CHAPTERS INTERACTIVE SHEET / PANEL */}
-              {showChaptersPanel && (
-                <motion.div
-                  ref={chaptersSectionRef}
-                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
-                  className="-mx-3 sm:mx-0 w-[calc(100%+1.5rem)] sm:w-full bg-zinc-950/98 border-y sm:border border-white/20 sm:border-white/15 rounded-none sm:rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xl backdrop-blur-2xl transition-all"
-                >
-                  {/* Top Drag Handle Bar */}
-                  <div className="w-12 h-1 bg-zinc-600/80 rounded-full mx-auto -mt-1 mb-1" />
-
-                  {/* Header Bar: "Chapters" + Close Button */}
-                  <div className="flex items-center justify-between px-1 pb-1 border-b border-white/10">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Chapters</h2>
-                      <span className="px-2.5 py-0.5 bg-blue-600/30 text-blue-300 border border-blue-500/30 text-[10px] font-mono font-bold rounded-full">
-                        {videoChapters.length}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowChaptersPanel(false)}
-                      className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-colors cursor-pointer active:scale-90"
-                      title="Close Chapters"
-                    >
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  {/* CHAPTERS VERTICAL LIST */}
-                  <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1 custom-scrollbar pt-1">
-                    {videoChapters.map((ch, idx) => {
-                      const isCurrentActive = activeChapter?.timeSeconds === ch.timeSeconds;
-                      return (
-                        <div
-                          key={`ch-${idx}-${ch.timeSeconds}`}
-                          onClick={() => handleSeekToChapter(ch)}
-                          className={`flex items-center gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer group ${
-                            isCurrentActive
-                              ? 'bg-zinc-900 border-blue-500/70 ring-1 ring-blue-500/40 shadow-xl'
-                              : 'bg-zinc-950/70 hover:bg-zinc-900 border-white/5 hover:border-white/15'
-                          }`}
-                        >
-                          {/* Thumbnail Preview Image */}
-                          <div className="relative w-32 sm:w-36 h-20 rounded-xl overflow-hidden bg-zinc-900 shrink-0 border border-white/10 shadow-md">
-                            <img
-                              src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-                              alt={ch.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop';
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                            {isCurrentActive && (
-                              <div className="absolute top-1.5 left-1.5 px-2 py-0.5 bg-blue-600 text-white font-extrabold text-[9px] rounded-md shadow-md flex items-center gap-1 animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                <span>Playing</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1 space-y-2">
-                            <h3 className={`text-xs sm:text-sm md:text-base font-semibold line-clamp-2 leading-snug ${
-                              isCurrentActive ? 'text-white font-bold' : 'text-zinc-200 group-hover:text-white'
-                            }`}>
-                              {ch.title}
-                            </h3>
-
-                            <div className="flex items-center gap-3 pt-0.5">
-                              <span className={`inline-flex items-center justify-center font-mono text-xs font-bold px-2.5 py-0.5 rounded-md border ${
-                                isCurrentActive 
-                                  ? 'bg-blue-600 text-white border-blue-400 shadow-sm' 
-                                  : 'bg-blue-950/80 text-blue-400 border-blue-500/30'
-                              }`}>
-                                {ch.timeDisplay}
-                              </span>
-
-                              <div className="flex items-center gap-2 text-zinc-400">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (navigator.share) {
-                                      navigator.share({ title: ch.title, url: `${window.location.href}&t=${ch.timeSeconds}s` }).catch(() => {});
-                                    } else if (onShowToast) {
-                                      onShowToast(`Copied chapter link (${ch.timeDisplay})`, 'info');
-                                    }
-                                  }}
-                                  className="p-1 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                                  title="Share Chapter"
-                                >
-                                  <Share2 size={14} />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSeekToChapter(ch);
-                                  }}
-                                  className="p-1 hover:text-white hover:bg-white/10 rounded-md transition-colors"
-                                  title="Repeat / Replay Chapter"
-                                >
-                                  <RotateCcw size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ACTION BAR & CHANNEL ROW - YOUTUBE MOBILE LAYOUT */}
-              <div className="flex items-center justify-between gap-3 overflow-x-auto custom-scrollbar py-2 border-y border-white/10">
-                {/* CHANNEL INFO & SUBSCRIBE BUTTON */}
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-rose-600 to-indigo-600 p-0.5 shadow-md shrink-0">
-                    <img
-                      src={realChannelAvatar || getChannelAvatar(realChannelName || currentTrack?.channel || '')}
-                      alt={realChannelName || currentTrack?.channel}
-                      className="w-full h-full rounded-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = getFallbackChannelAvatar(realChannelName || currentTrack?.channel || '');
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-xs sm:text-sm text-white truncate max-w-[120px] sm:max-w-none">
-                      {decodeHtmlEntities(realChannelName || currentTrack?.channel || '')}
-                    </span>
-
-                    {/* Subscribe / Subscribed Bell Toggle Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const targetChan = realChannelName || currentTrack?.channel;
-                        if (onToggleSubscribe && targetChan) {
-                          onToggleSubscribe(targetChan);
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-full font-bold text-xs transition-all active:scale-95 flex items-center gap-1 shrink-0 ${
-                        isSubscribed
-                          ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-white/10'
-                          : 'bg-white text-zinc-950 hover:bg-zinc-200'
-                      }`}
-                    >
-                      {isSubscribed ? (
-                        <>
-                          <Bell size={13} className="fill-zinc-200 text-zinc-200" />
-                          <ChevronDown size={12} />
-                        </>
-                      ) : (
-                        <span>Subscribe</span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* LIKE / DISLIKE / SHARE / REMIX / MORE ACTIONS */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Like / Dislike Pill Group */}
-                  <div className="flex items-center bg-zinc-800/90 border border-white/10 rounded-full p-0.5 shadow-sm">
-                    <button
-                      type="button"
-                      onClick={handleToggleLike}
-                      className={`px-3 py-1.5 rounded-l-full text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                        hasLiked ? 'text-rose-400 bg-rose-500/20' : 'text-zinc-300 hover:text-white'
-                      }`}
-                      title="Like Video"
-                    >
-                      <ThumbsUp size={14} className={hasLiked ? 'fill-rose-400' : ''} />
-                      <span className="hidden sm:inline">{realLikeCountStr || '4.7K'}</span>
-                    </button>
-
-                    <div className="w-px h-3.5 bg-white/20" />
-
-                    <button
-                      type="button"
-                      onClick={handleToggleDislike}
-                      className={`px-2.5 py-1.5 rounded-r-full text-xs font-bold flex items-center gap-1.5 transition-colors ${
-                        hasDisliked ? 'text-rose-400 bg-rose-500/20' : 'text-zinc-300 hover:text-white'
-                      }`}
-                      title="Dislike Video"
-                    >
-                      <ThumbsDown size={14} className={hasDisliked ? 'fill-rose-400' : ''} />
-                    </button>
-                  </div>
-
-                  {/* Share Pill */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({ title: currentTrack?.title, url: window.location.href }).catch(() => {});
-                      } else if (onShowToast) {
-                        onShowToast('Video URL copied to clipboard!', 'info');
-                      }
-                    }}
-                    className="p-2 sm:px-3 sm:py-1.5 bg-zinc-800/90 hover:bg-zinc-700 border border-white/10 rounded-full text-xs font-bold text-zinc-200 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                    title="Share Video"
-                  >
-                    <Share2 size={14} />
-                    <span className="hidden sm:inline">Share</span>
-                  </button>
-
-                  {/* Remix / Sparkles Pill */}
-                  <button
-                    type="button"
-                    onClick={() => setShowChaptersPanel(!showChaptersPanel)}
-                    className={`p-2 sm:px-3 sm:py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer border ${
-                      showChaptersPanel
-                        ? 'bg-rose-600 text-white border-rose-500'
-                        : 'bg-zinc-800/90 hover:bg-zinc-700 border-white/10 text-zinc-200'
-                    }`}
-                    title="Chapters & Remix"
-                  >
-                    <Sparkles size={14} className="text-amber-400" />
-                    <span className="hidden sm:inline">Remix</span>
-                  </button>
-
-                  {/* More Options Button */}
-                  <div className="relative shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowActionMoreMenu(!showActionMoreMenu);
-                      }}
-                      className={`p-2 rounded-full border shadow-md transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
-                        showActionMoreMenu
-                          ? 'bg-rose-600 text-white border-rose-500 shadow-rose-600/30'
-                          : 'bg-zinc-800/90 hover:bg-zinc-700/90 border-white/10 text-zinc-200'
-                      }`}
-                      title="More Options"
-                    >
-                      <MoreHorizontal size={15} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* AUTHENTIC YOUTUBE OPTIONS & SETTINGS BOTTOM SHEET MODAL */}
-              <AnimatePresence>
-                {showActionMoreMenu && (
-                  <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    {/* Dark Backdrop */}
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowActionMoreMenu(false);
-                      }}
-                      className="absolute inset-0 bg-black/75 backdrop-blur-sm cursor-pointer"
-                    />
-
-                    {/* Bottom Sheet Box */}
-                    <motion.div
-                      initial={{ y: '100%', opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: '100%', opacity: 0 }}
-                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="relative w-full max-w-lg bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 max-h-[85vh] overflow-y-auto custom-scrollbar space-y-3 text-white"
-                    >
-                      {/* Drag Indicator Bar */}
-                      <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
-
-                      {/* Header */}
-                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                        <div className="flex items-center gap-2">
-                          <MoreHorizontal size={20} className="text-rose-500" />
-                          <span className="font-extrabold text-base text-white">More Options</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowActionMoreMenu(false)}
-                          className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-
-                      {/* Action Buttons List */}
-                      <div className="space-y-1 divide-y divide-zinc-900 text-xs">
-                        <div className="space-y-1 pb-2">
-                          {/* Video Quality / Stream Engine */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowActionMoreMenu(false);
-                              setShowQualityMenu(true);
-                            }}
-                            className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
-                                <Settings2 size={18} />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-bold text-white">Video Quality</span>
-                                <span className="text-xs text-zinc-400 font-normal">{selectedQuality}</span>
-                              </div>
-                            </div>
-                            <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">Change ›</span>
-                          </button>
-
-                          {/* Playback Speed */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowActionMoreMenu(false);
-                              setShowSpeedMenu(true);
-                            }}
-                            className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
-                                <Zap size={18} />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-bold text-white">Playback Speed</span>
-                                <span className="text-xs text-zinc-400 font-normal">{playbackSpeed === 1.0 ? 'Normal (1.0x)' : `${playbackSpeed}x`}</span>
-                              </div>
-                            </div>
-                            <span className="text-xs text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">Change ›</span>
-                          </button>
-
-                          {/* Share Video */}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              setShowActionMoreMenu(false);
-                              const shareUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                              if (navigator.share && currentTrack) {
-                                try {
-                                  await navigator.share({
-                                    title: currentTrack.title,
-                                    text: `Watch official YouTube video "${currentTrack.title}"`,
-                                    url: shareUrl
-                                  });
-                                  onShowToast?.('Shared successfully!', 'info');
-                                } catch {
-                                  await navigator.clipboard.writeText(shareUrl);
-                                  onShowToast?.('Video link copied to clipboard!', 'info');
-                                }
-                              } else {
-                                await navigator.clipboard.writeText(shareUrl);
-                                onShowToast?.('Video link copied to clipboard!', 'info');
-                              }
-                            }}
-                            className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400">
-                                <Share2 size={18} />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-bold text-white">Share Video</span>
-                                <span className="text-xs text-zinc-400 font-normal">Copy link or share to social apps</span>
-                              </div>
-                            </div>
-                            <span className="text-xs text-sky-400 font-bold bg-sky-500/10 px-2.5 py-1 rounded-full border border-sky-500/20">Share ›</span>
-                          </button>
-
-                          {/* Download Option */}
-                          {currentTrack && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowActionMoreMenu(false);
-                                if (onDownloadTrack) {
-                                  onDownloadTrack(currentTrack);
-                                }
-                                onShowToast?.(`Downloading "${currentTrack.title}" to offline library...`, 'info');
-                              }}
-                              className="w-full text-left px-3.5 py-3 rounded-2xl font-bold text-zinc-200 hover:text-white hover:bg-zinc-900 flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99]"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-purple-500/15 text-purple-400">
-                                  <Download size={18} />
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-white">Download Track</span>
-                                  <span className="text-xs text-zinc-400 font-normal">Save to offline library</span>
-                                </div>
-                              </div>
-                              <span className="text-xs text-purple-400 font-bold bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">Download ›</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
-
-              {/* VIDEO QUALITY SELECTION SHEET */}
-              <AnimatePresence>
-                {showQualityMenu && (
-                  <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowQualityMenu(false);
-                      }}
-                      className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
-                    />
-
-                    <motion.div
-                      initial={{ y: '100%', opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: '100%', opacity: 0 }}
-                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="relative w-full max-w-sm bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 text-white space-y-3"
-                    >
-                      <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
-
-                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                        <div className="flex items-center gap-2">
-                          <Settings2 size={20} className="text-emerald-400" />
-                          <span className="font-extrabold text-base text-white">Video Quality</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowQualityMenu(false)}
-                          className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-
-                      <div className="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        {[
-                          { id: '240p (Zero Buffer)', label: '240p Zero Buffer Mode', desc: 'Ultra-low data • Instant buffer-free playback on 2G/3G', badge: 'Zero Lag' },
-                          { id: 'Auto (Buffer-Free)', label: 'Auto (Buffer-Free Streaming)', desc: 'Adaptive bitrate • Smooth playback', badge: 'Recommended' },
-                          { id: '1080p HD', label: '1080p Full HD', desc: 'Highest clarity for fast networks' },
-                          { id: '720p HD', label: '720p HD', desc: 'Crisp balanced stream' },
-                          { id: '480p SD', label: '480p Standard', desc: 'Smooth on standard mobile data' },
-                          { id: '360p Data Saver', label: '360p Data Saver', desc: 'Instant playback • Minimum data' },
-                          { id: '144p (Data Saver)', label: '144p Ultra Low Bitrate', desc: 'Extreme data saver for very weak signal' },
-                        ].map((q) => {
-                          const isSelected = selectedQuality === q.id || (q.id.startsWith('Auto') && selectedQuality.startsWith('Auto'));
-                          return (
-                            <button
-                              key={q.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedQuality(q.id);
-                                setShowQualityMenu(false);
-                                onShowToast?.(`Video quality set to ${q.id}`, 'info');
-                              }}
-                              className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/20 border border-emerald-500/40 text-emerald-300'
-                                  : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 border border-transparent'
-                              }`}
-                            >
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-white">{q.label}</span>
-                                  {q.badge && (
-                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                      {q.badge}
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-xs text-zinc-400">{q.desc}</span>
-                              </div>
-                              {isSelected && <CheckCircle2 size={18} className="text-emerald-400 shrink-0 ml-2" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
-
-              {/* PLAYBACK SPEED SELECTION SHEET */}
-              <AnimatePresence>
-                {showSpeedMenu && (
-                  <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowSpeedMenu(false);
-                      }}
-                      className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
-                    />
-
-                    <motion.div
-                      initial={{ y: '100%', opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: '100%', opacity: 0 }}
-                      transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="relative w-full max-w-sm bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 text-white space-y-3"
-                    >
-                      <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2" />
-
-                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                        <div className="flex items-center gap-2">
-                          <Zap size={20} className="text-amber-400" />
-                          <span className="font-extrabold text-base text-white">Playback Speed</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowSpeedMenu(false)}
-                          className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-
-                      <div className="space-y-1.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        {[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((speed) => {
-                          const isSelected = playbackSpeed === speed;
-                          const speedLabel = speed === 1.0 ? 'Normal (1.0x)' : `${speed}x`;
-                          return (
-                            <button
-                              key={speed}
-                              type="button"
-                              onClick={() => {
-                                setPlaybackSpeed(speed);
-                                setShowSpeedMenu(false);
-                                if (playerRef.current) {
-                                  try {
-                                    const internal = playerRef.current.getInternalPlayer();
-                                    if (internal && typeof internal.setPlaybackRate === 'function') {
-                                      internal.setPlaybackRate(speed);
-                                    }
-                                  } catch {
-                                    // ignore
-                                  }
-                                }
-                                onShowToast?.(`Playback speed set to ${speedLabel}`, 'info');
-                              }}
-                              className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between text-sm font-bold transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/40 text-amber-300'
-                                  : 'bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 border border-transparent'
-                              }`}
-                            >
-                              <span>{speedLabel}</span>
-                              {isSelected && <CheckCircle2 size={18} className="text-amber-400" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
-
-              {/* AUTHENTIC YOUTUBE EXPANDABLE VIDEO DESCRIPTION BOTTOM SHEET */}
-              <YouTubeVideoDescriptionSheet
-                isOpen={showFullDescription}
-                onClose={() => setShowFullDescription(false)}
-                track={currentTrack}
-                realViewCount={realViewCount}
-                realSubscriberCount={realSubscriberCount}
-                realChannelName={realChannelName}
-                realChannelAvatar={realChannelAvatar}
-                isSubscribed={isSubscribed}
-                onToggleSubscribe={onToggleSubscribe}
-                onSeek={handleSeekToSeconds}
-                onShowToast={onShowToast}
-              />
-
-              {/* AUTHENTIC YOUTUBE COMMENTS CARD & BOTTOM SHEET */}
-              <div className="space-y-3 pt-2">
-                {/* Mobile Preview Comments Card (Tapping opens YouTube Comments Bottom Sheet) */}
-                <div 
-                  onClick={() => setShowMobileCommentsSheet(true)}
-                  className="p-3.5 bg-zinc-900/95 hover:bg-zinc-850 rounded-2xl border border-white/10 space-y-2 cursor-pointer transition-all group shadow-xl active:scale-[0.99]"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-sm text-white">Comments</span>
-                      <span className="text-xs text-zinc-400 font-semibold">{comments.length > 0 ? comments.length + 1840 : 2}</span>
-                    </div>
-                    {/* Pagination Indicator Dots */}
-                    <div className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                    </div>
-                  </div>
-
-                  {/* Initial user prompt row matching YouTube mobile screenshot */}
-                  <div className="flex items-center gap-2.5 pt-0.5 text-xs">
-                    {/* Circular Initial Avatar B (Pink/Magenta) */}
-                    <div className="w-6 h-6 rounded-full bg-pink-600 text-white font-bold flex items-center justify-center shrink-0 text-[11px] shadow-sm ring-1 ring-white/10">
-                      B
-                    </div>
-                    <span className="text-zinc-400 font-normal text-xs flex-1">
-                      Comment...
-                    </span>
-                  </div>
-                </div>
-
-                {/* YOUTUBE MOBILE COMMENTS BOTTOM SHEET MODAL */}
-                <AnimatePresence>
-                  {showMobileCommentsSheet && (
-                    <div className="fixed inset-0 z-[125] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                      {/* Dark Backdrop */}
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setShowMobileCommentsSheet(false)}
-                        className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
-                      />
-
-                      {/* Bottom Sheet Box */}
-                      <motion.div
-                        initial={{ y: '100%', opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: '100%', opacity: 0 }}
-                        transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="relative w-full max-w-lg bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-5 z-10 max-h-[85vh] flex flex-col text-white"
-                      >
-                        {/* Drag Indicator Bar */}
-                        <div className="w-10 h-1 bg-zinc-700 rounded-full mx-auto -mt-1 mb-2 shrink-0" />
-
-                        {/* Comments Header */}
-                        <div className="flex items-center justify-between pb-3 border-b border-zinc-800 shrink-0">
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-extrabold text-base text-white flex items-center gap-2">
-                              <span>Comments</span>
-                              <span className="text-xs text-zinc-400 font-semibold">{comments.length > 0 ? comments.length + 1840 : 2}</span>
-                            </h3>
-
-                            {/* Sort Dropdown */}
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={() => setShowSortMenu(!showSortMenu)}
-                                className="flex items-center gap-1 text-xs font-bold text-zinc-300 hover:text-white px-2 py-1 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
-                              >
-                                <ListFilter size={14} />
-                                <span>Sort</span>
-                              </button>
-
-                              {showSortMenu && (
-                                <div className="absolute left-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1 z-50 text-xs">
-                                  <button
-                                    type="button"
-                                    onClick={() => { setCommentSort('top'); setShowSortMenu(false); }}
-                                    className={`w-full text-left px-3 py-2 rounded-lg font-bold transition-colors ${commentSort === 'top' ? 'bg-rose-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
-                                  >
-                                    Top comments
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setCommentSort('newest'); setShowSortMenu(false); }}
-                                    className={`w-full text-left px-3 py-2 rounded-lg font-bold transition-colors ${commentSort === 'newest' ? 'bg-rose-600 text-white' : 'text-zinc-300 hover:bg-zinc-800'}`}
-                                  >
-                                    Newest first
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setShowMobileCommentsSheet(false)}
-                            className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-
-                        {/* Add Comment Input Form */}
-                        <form onSubmit={handleAddComment} className="flex gap-2.5 py-3 border-b border-zinc-800 shrink-0">
-                          <div className="w-8 h-8 rounded-full bg-pink-600 flex items-center justify-center font-black text-white shrink-0 text-xs shadow-md">
-                            B
-                          </div>
-
-                          <div className="flex-1 flex items-center gap-2 bg-zinc-900 rounded-full px-3 py-1.5 border border-zinc-800 focus-within:border-zinc-600">
-                            <input
-                              type="text"
-                              value={newCommentInput}
-                              onChange={(e) => setNewCommentInput(e.target.value)}
-                              placeholder="Add a comment..."
-                              className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none"
-                            />
-                            {newCommentInput.trim() && (
-                              <button
-                                type="submit"
-                                className="p-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shrink-0"
-                              >
-                                <Send size={12} />
-                              </button>
-                            )}
-                          </div>
-                        </form>
-
-                        {/* Comments Scrollable List */}
-                        <div className="space-y-4 py-3 overflow-y-auto custom-scrollbar flex-1 pr-1">
-                          {comments.map((cmt) => (
-                            <div key={cmt.id} className="flex gap-3 text-xs group/cmt">
-                              {/* User Avatar */}
-                              <img
-                                src={cmt.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop'}
-                                alt={cmt.author}
-                                className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-white/10"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop';
-                                }}
-                              />
-
-                              <div className="min-w-0 flex-1 space-y-1">
-                                {cmt.isPinned && (
-                                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 pb-0.5">
-                                    <Pin size={12} className="text-zinc-300 rotate-45 fill-zinc-300" />
-                                    <span>Pinned by <strong className="text-zinc-200">@{cmt.pinnedBy || cmt.author}</strong></span>
-                                  </div>
-                                )}
-
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-xs text-zinc-200">
-                                    @{cmt.author}
-                                  </span>
-                                  <span className="text-[11px] text-zinc-500">{cmt.timeAgo}</span>
-                                </div>
-
-                                <p className="text-xs text-zinc-200 font-normal leading-relaxed whitespace-pre-line">
-                                  {cmt.text}
-                                </p>
-
-                                <div className="flex items-center gap-4 pt-1 text-zinc-400">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleCommentLike(cmt.id)}
-                                    className={`flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer ${
-                                      cmt.userLiked ? 'text-rose-400 font-bold' : ''
-                                    }`}
-                                  >
-                                    <ThumbsUp size={13} className={cmt.userLiked ? 'fill-rose-400 text-rose-400' : ''} />
-                                    <span className="text-xs">
-                                      {cmt.likes > 0 ? (cmt.likes >= 1000 ? `${(cmt.likes/1000).toFixed(1)}K` : cmt.likes) : ''}
-                                    </span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleCommentDislike(cmt.id)}
-                                    className={`flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer ${
-                                      cmt.userDisliked ? 'text-zinc-200 font-bold' : ''
-                                    }`}
-                                  >
-                                    <ThumbsDown size={13} className={cmt.userDisliked ? 'fill-zinc-200 text-zinc-200' : ''} />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => setReplyingToId(replyingToId === cmt.id ? null : cmt.id)}
-                                    className="hover:text-white font-bold text-xs text-zinc-300 transition-colors cursor-pointer"
-                                  >
-                                    Reply
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              </div>
-
-            </div>
-
-            {/* RIGHT SIDEBAR (Up Next & Chapters Page - Exactly like YouTube) */}
-            {!isTheaterMode && (
-              <div className="lg:col-span-4 xl:col-span-3 px-3 sm:px-0 space-y-3">
-                {/* Navigation Header between "Up Next" and "Chapters" */}
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowChaptersPanel(false)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                        !showChaptersPanel
-                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
-                          : 'bg-slate-900 text-slate-400 hover:text-white border border-white/10'
-                      }`}
-                    >
-                      <Sparkles size={13} />
-                      <span>Up Next</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowChaptersPanel(true)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                        showChaptersPanel
-                          ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
-                          : 'bg-slate-900 text-slate-400 hover:text-white border border-white/10'
-                      }`}
-                    >
-                      <Layers size={13} />
-                      <span>Chapters ({videoChapters.length})</span>
-                    </button>
-                  </div>
-
-                  {showChaptersPanel ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowChaptersPanel(false)}
-                      className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                      title="Close Chapters & show Up Next"
-                    >
-                      <X size={15} />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onToggleAutoplay?.(!isAutoplay)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border select-none active:scale-95 ${
-                        isAutoplay
-                          ? 'bg-rose-600/30 text-rose-300 border-rose-500/60 shadow-xs'
-                          : 'bg-slate-900 text-slate-400 border-white/10 hover:border-white/25 hover:text-slate-200'
-                      }`}
-                      title={isAutoplay ? 'Autoplay is ON (Click to turn off)' : 'Autoplay is OFF (Click to turn on)'}
-                    >
-                      <span className="text-[11px]">Autoplay</span>
-                      <div className={`w-7 h-4 rounded-full p-0.5 transition-colors relative flex items-center ${
-                        isAutoplay ? 'bg-rose-500' : 'bg-slate-700'
-                      }`}>
-                        <div className={`w-3 h-3 rounded-full bg-white transition-transform ${
-                          isAutoplay ? 'translate-x-3' : 'translate-x-0'
-                        }`} />
-                      </div>
-                    </button>
-                  )}
-                </div>
-
-                {/* DEDICATED YOUTUBE CHAPTERS SIDE PAGE OR UP NEXT RECOMMENDATIONS */}
-                {showChaptersPanel ? (
-                  <div className="bg-slate-900/90 border border-rose-500/30 rounded-2xl p-3.5 space-y-3 shadow-2xl backdrop-blur-md animate-fade-in">
-                    <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                      <div>
-                        <h3 className="font-black text-sm text-white flex items-center gap-2 uppercase tracking-wider">
-                          <Layers size={16} className="text-rose-400" />
-                          <span>Video Chapters</span>
-                        </h3>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Active: <span className="text-amber-300 font-extrabold">{activeChapter?.timeDisplay}</span> <span className="text-slate-300">• {activeChapter?.title}</span>
-                        </p>
-                      </div>
-                      <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full text-[10px] font-mono font-bold border border-rose-500/30">
-                        {videoChapters.length} Sections
-                      </span>
-                    </div>
-
-                    <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-                      {videoChapters.map((ch, idx) => {
-                        const isActive = activeChapter?.timeSeconds === ch.timeSeconds;
-                        return (
-                          <button
-                            key={`side-ch-${idx}-${ch.timeSeconds}`}
-                            type="button"
-                            onClick={() => handleSeekToChapter(ch)}
-                            className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 cursor-pointer group ${
-                              isActive
-                                ? 'bg-gradient-to-r from-rose-600/30 to-indigo-600/30 border-rose-500 text-white shadow-lg ring-1 ring-rose-500/50'
-                                : 'bg-slate-950/70 hover:bg-slate-800 border-white/10 hover:border-white/20 text-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black shrink-0 ${
-                                isActive ? 'bg-rose-600 text-white shadow-md' : 'bg-slate-800 text-rose-400 border border-white/10'
-                              }`}>
-                                {ch.timeDisplay}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className={`text-xs font-bold truncate ${isActive ? 'text-white font-extrabold' : 'text-slate-200 group-hover:text-white'}`}>
-                                  {ch.title}
-                                </p>
-                                <p className="text-[10px] text-slate-400 font-medium">Chapter {idx + 1} of {videoChapters.length}</p>
-                              </div>
-                            </div>
-
-                            {isActive ? (
-                              <span className="px-2.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-extrabold shrink-0 flex items-center gap-1 animate-pulse shadow-xs">
-                                <Play size={10} className="fill-white" />
-                                <span>Playing</span>
-                              </span>
-                            ) : (
-                              <Play size={14} className="text-slate-400 group-hover:text-rose-400 shrink-0 transition-transform group-hover:scale-110" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Topic Filter Pills Bar */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                      {[
-                        { id: 'All', label: '🔥 All Topics' },
-                        { id: 'Lofi', label: '🎧 Lofi & Chill' },
-                        { id: 'Pop', label: '🎵 Pop & Hits' },
-                        { id: 'EDM', label: '⚡ EDM & Synthwave' },
-                        { id: 'Rock', label: '🎸 Rock & Metal' },
-                        { id: 'HipHop', label: '🎤 Hip-Hop & R&B' },
-                        { id: 'Acoustic', label: '🎻 Acoustic & Jazz' },
-                        { id: 'Live', label: '📺 Live Concerts' }
-                      ].map((cat) => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedTopicCategory(cat.id);
-                            fetchRelated(cat.id);
-                          }}
-                          className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all border shrink-0 active:scale-95 ${
-                            selectedTopicCategory === cat.id
-                              ? 'bg-rose-600 text-white border-rose-600 shadow-md'
-                              : 'bg-slate-900 text-slate-300 border-white/10 hover:border-rose-400'
-                          }`}
-                        >
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
-
-                {/* Recommendations Video List */}
-                {loadingRecs ? (
-                  <div className="space-y-2 py-2">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={`rec-skel-${i}`} className="h-20 bg-slate-900 animate-pulse rounded-xl" />
-                    ))}
-                  </div>
-                ) : recommendations.length > 0 ? (
-                  <div className="space-y-4 max-h-[850px] overflow-y-auto pr-1 no-scrollbar pt-1">
-                    {recommendations.map((recTrack) => (
-                      <YouTubeFeedCard
-                        key={`yt-feed-rec-${recTrack.id}`}
-                        track={recTrack}
-                        onPlay={(trk) => {
-                          if (onPlayTrack) onPlayTrack(trk);
-                        }}
-                        onDownload={(trk) => {
-                          if (onDownloadTrack) onDownloadTrack(trk);
-                        }}
-                        isPlayingCurrent={currentTrack?.id === recTrack.id}
-                        onOpenAddToPlaylist={(trk) => {
-                          if (onOpenAddToPlaylist) onOpenAddToPlaylist(trk);
-                        }}
-                        onShowToast={onShowToast}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 py-4 text-center">No additional video recommendations found for this category.</p>
-                )}
-                  </>
-                )}
-              </div>
-            )}
-
-          </div>
-        </div>
-      ) : (
-        /* Standard Floating / Mini Player View Box */
-        <div className={playerBoxClassName}>
-          {(isDragging || isResizing) && (
-            <div className="absolute inset-0 z-30 bg-black/20 cursor-grabbing backdrop-blur-[1px] flex items-center justify-center text-white/80 text-xs font-mono font-bold">
-              <Move size={18} className="mr-1 animate-pulse" />
-              <span>{dimensions.width} x {dimensions.height}</span>
-            </div>
-          )}
-
-          {renderVideoStage(true)}
-
-          {isFloating && (
-            <>
-              <div
-                onMouseDown={(e) => handleResizeStart(e, 'br')}
-                onTouchStart={(e) => handleResizeStart(e, 'br')}
-                className="absolute bottom-0 right-0 z-40 cursor-se-resize flex items-center gap-1 px-2 py-1 bg-slate-950/90 border-t border-l border-amber-500/40 text-amber-300 font-mono text-[10px] font-extrabold rounded-tl-md rounded-br-lg shadow-lg hover:bg-indigo-600 hover:text-white transition-all active:scale-95 group"
-                title="Drag corner to resize mini video player"
-              >
-                <Scaling size={11} className="text-amber-400 group-hover:text-white" />
-                <span>{dimensions.width}×{dimensions.height} px</span>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </motion.div>
+      {renderPlayerEngine(false)}
+    </div>
   );
 };
-
-

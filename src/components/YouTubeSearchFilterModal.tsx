@@ -12,10 +12,21 @@ export interface SearchFilterOptions {
   hd4kOnly: boolean;
 }
 
+export const DEFAULT_SEARCH_FILTERS: SearchFilterOptions = {
+  sortBy: 'relevance',
+  type: 'all',
+  uploadDate: 'any',
+  duration: 'any',
+  officialOnly: false,
+  liveOnly: false,
+  hd4kOnly: false
+};
+
 interface YouTubeSearchFilterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentFilters: SearchFilterOptions;
+  currentFilters?: SearchFilterOptions;
+  filterOptions?: SearchFilterOptions;
   onApplyFilters: (filters: SearchFilterOptions) => void;
   onResetFilters: () => void;
 }
@@ -24,36 +35,39 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
   isOpen,
   onClose,
   currentFilters,
+  filterOptions,
   onApplyFilters,
   onResetFilters
 }) => {
-  const [localFilters, setLocalFilters] = useState<SearchFilterOptions>(currentFilters);
+  const resolvedFilters: SearchFilterOptions = {
+    ...DEFAULT_SEARCH_FILTERS,
+    ...(currentFilters || {}),
+    ...(filterOptions || {})
+  };
+  const [localFilters, setLocalFilters] = useState<SearchFilterOptions>(resolvedFilters);
 
-  // Sync with currentFilters when opened
+  // Sync with currentFilters / filterOptions when opened
   React.useEffect(() => {
     if (isOpen) {
-      setLocalFilters(currentFilters);
+      setLocalFilters({
+        ...DEFAULT_SEARCH_FILTERS,
+        ...(currentFilters || {}),
+        ...(filterOptions || {})
+      });
     }
-  }, [isOpen, currentFilters]);
+  }, [isOpen, filterOptions, currentFilters]);
 
   const handleReset = () => {
-    const defaultFilters: SearchFilterOptions = {
-      sortBy: 'relevance',
-      type: 'all',
-      uploadDate: 'any',
-      duration: 'any',
-      officialOnly: false,
-      liveOnly: false,
-      hd4kOnly: false
-    };
-    setLocalFilters(defaultFilters);
+    setLocalFilters(DEFAULT_SEARCH_FILTERS);
     onResetFilters();
   };
 
   const handleApply = () => {
-    onApplyFilters(localFilters);
+    onApplyFilters(localFilters || DEFAULT_SEARCH_FILTERS);
     onClose();
   };
+
+  const safeFilters = localFilters || DEFAULT_SEARCH_FILTERS;
 
   return (
     <AnimatePresence>
@@ -124,12 +138,12 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     { id: 'view_count', label: 'View count' },
                     { id: 'rating', label: 'Rating' }
                   ].map((opt) => {
-                    const isSelected = localFilters.sortBy === opt.id;
+                    const isSelected = (safeFilters.sortBy || 'relevance') === opt.id;
                     return (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setLocalFilters({ ...localFilters, sortBy: opt.id as any })}
+                        onClick={() => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), sortBy: opt.id as any }))}
                         className={`px-3.5 py-2.5 rounded-xl text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${
                           isSelected 
                             ? 'bg-white text-black font-bold shadow-sm' 
@@ -156,12 +170,12 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     { id: 'channel', label: 'Channel' },
                     { id: 'playlist', label: 'Playlist' }
                   ].map((opt) => {
-                    const isSelected = localFilters.type === opt.id;
+                    const isSelected = (safeFilters.type || 'all') === opt.id;
                     return (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setLocalFilters({ ...localFilters, type: opt.id as any })}
+                        onClick={() => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), type: opt.id as any }))}
                         className={`px-3 py-2 rounded-xl text-xs font-medium text-center transition-all cursor-pointer ${
                           isSelected 
                             ? 'bg-white text-black font-bold shadow-sm' 
@@ -189,12 +203,12 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     { id: 'month', label: 'This month' },
                     { id: 'year', label: 'This year' }
                   ].map((opt) => {
-                    const isSelected = localFilters.uploadDate === opt.id;
+                    const isSelected = (safeFilters.uploadDate || 'any') === opt.id;
                     return (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setLocalFilters({ ...localFilters, uploadDate: opt.id as any })}
+                        onClick={() => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), uploadDate: opt.id as any }))}
                         className={`px-3 py-2 rounded-xl text-xs font-medium text-center transition-all cursor-pointer ${
                           isSelected 
                             ? 'bg-white text-black font-bold shadow-sm' 
@@ -220,12 +234,12 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     { id: 'medium', label: '4–20 min' },
                     { id: 'long', label: '> 20 min' }
                   ].map((opt) => {
-                    const isSelected = localFilters.duration === opt.id;
+                    const isSelected = (safeFilters.duration || 'any') === opt.id;
                     return (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setLocalFilters({ ...localFilters, duration: opt.id as any })}
+                        onClick={() => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), duration: opt.id as any }))}
                         className={`px-3 py-2 rounded-xl text-xs font-medium text-center transition-all cursor-pointer ${
                           isSelected 
                             ? 'bg-white text-black font-bold shadow-sm' 
@@ -249,8 +263,8 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     <span className="text-xs font-medium text-white">Live streams only</span>
                     <input 
                       type="checkbox" 
-                      checked={localFilters.liveOnly}
-                      onChange={(e) => setLocalFilters({ ...localFilters, liveOnly: e.target.checked })}
+                      checked={Boolean(safeFilters.liveOnly)}
+                      onChange={(e) => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), liveOnly: e.target.checked }))}
                       className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
                     />
                   </label>
@@ -258,8 +272,8 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     <span className="text-xs font-medium text-white">Official Music & Videos</span>
                     <input 
                       type="checkbox" 
-                      checked={localFilters.officialOnly}
-                      onChange={(e) => setLocalFilters({ ...localFilters, officialOnly: e.target.checked })}
+                      checked={Boolean(safeFilters.officialOnly)}
+                      onChange={(e) => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), officialOnly: e.target.checked }))}
                       className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
                     />
                   </label>
@@ -267,8 +281,8 @@ export const YouTubeSearchFilterModal: React.FC<YouTubeSearchFilterModalProps> =
                     <span className="text-xs font-medium text-white">4K / High Definition</span>
                     <input 
                       type="checkbox" 
-                      checked={localFilters.hd4kOnly}
-                      onChange={(e) => setLocalFilters({ ...localFilters, hd4kOnly: e.target.checked })}
+                      checked={Boolean(safeFilters.hd4kOnly)}
+                      onChange={(e) => setLocalFilters(prev => ({ ...(prev || DEFAULT_SEARCH_FILTERS), hd4kOnly: e.target.checked }))}
                       className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
                     />
                   </label>
