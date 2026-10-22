@@ -11,6 +11,13 @@ import {
   Send,
   X,
   Play,
+  Pause,
+  Maximize2,
+  PictureInPicture2,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  GripHorizontal,
   Shuffle,
   Bell,
   Repeat,
@@ -35,10 +42,14 @@ import { stopSpeechSynthesis } from '../utils/speechTranslator';
 
 export interface YouTubeStandardWebPlayerProps {
   isOpen: boolean;
+  isMiniPlayerVisible?: boolean;
   track: Track | null;
   isPlaying: boolean;
+  onSetPlaying?: (playing: boolean) => void;
   onClose: () => void;
   onMinimizeToMiniPlayer?: () => void;
+  onExpandToFullPlayer?: () => void;
+  onDismissMiniPlayer?: () => void;
   onTogglePlay?: () => void;
   onPlayTrack: (track: Track) => void;
   onNextTrack?: (trackList?: Track[]) => void;
@@ -75,13 +86,18 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> = ({
   isOpen,
+  isMiniPlayerVisible = true,
   track,
   isPlaying = false,
+  onSetPlaying,
   onClose,
   onMinimizeToMiniPlayer,
+  onExpandToFullPlayer,
+  onDismissMiniPlayer,
   onTogglePlay,
   onPlayTrack,
   onNextTrack,
+  isMuted = false,
   onToggleMute,
   onOpenAddToPlaylist,
   onDownload,
@@ -133,6 +149,33 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
   });
   const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
 
+  // Modern Mini Player Layout Mode: 'dock' (YouTube/iOS liquid glass bottom dock bar) vs 'pip' (floating Picture-in-Picture card)
+  const [miniPlayerLayout, setMiniPlayerLayout] = useState<'dock' | 'pip'>(() => {
+    try {
+      const saved = localStorage.getItem('aura_mini_player_layout');
+      return (saved as 'dock' | 'pip') || 'dock';
+    } catch {
+      return 'dock';
+    }
+  });
+
+  const handleToggleMiniLayout = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const next = miniPlayerLayout === 'dock' ? 'pip' : 'dock';
+    setMiniPlayerLayout(next);
+    try {
+      localStorage.setItem('aura_mini_player_layout', next);
+    } catch {}
+    queueMicrotask(() => {
+      onShowToast?.(
+        next === 'pip'
+          ? 'Switched to Floating Picture-in-Picture (PiP) Window'
+          : 'Switched to Docked Liquid Glass Mini Player Bar',
+        'info'
+      );
+    });
+  };
+
   // Playback timer for synchronized live speech translation pacing
   useEffect(() => {
     if (!isPlaying) return;
@@ -154,22 +197,24 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
     try {
       localStorage.setItem('aura_video_target_language', lang.id);
     } catch {}
-    onShowToast?.(`Real-time speech translation: Speaking in ${lang.nativeName} (${lang.name}) 🗣️`, 'success');
+    queueMicrotask(() => {
+      onShowToast?.(`Real-time speech translation: Speaking in ${lang.nativeName} (${lang.name}) 🗣️`, 'success');
+    });
   };
 
   const handleToggleVoiceDubbing = () => {
-    setIsVoiceDubbingEnabled(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem('aura_video_voice_dubbing', String(next));
-      } catch {}
+    const next = !isVoiceDubbingEnabled;
+    setIsVoiceDubbingEnabled(next);
+    try {
+      localStorage.setItem('aura_video_voice_dubbing', String(next));
+    } catch {}
+    queueMicrotask(() => {
       onShowToast?.(
         next 
           ? `🔊 Voice Dubbing ON: Translating and speaking in ${selectedLanguage.nativeName} aloud` 
           : '🔇 Voice Dubbing Muted: Showing Subtitles Only', 
         'info'
       );
-      return next;
     });
   };
 
@@ -186,6 +231,47 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
+  // Send postMessage commands to YouTube iframe API for instant zero-reload play/pause/mute
+  const sendIframeCommand = useCallback((command: 'playVideo' | 'pauseVideo' | 'mute' | 'unMute') => {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func: command, args: [] }),
+        '*'
+      );
+    } catch {}
+  }, []);
+
+  // Track whether playback has ever been initiated so switching Full <-> Mini never resets or reloads the iframe
+  const hasSessionStartedPlaybackRef = useRef<boolean>(false);
+  if (isPlaying || isOpen) {
+    hasSessionStartedPlaybackRef.current = true;
+  }
+
+  // Listen to YouTube IFrame API state changes so native play/pause inside iframe stays synced with React state
+  useEffect(() => {
+    const handleYouTubeMessage = (event: MessageEvent) => {
+      if (!event.origin.includes('youtube')) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (!data) return;
+        const playerState =
+          data.event === 'onStateChange'
+            ? data.info
+            : data.event === 'infoDelivery' && typeof data.info?.playerState === 'number'
+              ? data.info.playerState
+              : undefined;
+        if (playerState === 1) {
+          hasSessionStartedPlaybackRef.current = true;
+          onSetPlaying?.(true);
+        } else if (playerState === 2) {
+          onSetPlaying?.(false);
+        }
+      } catch {}
+    };
+    window.addEventListener('message', handleYouTubeMessage);
+    return () => window.removeEventListener('message', handleYouTubeMessage);
+  }, [onSetPlaying]);
+
   useEffect(() => {
     setHasLiked(isFavorite);
   }, [isFavorite]);
@@ -201,13 +287,44 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
   const timeAgo = track?.publishedTime || '2h ago';
   const userInitial = (user?.displayName?.[0] || userName?.[0] || 'B').toUpperCase();
 
-  // Embed source
+  // Lock initial autoplay per videoId so toggling isPlaying or switching Full <-> Mini NEVER changes iframeSrc!
+  const videoAutoPlayMapRef = useRef<Record<string, number>>({});
+  if (activeVideoId && videoAutoPlayMapRef.current[activeVideoId] === undefined) {
+    videoAutoPlayMapRef.current[activeVideoId] = hasSessionStartedPlaybackRef.current || isPlaying || isOpen ? 1 : 0;
+  }
+
+  // Embed source — strictly depends ONLY on activeVideoId and isLooping so the iframe NEVER reloads on Full <-> Mini switch
   const iframeSrc = useMemo(() => {
     if (!activeVideoId) return '';
-    const autoPlayVal = isPlaying ? 1 : 0;
+    const autoPlayVal = videoAutoPlayMapRef.current[activeVideoId] ?? 1;
     const loopVal = isLooping ? `&loop=1&playlist=${activeVideoId}` : '';
     return `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=${autoPlayVal}&enablejsapi=1&rel=0&playsinline=1&controls=1&modestbranding=1${loopVal}`;
-  }, [activeVideoId, isPlaying, isLooping]);
+  }, [activeVideoId, isLooping]);
+
+  // Whenever isPlaying changes from external button click, command the live iframe without reloading it
+  const prevIsPlayingRef = useRef<boolean>(isPlaying);
+  useEffect(() => {
+    if (prevIsPlayingRef.current !== isPlaying) {
+      prevIsPlayingRef.current = isPlaying;
+      sendIframeCommand(isPlaying ? 'playVideo' : 'pauseVideo');
+    }
+  }, [isPlaying, sendIframeCommand]);
+
+  // Ensure continuous uninterrupted playback when switching between Full Video Player and Mini Video Player
+  const prevIsOpenRef = useRef<boolean>(isOpen);
+  useEffect(() => {
+    if (prevIsOpenRef.current !== isOpen) {
+      prevIsOpenRef.current = isOpen;
+      if (isPlaying || hasSessionStartedPlaybackRef.current) {
+        sendIframeCommand('playVideo');
+        // Follow-up command after layout transition to prevent any browser iframe pause on resize
+        const timer = setTimeout(() => {
+          sendIframeCommand('playVideo');
+        }, 120);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isOpen, isPlaying, sendIframeCommand]);
 
   // Queue generator
   const generateEndlessQueue = useCallback((baseTracks: Track[], currentTrackId?: string): Track[] => {
@@ -391,66 +508,307 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
     return `${diffDays}d ago`;
   };
 
-  if (!isOpen || !track) return null;
+  if (!track || (!isOpen && !isMiniPlayerVisible)) return null;
 
   const displayCommentsCount = realtimeComments.length > 0 ? realtimeComments.length : 3;
 
+  const handleMiniTogglePlay = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    hasSessionStartedPlaybackRef.current = true;
+    if (isPlaying) {
+      sendIframeCommand('pauseVideo');
+    } else {
+      sendIframeCommand('playVideo');
+    }
+    onTogglePlay?.();
+  };
+
+  const handleMiniToggleMute = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (isMuted) {
+      sendIframeCommand('unMute');
+    } else {
+      sendIframeCommand('mute');
+    }
+    onToggleMute?.();
+  };
+
+  const handleExpandFromMini = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    hasSessionStartedPlaybackRef.current = true;
+    sendIframeCommand('playVideo');
+    onSetPlaying?.(true);
+    if (onExpandToFullPlayer) {
+      onExpandToFullPlayer();
+    }
+  };
+
+  const handleMinimizeFromFull = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    // Keep playing continuously when minimizing to mini player
+    if (isPlaying || hasSessionStartedPlaybackRef.current) {
+      sendIframeCommand('playVideo');
+    }
+    if (onMinimizeToMiniPlayer) {
+      onMinimizeToMiniPlayer();
+    } else {
+      onClose();
+    }
+  };
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-      className="fixed inset-0 z-50 overflow-hidden select-none font-sans bg-[#0f0f0f] text-white flex flex-col transform-gpu"
+    <div
+      className={
+        isOpen
+          ? 'fixed inset-0 z-50 overflow-hidden select-none font-sans bg-[#0f0f0f] text-white flex flex-col transform-gpu'
+          : miniPlayerLayout === 'pip'
+            ? 'fixed bottom-20 right-3 sm:bottom-6 sm:right-6 z-40 select-none w-[288px] sm:w-[324px] rounded-3xl bg-white/85 dark:bg-zinc-950/90 backdrop-blur-3xl border border-white/60 dark:border-white/20 shadow-2xl overflow-hidden flex flex-col pointer-events-auto transform-gpu transition-all duration-200 ring-1 ring-black/5 dark:ring-white/10'
+            : 'fixed bottom-[68px] sm:bottom-[76px] left-2.5 right-2.5 sm:left-auto sm:right-6 sm:w-[460px] z-40 select-none rounded-2xl sm:rounded-3xl bg-white/85 dark:bg-[#121218]/92 backdrop-blur-3xl border border-white/70 dark:border-white/15 shadow-[0_12px_38px_rgba(0,0,0,0.18),inset_0_1px_1.5px_rgba(255,255,255,0.85)] dark:shadow-[0_18px_50px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(255,255,255,0.15)] overflow-hidden flex flex-col pointer-events-auto transform-gpu transition-all duration-200'
+      }
     >
       {/* ========================================================================= */}
-      {/* 1. EDGE-TO-EDGE 16:9 VIDEO STAGE AT TOP (Matches Screenshot)              */}
+      {/* 0. FLOATING PIP HEADER BAR (Visible only in Floating PiP Mode)            */}
       {/* ========================================================================= */}
-      <div className="w-full bg-black shrink-0 z-30 flex flex-col items-center relative">
-        <div className="w-full max-w-5xl aspect-video bg-black relative overflow-hidden group/player">
+      <div
+        className={
+          !isOpen && miniPlayerLayout === 'pip'
+            ? 'w-full px-3 py-1.5 bg-slate-100/70 dark:bg-white/[0.08] backdrop-blur-xl border-b border-black/5 dark:border-white/15 flex items-center justify-between gap-2 text-slate-800 dark:text-white'
+            : 'hidden'
+        }
+      >
+        <div
+          onClick={handleExpandFromMini}
+          className="flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer"
+        >
+          <GripHorizontal size={14} className="text-slate-400 dark:text-zinc-400 shrink-0 opacity-80" />
+          <span className="text-[11px] font-semibold text-slate-800 dark:text-white truncate drop-shadow-xs" title={title}>
+            {title}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={handleToggleMiniLayout}
+            className="p-1 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-950 dark:hover:text-white transition-all cursor-pointer active:scale-90"
+            title="Dock to bottom player bar"
+          >
+            <PictureInPicture2 size={12} />
+          </button>
+          <button
+            type="button"
+            onClick={handleExpandFromMini}
+            className="p-1 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-950 dark:hover:text-white transition-all cursor-pointer active:scale-90"
+            title="Expand to Full Video Player"
+          >
+            <Maximize2 size={12} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              sendIframeCommand('pauseVideo');
+              stopSpeechSynthesis();
+              if (onDismissMiniPlayer) {
+                onDismissMiniPlayer();
+              } else {
+                onClose();
+              }
+            }}
+            className="p-1 rounded-lg ios-glass-button hover:bg-rose-600/80 hover:text-white text-slate-700 dark:text-zinc-200 transition-all cursor-pointer active:scale-90"
+            title="Close Mini Player"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 1. CONTINUOUS 16:9 VIDEO STAGE (Same DOM node in both Full & Mini Modes!) */}
+      {/* ========================================================================= */}
+      <div
+        className={
+          isOpen
+            ? 'w-full bg-black shrink-0 z-30 flex flex-col items-center relative'
+            : miniPlayerLayout === 'dock'
+              ? 'w-full flex items-center p-2 sm:p-2.5 gap-2.5 sm:gap-3 relative'
+              : 'w-full bg-black shrink-0 z-30 flex flex-col items-center relative'
+        }
+      >
+        {/* 16:9 Live Video Aspect Box */}
+        <div
+          onClick={!isOpen && miniPlayerLayout === 'dock' ? handleExpandFromMini : undefined}
+          className={
+            isOpen
+              ? 'w-full max-w-5xl aspect-video bg-black relative overflow-hidden group/player'
+              : miniPlayerLayout === 'dock'
+                ? 'w-[96px] sm:w-[116px] aspect-video rounded-xl sm:rounded-2xl overflow-hidden bg-black shrink-0 relative shadow-sm border border-black/10 dark:border-white/10 group cursor-pointer'
+                : 'w-full aspect-video bg-black relative overflow-hidden group/player'
+          }
+        >
           <iframe
             ref={iframeRef}
             key={`yt-cinema-${activeVideoId}`}
             src={iframeSrc}
             title={title}
+            onLoad={() => {
+              try {
+                iframeRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                  '*'
+                );
+                if (isPlaying || isOpen) {
+                  sendIframeCommand('playVideo');
+                }
+              } catch {}
+            }}
             className="w-full h-full border-0 pointer-events-auto"
             referrerPolicy="strict-origin-when-cross-origin"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
             allowFullScreen
           />
 
-          {/* Subtle Corner Minimize & Close Overlay (Appears cleanly without blocking video) */}
-          <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none opacity-85 hover:opacity-100 transition-opacity">
+          {/* Hover overlay hint when in Docked Mini Mode */}
+          {!isOpen && miniPlayerLayout === 'dock' && (
+            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+              <div className="p-1 rounded-full bg-black/60 text-white backdrop-blur-xs">
+                <Maximize2 size={11} />
+              </div>
+            </div>
+          )}
+
+          {/* Subtle Corner Minimize Overlay (Visible in Full Mode) */}
+          <div
+            className={
+              isOpen
+                ? 'absolute top-2.5 left-2.5 z-20 flex items-center pointer-events-none opacity-85 hover:opacity-100 transition-opacity'
+                : 'hidden'
+            }
+          >
             <button
               type="button"
-              onClick={() => {
-                if (onMinimizeToMiniPlayer) onMinimizeToMiniPlayer();
-                else onClose();
-              }}
+              onClick={handleMinimizeFromFull}
               className="pointer-events-auto w-9 h-9 rounded-xl bg-black/55 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
               title="Minimize to Mini Player"
             >
               <ChevronDown size={20} />
             </button>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="pointer-events-auto w-9 h-9 rounded-xl bg-black/55 hover:bg-black/80 text-white backdrop-blur-md flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
-              title="Close Player"
-            >
-              <X size={18} />
-            </button>
           </div>
 
-          {/* Thin Bottom Edge Progress Hairline (Matches Screenshot) */}
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/30 pointer-events-none z-20">
+          {/* Thin Bottom Edge Progress Hairline (Visible in Full Mode) */}
+          <div
+            className={
+              isOpen
+                ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-white/30 pointer-events-none z-20'
+                : 'hidden'
+            }
+          >
             <div className="h-full w-[38%] bg-white/90" />
           </div>
         </div>
 
-        {/* Real-Time Live Speech Translation & Voice Dubbing HUD (Mounted right beneath the video canvas) */}
-        {isLanguageTranslatorActive && (
+        {/* Docked Mini Player Center Info & Right Control Row */}
+        <div
+          className={
+            !isOpen && miniPlayerLayout === 'dock'
+              ? 'flex-1 min-w-0 flex items-center justify-between gap-1 sm:gap-2'
+              : 'hidden'
+          }
+        >
+          {/* Middle: Title & Channel Info (Clickable to Expand) */}
+          <div
+            onClick={handleExpandFromMini}
+            className="flex-1 min-w-0 flex flex-col justify-center cursor-pointer select-none pr-1"
+          >
+            <h4
+              className="text-xs sm:text-[13px] font-bold text-slate-900 dark:text-white truncate tracking-tight hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+              title={title}
+            >
+              {title}
+            </h4>
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
+              <span className="truncate">{channel}</span>
+              {isLanguageTranslatorActive && (
+                <span className="shrink-0 px-1.5 py-0.2 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-[9px] border border-rose-500/25">
+                  🗣️ {selectedLanguage.nativeName}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Quick Action Controls */}
+          <div
+            className="flex items-center gap-1 sm:gap-1.5 shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. Play / Pause Button */}
+            <button
+              type="button"
+              onClick={handleMiniTogglePlay}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white flex items-center justify-center shadow-md active:scale-90 transition-all cursor-pointer"
+              title={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? <Pause size={14} className="fill-white" /> : <Play size={14} className="fill-white ml-0.5" />}
+            </button>
+
+            {/* 2. Next Track Button */}
+            {onNextTrack && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNextTrack(randomQueue);
+                }}
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white flex items-center justify-center active:scale-90 cursor-pointer"
+                title="Next Track"
+              >
+                <SkipForward size={14} />
+              </button>
+            )}
+
+            {/* 3. Switch to Floating PiP Mode Button */}
+            <button
+              type="button"
+              onClick={handleToggleMiniLayout}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white flex items-center justify-center active:scale-90 cursor-pointer"
+              title="Switch to Floating PiP Window"
+            >
+              <PictureInPicture2 size={13} />
+            </button>
+
+            {/* 4. Expand Fullscreen Button */}
+            <button
+              type="button"
+              onClick={handleExpandFromMini}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white flex items-center justify-center active:scale-90 cursor-pointer"
+              title="Expand to Full Video Player"
+            >
+              <Maximize2 size={13} />
+            </button>
+
+            {/* 5. Dismiss / Close Mini Player Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                sendIframeCommand('pauseVideo');
+                stopSpeechSynthesis();
+                if (onDismissMiniPlayer) {
+                  onDismissMiniPlayer();
+                } else {
+                  onClose();
+                }
+              }}
+              className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-500 dark:text-zinc-500 dark:hover:text-rose-400 transition-colors flex items-center justify-center active:scale-90 cursor-pointer"
+              title="Close Mini Player"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+
+        {/* Real-Time Live Speech Translation & Voice Dubbing HUD (Mounted right beneath the video canvas in Full Mode) */}
+        {isOpen && isLanguageTranslatorActive && (
           <VideoLiveTranslationHUD
             track={track}
             isPlaying={isPlaying}
@@ -470,11 +828,102 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. SCROLLABLE WATCH FEED (Title, Metadata, Channel+Actions, Comments, Feed)*/}
+      {/* 1B. FLOATING PIP BOTTOM CONTROL BAR (Visible only in Floating PiP Mode)   */}
+      {/* ========================================================================= */}
+      <div
+        className={
+          !isOpen && miniPlayerLayout === 'pip'
+            ? `px-3 py-2 bg-white/75 dark:bg-black/65 backdrop-blur-2xl flex items-center justify-between gap-2 ${
+                isLaxmiPuja
+                  ? 'border-t border-amber-400/40 shadow-[0_-2px_12px_rgba(245,158,11,0.25)]'
+                  : 'border-t border-black/5 dark:border-white/10'
+              }`
+            : 'hidden'
+        }
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span
+          onClick={handleExpandFromMini}
+          className="text-[10px] text-slate-700 dark:text-zinc-300 font-medium truncate max-w-[100px] cursor-pointer hover:underline"
+          title={`Expand: ${channel}`}
+        >
+          {channel}
+        </span>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Dock Button */}
+          <button
+            type="button"
+            onClick={handleToggleMiniLayout}
+            className="p-1.5 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-950 dark:hover:text-white transition-all cursor-pointer active:scale-90"
+            title="Dock to bottom player bar"
+          >
+            <PictureInPicture2 size={13} />
+          </button>
+
+          {/* Mute / Unmute */}
+          <button
+            type="button"
+            onClick={handleMiniToggleMute}
+            className={`p-1.5 rounded-lg ios-glass-button transition-all cursor-pointer active:scale-90 ${
+              isLaxmiPuja
+                ? 'border border-amber-400/30 text-amber-500 dark:text-amber-200'
+                : 'text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? <VolumeX size={13} className="text-amber-500" /> : <Volume2 size={13} />}
+          </button>
+
+          {/* Play / Pause */}
+          <button
+            type="button"
+            onClick={handleMiniTogglePlay}
+            className="p-1.5 px-2.5 rounded-lg bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white shadow-sm transition-all cursor-pointer active:scale-90 flex items-center justify-center"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? <Pause size={13} className="fill-white" /> : <Play size={13} className="fill-white ml-0.5" />}
+          </button>
+
+          {/* Next Track */}
+          {onNextTrack && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNextTrack(randomQueue);
+              }}
+              className="p-1.5 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer active:scale-90"
+              title="Next Track"
+            >
+              <SkipForward size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Liquid Glass Progress Hairline (Visible in Docked Mini Mode) */}
+      {!isOpen && miniPlayerLayout === 'dock' && (
+        <div className="w-full h-[2.5px] bg-slate-200/80 dark:bg-white/10 overflow-hidden shrink-0">
+          <div
+            className="h-full bg-gradient-to-r from-rose-500 to-red-500 transition-all duration-300"
+            style={{
+              width: playbackSeconds > 0 ? `${Math.min(100, Math.max(5, (playbackSeconds % 200) / 2))}%` : '35%'
+            }}
+          />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. SCROLLABLE WATCH FEED (Visible in Full Mode; hidden in Mini Mode)       */}
       {/* ========================================================================= */}
       <div
         ref={mainScrollRef}
-        className="w-full flex-1 overflow-y-auto pb-16 z-10 relative custom-scrollbar bg-[#0f0f0f]"
+        className={
+          isOpen
+            ? 'w-full flex-1 overflow-y-auto pb-16 z-10 relative custom-scrollbar bg-[#0f0f0f]'
+            : 'hidden'
+        }
       >
         <div className="w-full max-w-5xl mx-auto">
           {/* ------------------------------------------------------------------- */}
@@ -850,8 +1299,8 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
                   >
                     <div className="pt-3.5 mt-3 border-t border-white/10 space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
                       {realtimeComments.length > 0 ? (
-                        realtimeComments.map((comm) => (
-                          <div key={comm.id} className="flex items-start gap-2.5 text-xs">
+                        realtimeComments.map((comm, commIdx) => (
+                          <div key={`yt-comm-${comm.id || 'c'}-${commIdx}`} className="flex items-start gap-2.5 text-xs">
                             <div className="w-7 h-7 rounded-xl bg-zinc-800 flex items-center justify-center text-white font-bold shrink-0 text-[11px]">
                               {(comm.userName?.[0] || 'U').toUpperCase()}
                             </div>
@@ -1192,13 +1641,13 @@ export const YouTubeStandardWebPlayer: React.FC<YouTubeStandardWebPlayerProps> =
 
       {/* Real-Time Indian Language Translator Selection Bottom Sheet */}
       <VideoLanguageTranslatorModal
-        isOpen={showLanguageTranslatorModal}
+        isOpen={isOpen && showLanguageTranslatorModal}
         onClose={() => setShowLanguageTranslatorModal(false)}
         selectedLanguage={selectedLanguage}
         onSelectLanguage={handleSelectLanguage}
         isVoiceDubbingEnabled={isVoiceDubbingEnabled}
         onToggleVoiceDubbing={handleToggleVoiceDubbing}
       />
-    </motion.div>
+    </div>
   );
 };

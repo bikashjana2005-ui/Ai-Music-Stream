@@ -229,9 +229,9 @@ export const LaxmiPujaModal: React.FC<{
             </div>
 
             <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-              {LAXMI_PUJA_SPECIAL_TRACKS.map((t) => (
+              {LAXMI_PUJA_SPECIAL_TRACKS.map((t, idx) => (
                 <div
-                  key={t.id}
+                  key={`laxmi-track-${t.id}-${idx}`}
                   onClick={() => {
                     onPlayTrack(t);
                     onShowToast(`▶ Playing: ${t.title}`, 'success');

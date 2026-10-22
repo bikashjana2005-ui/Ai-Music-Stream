@@ -786,13 +786,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
 
           {/* Dynamic User Playlists */}
-          {playlists.map((playlist) => {
+          {playlists.map((playlist, idx) => {
             if (playlist.name === 'Song') return null;
             const coverThumb = playlist.tracks[0]?.thumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop';
 
             return (
               <div
-                key={playlist.id}
+                key={`lib-playlist-${playlist.id}-${idx}`}
                 onClick={() => setSelectedPlaylistId(playlist.id)}
                 className="pt-3 flex items-center justify-between gap-3 group cursor-pointer"
               >

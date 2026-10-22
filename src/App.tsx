@@ -252,11 +252,13 @@ export default function App() {
   });
 
   const handleToggleAutoplayUpNext = (enabled?: boolean) => {
-    setIsAutoplayUpNext(prev => {
-      const nextVal = typeof enabled === 'boolean' ? enabled : !prev;
+    const nextVal = typeof enabled === 'boolean' ? enabled : !isAutoplayUpNext;
+    setIsAutoplayUpNext(nextVal);
+    try {
       localStorage.setItem('aura_autoplay_upnext', String(nextVal));
+    } catch {}
+    queueMicrotask(() => {
       showToast(nextVal ? '▶ Autoplay enabled: Up next videos will play automatically' : '⏹ Autoplay stopped: Videos will not play automatically', 'info');
-      return nextVal;
     });
   };
 
@@ -1467,12 +1469,12 @@ export default function App() {
     } catch {}
 
     if (currentTrack?.id === trackWithCorrectThumbnail.id) {
-      setIsPlaying(false); // Stop automatic video play
+      setIsPlaying(true);
       setIsFullVideoPlayerOpen(true);
       setIsVideoMiniPlayerOpen(false);
     } else {
       setCurrentTrack(trackWithCorrectThumbnail);
-      setIsPlaying(false); // Stop automatic video play
+      setIsPlaying(true);
       setPlaybackTime(0);
       setRealDuration(0);
       setIsFullVideoPlayerOpen(true);
@@ -2330,27 +2332,6 @@ export default function App() {
         onToggleMute={handleToggleMute}
       />
 
-      {/* Resizable Rectangular Video Mini Player (floating Picture-in-Picture window displaying last played video) */}
-      {!isFullVideoPlayerOpen && (currentTrack || lastPlayedVideo) && !isMiniPlayerDismissed && (
-        <VideoMiniPlayer
-          currentTrack={currentTrack || lastPlayedVideo}
-          isPlaying={isPlaying}
-          onTogglePlay={handleTogglePlay}
-          onNextTrack={() => handleNextTrack()}
-          onExpand={() => {
-            setIsVideoMiniPlayerOpen(false);
-            setIsFullVideoPlayerOpen(true);
-          }}
-          onClose={() => {
-            setIsVideoMiniPlayerOpen(false);
-            setIsMiniPlayerDismissed(true);
-            setIsPlaying(false);
-          }}
-          isMuted={isMuted}
-          onToggleMute={handleToggleMute}
-        />
-      )}
-
       {/* Floating Restore Mini Player Button when dismissed: Show last played video in mini player anytime */}
       {!isFullVideoPlayerOpen && isMiniPlayerDismissed && (currentTrack || lastPlayedVideo) && (
         <button
@@ -2392,59 +2373,79 @@ export default function App() {
         </button>
       )}
 
-      {/* YouTube Own Standard Web Full Video Player with Smooth Morph Transition */}
-      <AnimatePresence>
-        {isFullVideoPlayerOpen && (
-          <YouTubeStandardWebPlayer
-            key="yt-standard-web-player-modal"
-            isOpen={isFullVideoPlayerOpen}
-            track={currentTrack || lastPlayedVideo}
-            isPlaying={isPlaying}
-            onClose={() => {
+      {/* Persistent Unified Full & Mini Video Player (Single Continuous Iframe DOM Node - Never Stops When Switching Modes) */}
+      {(currentTrack || lastPlayedVideo) && (isFullVideoPlayerOpen || !isMiniPlayerDismissed) && (
+        <YouTubeStandardWebPlayer
+          key="yt-standard-web-player-persistent"
+          isOpen={isFullVideoPlayerOpen}
+          isMiniPlayerVisible={!isMiniPlayerDismissed}
+          track={currentTrack || lastPlayedVideo}
+          isPlaying={isPlaying}
+          onSetPlaying={setIsPlaying}
+          onClose={() => {
+            queueMicrotask(() => {
               setIsFullVideoPlayerOpen(false);
               setIsVideoMiniPlayerOpen(true);
               setIsMiniPlayerDismissed(false);
               if (!currentTrack && lastPlayedVideo) {
                 setCurrentTrack(lastPlayedVideo);
               }
-            }}
-            onMinimizeToMiniPlayer={() => {
+            });
+          }}
+          onMinimizeToMiniPlayer={() => {
+            queueMicrotask(() => {
               setIsFullVideoPlayerOpen(false);
               setIsVideoMiniPlayerOpen(true);
               setIsMiniPlayerDismissed(false);
               if (!currentTrack && lastPlayedVideo) {
                 setCurrentTrack(lastPlayedVideo);
               }
-            }}
-            onTogglePlay={handleTogglePlay}
-            onPlayTrack={(t) => {
+            });
+          }}
+          onExpandToFullPlayer={() => {
+            queueMicrotask(() => {
+              setIsVideoMiniPlayerOpen(false);
+              setIsFullVideoPlayerOpen(true);
+              setIsPlaying(true);
+            });
+          }}
+          onDismissMiniPlayer={() => {
+            queueMicrotask(() => {
+              setIsVideoMiniPlayerOpen(false);
+              setIsMiniPlayerDismissed(true);
+              setIsPlaying(false);
+            });
+          }}
+          onTogglePlay={handleTogglePlay}
+          onPlayTrack={(t) => {
+            queueMicrotask(() => {
               startActualPlayTrack(t);
               setIsVideoMiniPlayerOpen(false);
               setIsFullVideoPlayerOpen(true);
-            }}
-            onNextTrack={() => handleNextTrack()}
-            onPrevTrack={() => handlePrevTrack()}
-            volume={volume}
-            onVolumeChange={handleVolumeChange}
-            isMuted={isMuted}
-            onToggleMute={handleToggleMute}
-            onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
-            onDownload={(track) => setDownloadTrack(track)}
-            isFavorite={favorites.some(f => f.id === currentTrack?.id)}
-            onToggleFavorite={handleToggleFavorite}
-            isSubscribed={subscriptions.some(s => s.name.toLowerCase() === (currentTrack?.artist || currentTrack?.channel || '').toLowerCase())}
-            onToggleSubscribe={handleToggleSubscribe}
-            onShowToast={showToast}
-            allTracks={DEFAULT_TRACKS}
-            darkMode={darkMode}
-            accentThemeId={accentThemeId}
-            user={user}
-            userName={user?.displayName || mobileAuthUser?.displayName || mobileAuthUser?.phoneNumber || 'Bikash Jana'}
-            isAutoplayUpNext={isAutoplayUpNext}
-            onToggleAutoplayUpNext={handleToggleAutoplayUpNext}
-          />
-        )}
-      </AnimatePresence>
+            });
+          }}
+          onNextTrack={() => handleNextTrack()}
+          onPrevTrack={() => handlePrevTrack()}
+          volume={volume}
+          onVolumeChange={handleVolumeChange}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+          onOpenAddToPlaylist={(track) => setAddToPlaylistTrack(track)}
+          onDownload={(track) => setDownloadTrack(track)}
+          isFavorite={favorites.some(f => f.id === currentTrack?.id)}
+          onToggleFavorite={handleToggleFavorite}
+          isSubscribed={subscriptions.some(s => s.name.toLowerCase() === (currentTrack?.artist || currentTrack?.channel || '').toLowerCase())}
+          onToggleSubscribe={handleToggleSubscribe}
+          onShowToast={showToast}
+          allTracks={DEFAULT_TRACKS}
+          darkMode={darkMode}
+          accentThemeId={accentThemeId}
+          user={user}
+          userName={user?.displayName || mobileAuthUser?.displayName || mobileAuthUser?.phoneNumber || 'Bikash Jana'}
+          isAutoplayUpNext={isAutoplayUpNext}
+          onToggleAutoplayUpNext={handleToggleAutoplayUpNext}
+        />
+      )}
 
     </div>
   );

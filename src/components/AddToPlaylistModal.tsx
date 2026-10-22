@@ -90,11 +90,11 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
                 No playlists found. Create your first playlist below!
               </p>
             ) : (
-              playlists.map((playlist) => {
+              playlists.map((playlist, idx) => {
                 const inPlaylist = playlist.tracks.some(t => t.id === track.id);
                 return (
                   <div
-                    key={playlist.id}
+                    key={`modal-playlist-${playlist.id}-${idx}`}
                     className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/80 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 border border-gray-100 dark:border-gray-700/50 transition-all"
                   >
                     <div className="min-w-0 pr-2">
