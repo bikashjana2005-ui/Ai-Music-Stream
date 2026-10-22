@@ -26,12 +26,13 @@ Redesign the full video player (`YouTubeStandardWebPlayer`) to match the exact l
 ## 2. User Experience & Visual Design
 
 ### Reference Screenshot Alignment
-![Reference Screenshot](/public/assets/aistudio/IMG-20261018-WA0002_947e4ddd.jpg)
+*Aligned with user uploaded screenshots (IMG-20261018-WA0002_947e4ddd.jpg, IMG-20261018-WA0003_1e87d351.jpg, and IMG-20261018-WA0001_a1895ed8.jpg)*
 
 - **Key User Flows**:
   1. **Watching a Video in Full Player**:
      - The 16:9 video plays flush at the top of the viewport with a thin bottom progress bar.
-     - Directly below the video, the title appears in bold white typography, followed by a single metadata row (`@channelhandle  87 likes  3.1K views  2h ago  #tag  more`). Tapping `more` toggles the full description drawer.
+     - Directly below the video, the title appears in bold white typography, followed by a single metadata row (`@channelhandle  87 likes  3.1K views  2h ago  #tag ...more`). Tapping `...more`, the title, or `•••` -> "Description" opens the full **Video Description Bottom Sheet Drawer** matching `IMG-20261018-WA0003_1e87d351.jpg` and `IMG-20261018-WA0001_a1895ed8.jpg`.
+     - The Description Drawer includes: top drag handle, full bold video title with `✕` close button, channel avatar & subscriber count with `[🔔 ⌄]`, 3-column stats row (`Likes`, `Views`, `Ago`), warm dark description box with Bengali festival greetings and blue `#দুর্গাপূজা` hashtags, transcript section with interactive timestamp lines, `✦ Summarize the video` AI button, and the `Video details` section (`Date`, `Views`, `Likes`).
      - On the next row, the user sees the channel avatar + bell notification pill (`🔔 ⌄`) on the left, and 5 crisp outline icons on the right: **Thumbs Up**, **Thumbs Down**, **Share Arrow**, **4-Point Star (`✦`)**, and **More (`•••`)**.
      - Below the action row sits a rounded dark gray **Comments Card** (`Comments 3` with carousel indicator on top, user initial badge `B` + `"Comment..."` pill input below). Tapping or typing allows instant commenting or expanding all comments.
      - Scrolling down reveals **Edge-to-Edge Recommended Video Cards** (`16:9` full-width thumbnail, bottom-right duration badge `39:45`, bottom progress hairline, and below it the channel avatar, 2-line title, `•••` button, and `Channel Name  ▷ 5.1M  3d ago` metadata).

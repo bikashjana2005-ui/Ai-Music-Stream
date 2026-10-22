@@ -41,20 +41,22 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const isDraggingCooldownRef = useRef<boolean>(false);
 
-  if (!currentTrack) return null;
-
-  // Extract valid 11-char YouTube Video ID
-  const videoId = extractYouTubeId(currentTrack.id || (currentTrack as any)?.youtubeUrl || '');
-  const activeVideoId = videoId || (currentTrack.id && currentTrack.id.length === 11 ? currentTrack.id : 'BddP6PYo2gs');
-  const title = decodeHtmlEntities(currentTrack.title || 'Video');
-  const channel = decodeHtmlEntities(currentTrack.channel || currentTrack.artist || 'YouTube Channel');
-  const thumbnail = currentTrack.thumbnail || getYouTubeThumbnail(activeVideoId, 'hq');
+  // Extract valid 11-char YouTube Video ID (no hardcoded default fallback)
+  const videoId = currentTrack ? extractYouTubeId(currentTrack.id || (currentTrack as any)?.youtubeUrl || '') : null;
+  const activeVideoId = videoId || (currentTrack?.id && currentTrack.id.length === 11 ? currentTrack.id : '');
 
   // Bulletproof YouTube Embed URL with controls and playsinline enabled
   const iframeSrc = useMemo(() => {
+    if (!activeVideoId) return '';
     const autoPlayVal = isPlaying ? 1 : 0;
     return `https://www.youtube-nocookie.com/embed/${activeVideoId}?autoplay=${autoPlayVal}&enablejsapi=1&rel=0&playsinline=1&controls=1&modestbranding=1`;
   }, [activeVideoId, isPlaying]);
+
+  if (!currentTrack || !activeVideoId) return null;
+
+  const title = decodeHtmlEntities(currentTrack.title || 'Video');
+  const channel = decodeHtmlEntities(currentTrack.channel || currentTrack.artist || 'YouTube Channel');
+  const thumbnail = currentTrack.thumbnail || getYouTubeThumbnail(activeVideoId, 'hq');
 
   // Send postMessage commands to YouTube iframe API for instant zero-reload play/pause/mute
   const sendIframeCommand = (command: 'playVideo' | 'pauseVideo' | 'mute' | 'unMute') => {
@@ -132,17 +134,17 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 35, scale: 0.92 }}
         transition={{ type: 'spring', damping: 28, stiffness: 380 }}
-        className="fixed bottom-20 right-3 sm:bottom-6 sm:right-6 z-50 select-none w-[280px] sm:w-[320px] rounded-3xl bg-black/60 backdrop-blur-3xl border border-white/25 shadow-[0_24px_60px_rgba(0,0,0,0.75),inset_0_1px_1.8px_rgba(255,255,255,0.4)] overflow-hidden flex flex-col pointer-events-auto transform-gpu"
+        className="fixed bottom-20 right-3 sm:bottom-6 sm:right-6 z-50 select-none w-[284px] sm:w-[320px] rounded-3xl bg-white/75 dark:bg-zinc-950/70 backdrop-blur-3xl border border-white/60 dark:border-white/20 shadow-[0_24px_60px_rgba(0,0,0,0.18),inset_0_1px_1.8px_rgba(255,255,255,0.9)] dark:shadow-[0_28px_65px_rgba(0,0,0,0.75),inset_0_1px_1.5px_rgba(255,255,255,0.25)] overflow-hidden flex flex-col pointer-events-auto transform-gpu"
       >
         {/* Top Header Bar: Grab Handle, Title, Expand & Close */}
         <div 
           onClick={handleExpandInternal}
-          className="w-full px-3 py-2 bg-white/[0.08] backdrop-blur-xl border-b border-white/15 flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing text-white"
+          className="w-full px-3 py-2 bg-slate-100/60 dark:bg-white/[0.08] backdrop-blur-xl border-b border-black/5 dark:border-white/15 flex items-center justify-between gap-2 cursor-grab active:cursor-grabbing text-slate-800 dark:text-white"
         >
           {/* Grab Handle + Title */}
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <GripHorizontal size={14} className="text-zinc-400 shrink-0 opacity-80" />
-            <span className="text-[11px] font-semibold text-white truncate drop-shadow-xs" title={title}>
+            <GripHorizontal size={14} className="text-slate-400 dark:text-zinc-400 shrink-0 opacity-80" />
+            <span className="text-[11px] font-semibold text-slate-800 dark:text-white truncate drop-shadow-xs" title={title}>
               {title}
             </span>
           </div>
@@ -156,7 +158,7 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
             <button
               type="button"
               onClick={handleExpandInternal}
-              className="p-1 rounded-lg ios-glass-button text-zinc-200 hover:text-white transition-all cursor-pointer active:scale-90"
+              className="p-1 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-950 dark:hover:text-white transition-all cursor-pointer active:scale-90"
               title="Expand to Full Video"
             >
               <Maximize2 size={12} />
@@ -167,7 +169,7 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
                 e.stopPropagation();
                 onClose();
               }}
-              className="p-1 rounded-lg ios-glass-button hover:bg-rose-600/80 text-zinc-200 hover:text-white transition-all cursor-pointer active:scale-90"
+              className="p-1 rounded-lg ios-glass-button hover:bg-rose-600/80 hover:text-white text-slate-700 dark:text-zinc-200 transition-all cursor-pointer active:scale-90"
               title="Close Mini Player"
             >
               <X size={12} />
@@ -210,16 +212,16 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
 
         {/* Bottom Control Bar: Exactly the 4 essential controls */}
         <div 
-          className={`px-3 py-2 bg-black/60 backdrop-blur-2xl flex items-center justify-between gap-2 ${
+          className={`px-3 py-2 bg-white/70 dark:bg-black/60 backdrop-blur-2xl flex items-center justify-between gap-2 ${
             isLaxmiPuja 
               ? 'border-t border-amber-400/40 shadow-[0_-2px_12px_rgba(245,158,11,0.25)]' 
-              : 'border-t border-white/10'
+              : 'border-t border-black/5 dark:border-white/10'
           }`}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Channel Name */}
-          <span className="text-[10px] text-zinc-300 font-medium truncate max-w-[110px]" title={channel}>
+          <span className="text-[10px] text-slate-600 dark:text-zinc-300 font-medium truncate max-w-[110px]" title={channel}>
             {channel}
           </span>
 
@@ -230,12 +232,12 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
               type="button"
               onClick={handleToggleMuteInternal}
               className={`p-1.5 rounded-lg ios-glass-button transition-all cursor-pointer active:scale-90 ${
-                isLaxmiPuja ? 'border border-amber-400/30 text-amber-200' : 'text-zinc-200 hover:text-white'
+                isLaxmiPuja ? 'border border-amber-400/30 text-amber-500 dark:text-amber-200' : 'text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white'
               }`}
               title={isMuted ? 'Unmute' : 'Mute'}
             >
               {isMuted ? (
-                <VolumeX size={13} className="text-amber-400" />
+                <VolumeX size={13} className="text-amber-500" />
               ) : (
                 <Volume2 size={13} />
               )}
@@ -264,7 +266,7 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
               <button
                 type="button"
                 onClick={handleNextTrackInternal}
-                className="p-1.5 rounded-lg ios-glass-button text-zinc-200 hover:text-white transition-all cursor-pointer active:scale-90"
+                className="p-1.5 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer active:scale-90"
                 title="Next Video"
               >
                 <SkipForward size={13} />
@@ -275,7 +277,7 @@ export const VideoMiniPlayer: React.FC<VideoMiniPlayerProps> = ({
             <button
               type="button"
               onClick={handleExpandInternal}
-              className="p-1.5 rounded-lg ios-glass-button text-zinc-200 hover:text-white transition-all cursor-pointer active:scale-90"
+              className="p-1.5 rounded-lg ios-glass-button text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer active:scale-90"
               title="Expand to Full Video"
             >
               <Maximize2 size={13} />

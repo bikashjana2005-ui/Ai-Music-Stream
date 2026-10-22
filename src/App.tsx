@@ -306,37 +306,33 @@ export default function App() {
   const [selectedChannelDetailsName, setSelectedChannelDetailsName] = useState<string | null>(null);
   const [selectedChannelForDetails, setSelectedChannelForDetails] = useState<string | null>(null);
 
-  // Track playback & audio stream state
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(() => {
+  // Helper to load only real user-played video (never a default fallback track)
+  // Helper to load last played video (or initial featured track so mini player is visible immediately)
+  const getInitialLastPlayedVideo = (): Track | null => {
     try {
-      const saved = localStorage.getItem('aura_ai_last_played_track');
-      if (saved) return JSON.parse(saved);
+      const explicitUserPlayed = localStorage.getItem('aura_user_last_played_video');
+      if (explicitUserPlayed) {
+        const parsed = JSON.parse(explicitUserPlayed);
+        if (parsed && parsed.id) return parsed;
+      }
       const savedHist = localStorage.getItem('aura_ai_history');
       if (savedHist) {
-        const parsed = JSON.parse(savedHist);
-        if (parsed.length > 0) return parsed[0];
+        const parsedHist = JSON.parse(savedHist);
+        if (Array.isArray(parsedHist) && parsedHist.length > 0 && parsedHist[0]?.id) {
+          return parsedHist[0];
+        }
       }
-      return DEFAULT_TRACKS[0];
+      return DEFAULT_TRACKS[0] || null;
     } catch {
-      return DEFAULT_TRACKS[0];
+      return DEFAULT_TRACKS[0] || null;
     }
-  });
+  };
 
-  // Dedicated last played video state to guarantee the mini player always displays the last played video
-  const [lastPlayedVideo, setLastPlayedVideo] = useState<Track | null>(() => {
-    try {
-      const saved = localStorage.getItem('aura_ai_last_played_track');
-      if (saved) return JSON.parse(saved);
-      const savedHist = localStorage.getItem('aura_ai_history');
-      if (savedHist) {
-        const parsed = JSON.parse(savedHist);
-        if (parsed.length > 0) return parsed[0];
-      }
-      return DEFAULT_TRACKS[0];
-    } catch {
-      return DEFAULT_TRACKS[0];
-    }
-  });
+  // Track playback & audio stream state
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(() => getInitialLastPlayedVideo());
+
+  // Dedicated last played video state so mini player always shows the real last played video
+  const [lastPlayedVideo, setLastPlayedVideo] = useState<Track | null>(() => getInitialLastPlayedVideo());
 
   const [isMiniPlayerDismissed, setIsMiniPlayerDismissed] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -358,7 +354,7 @@ export default function App() {
   });
   const [showVideo, setShowVideo] = useState<boolean>(false);
   const [isFullVideoPlayerOpen, setIsFullVideoPlayerOpen] = useState<boolean>(false);
-  const [isVideoMiniPlayerOpen, setIsVideoMiniPlayerOpen] = useState<boolean>(false);
+  const [isVideoMiniPlayerOpen, setIsVideoMiniPlayerOpen] = useState<boolean>(true);
   const [playerEngine, setPlayerEngine] = useState<PlayerEngine>(() => {
     return (localStorage.getItem('aura_player_engine') as PlayerEngine) || 'youtube-nocookie';
   });
@@ -1334,12 +1330,19 @@ export default function App() {
           }
         }
 
-        // 5. Sync Last Played Track from localStorage
-        const savedTrack = localStorage.getItem('aura_ai_last_played_track');
-        if (savedTrack) {
-          const parsedTrack: Track = JSON.parse(savedTrack);
+        // 5. Sync Real User-Played Last Video from localStorage (never default fallback)
+        const savedUserTrack = localStorage.getItem('aura_user_last_played_video');
+        if (savedUserTrack) {
+          const parsedTrack: Track = JSON.parse(savedUserTrack);
           if (parsedTrack && parsedTrack.id) {
             setCurrentTrack(parsedTrack);
+            setLastPlayedVideo(parsedTrack);
+          }
+        } else if (savedHist) {
+          const parsedHist: Track[] = JSON.parse(savedHist);
+          if (Array.isArray(parsedHist) && parsedHist.length > 0 && parsedHist[0]?.id) {
+            setCurrentTrack(parsedHist[0]);
+            setLastPlayedVideo(parsedHist[0]);
           }
         }
 
@@ -1394,6 +1397,7 @@ export default function App() {
   // Sync last played track to localStorage and update lastPlayedVideo state
   useEffect(() => {
     if (currentTrack) {
+      localStorage.setItem('aura_user_last_played_video', JSON.stringify(currentTrack));
       localStorage.setItem('aura_ai_last_played_track', JSON.stringify(currentTrack));
       setLastPlayedVideo(currentTrack);
     }
@@ -1442,7 +1446,7 @@ export default function App() {
     const validVideoId = extractYouTubeId(track.id || (track as any).youtubeUrl || '');
     const finalId = validVideoId && validVideoId.length === 11 
       ? validVideoId 
-      : (track.id && track.id.length === 11 ? track.id : 'BddP6PYo2gs');
+      : (track.id && track.id.length === 11 ? track.id : '');
 
     const correctThumbnail = finalId && finalId.length === 11
       ? `https://i.ytimg.com/vi/${finalId}/hqdefault.jpg`
@@ -1452,10 +1456,15 @@ export default function App() {
 
     const trackWithCorrectThumbnail: Track = {
       ...track,
-      id: finalId,
+      id: finalId || track.id,
       thumbnail: correctThumbnail,
       addedAt: new Date().toISOString()
     };
+
+    try {
+      localStorage.setItem('aura_user_last_played_video', JSON.stringify(trackWithCorrectThumbnail));
+      localStorage.setItem('aura_ai_last_played_track', JSON.stringify(trackWithCorrectThumbnail));
+    } catch {}
 
     if (currentTrack?.id === trackWithCorrectThumbnail.id) {
       setIsPlaying(false); // Stop automatic video play
@@ -1844,17 +1853,21 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/90 dark:bg-[#07080f] text-slate-900 dark:text-slate-100 font-sans transition-colors selection:bg-rose-500 selection:text-white relative overflow-x-hidden flex flex-col items-center justify-start w-full">
+    <div className="min-h-screen bg-[#f5f6fa] dark:bg-[#070810] text-slate-900 dark:text-slate-100 font-sans transition-colors selection:bg-rose-500 selection:text-white relative overflow-x-hidden flex flex-col items-center justify-start w-full">
       <AnimatePresence>
         {showSplash && <SplashScreen onComplete={handleCompleteSplash} />}
       </AnimatePresence>
       
       {/* ========================================================================= */}
-      {/* Clean Fluid Liquid Background (Zero Circle Artifacts)                     */}
+      {/* iOS Style Full Liquid Glass Fluid Aurora Ambient Canvas (Light & Dark)     */}
       {/* ========================================================================= */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 select-none">
-        <div className="absolute inset-0 bg-gradient-to-tr from-rose-950/20 via-transparent to-indigo-950/25 dark:from-rose-950/25 dark:via-transparent dark:to-blue-950/30 opacity-70" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900/10 dark:to-black/35 pointer-events-none" />
+        {/* Fluid morphing liquid mesh blobs with organic squircle curvature */}
+        <div className="absolute -top-[15%] -left-[10%] w-[55vw] h-[55vw] max-w-[650px] max-h-[650px] rounded-[42%_58%_70%_30%/45%_45%_55%_55%] bg-gradient-to-br from-rose-400/25 via-pink-400/20 to-amber-300/20 dark:from-rose-600/18 dark:via-purple-700/15 dark:to-transparent blur-[80px] animate-aurora-1" />
+        <div className="absolute -top-[10%] -right-[10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-[55%_45%_35%_65%/60%_40%_60%_40%] bg-gradient-to-bl from-indigo-400/25 via-sky-400/20 to-teal-300/15 dark:from-indigo-600/20 dark:via-blue-700/18 dark:to-transparent blur-[85px] animate-aurora-2" />
+        <div className="absolute top-[45%] left-[25%] w-[45vw] h-[45vw] max-w-[500px] max-h-[500px] rounded-[60%_40%_48%_52%/40%_60%_40%_60%] bg-gradient-to-tr from-amber-300/15 via-rose-300/15 to-violet-400/20 dark:from-purple-900/22 dark:via-rose-900/18 dark:to-transparent blur-[90px] animate-aurora-3" />
+        {/* Specular fluid light sheen */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-slate-200/20 dark:from-white/[0.02] dark:via-transparent dark:to-black/40 pointer-events-none" />
       </div>
 
 

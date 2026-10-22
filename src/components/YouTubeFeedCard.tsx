@@ -99,7 +99,7 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
 
         {/* Hover / Playing Play Overlay */}
         <div className={`absolute inset-0 bg-black/30 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-150 ${isPlayingCurrent ? 'opacity-100 bg-black/50' : 'opacity-0 group-hover:opacity-100'}`}>
-          <div className="p-3.5 bg-rose-600 text-white rounded-full shadow-2xl scale-95 group-hover:scale-105 transition-transform flex items-center justify-center">
+          <div className="p-3.5 bg-rose-600 text-white rounded-2xl shadow-2xl scale-95 group-hover:scale-105 transition-transform flex items-center justify-center">
             <Play size={22} className="fill-white ml-0.5" />
           </div>
         </div>
@@ -136,7 +136,7 @@ export const YouTubeFeedCard: React.FC<YouTubeFeedCardProps> = ({
           onError={(e) => {
             (e.target as HTMLImageElement).src = getFallbackChannelAvatar(channelName);
           }}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover shrink-0 cursor-pointer border border-gray-200 dark:border-white/10 hover:ring-2 hover:ring-rose-500 transition-all mt-0.5 bg-white dark:bg-zinc-800 p-0.5 shadow-sm"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover shrink-0 cursor-pointer border border-gray-200 dark:border-white/10 hover:ring-2 hover:ring-rose-500 transition-all mt-0.5 bg-white dark:bg-zinc-800 p-0.5 shadow-sm"
           onClick={(e) => {
             if (onOpenChannelDetails) {
               e.stopPropagation();

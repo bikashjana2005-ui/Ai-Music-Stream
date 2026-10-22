@@ -137,10 +137,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* ========================================================================= */}
       {/* 1. TOP HEADER BAR: Flush, Non-Overlying Edge-to-Edge Navigation Bar       */}
       {/* ========================================================================= */}
-      <div className={`sticky top-0 z-40 w-full bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-xl select-none transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] transform-gpu will-change-transform ${
+      <div className={`sticky top-0 z-40 w-full ios-glass-header select-none transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] transform-gpu will-change-transform ${
         isLaxmiPuja 
-          ? 'border-b border-amber-500/30 dark:border-amber-400/25 shadow-[0_2px_16px_rgba(245,158,11,0.1)]' 
-          : 'border-b border-slate-200/80 dark:border-white/10 shadow-xs'
+          ? 'border-b border-amber-500/40 dark:border-amber-400/30 shadow-[0_4px_20px_rgba(245,158,11,0.12)]' 
+          : ''
       } ${
         isHeaderVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
       }`}>
@@ -290,13 +290,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     </div>
 
       {/* ========================================================================= */}
-      {/* 2. AUTHENTIC FIXED BOTTOM NAVIGATION BAR / DOCK BAR (Laxmi Puja Festive)   */}
+      {/* 2. AUTHENTIC FIXED BOTTOM NAVIGATION BAR / DOCK BAR (iOS Liquid Glass)    */}
       {/* ========================================================================= */}
-      <div className={`fixed bottom-0 left-0 right-0 w-full z-50 pointer-events-auto select-none bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-xl ${
+      <div className={`fixed bottom-0 left-0 right-0 inset-x-0 w-full z-50 pointer-events-auto select-none ios-glass-dock pb-[env(safe-area-inset-bottom)] ${
         isLaxmiPuja 
-          ? 'border-t border-amber-400/40 dark:border-amber-400/35 shadow-[0_-4px_24px_rgba(245,158,11,0.2)]' 
-          : 'border-t border-slate-200/80 dark:border-white/10 shadow-[0_-4px_24px_rgba(0,0,0,0.12)]'
-      } pb-[env(safe-area-inset-bottom)] relative`}>
+          ? 'border-t border-amber-400/50 dark:border-amber-400/40 shadow-[0_-4px_28px_rgba(245,158,11,0.22)]' 
+          : 'border-t border-white/40 dark:border-white/15'
+      }`}>
         {/* Sacred Festive Golden Light Trim Line on Dock Bar */}
         {isLaxmiPuja && (
           <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-85 animate-pulse pointer-events-none" />
